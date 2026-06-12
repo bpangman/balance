@@ -115,15 +115,21 @@ input {
   position: absolute;
   inset: 0;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.35s ease, transform 0.35s ease;
+  /* visibility flips after the fade-out so children with their own
+     pointer-events:auto (e.g. .tab-pane.active) can never catch taps
+     while their screen is hidden */
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0.35s;
   transform: translateX(20px);
   overflow: hidden;
 }
 
 .screen.active {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s;
   transform: translateX(0);
 }
 
@@ -218,16 +224,20 @@ input {
   flex-direction: column;
   padding: max(var(--safe-top), 54px) 24px max(var(--safe-bottom), 24px);
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   transform: translateX(30px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease, visibility 0s linear 0.3s;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .ob-step.active {
   opacity: 1;
+  /* inherit (not visible) so a hidden ancestor screen still wins */
+  visibility: inherit;
   pointer-events: auto;
+  transition: opacity 0.3s ease, transform 0.3s ease, visibility 0s;
   transform: translateX(0);
 }
 
@@ -727,14 +737,18 @@ input {
   position: absolute;
   inset: 0;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s linear 0.25s;
   transform: translateY(10px);
 }
 
 .tab-pane.active {
   opacity: 1;
+  /* inherit (not visible) so a hidden ancestor screen still wins */
+  visibility: inherit;
   pointer-events: auto;
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s;
   transform: translateY(0);
 }
 
