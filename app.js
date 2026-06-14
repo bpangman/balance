@@ -5,15 +5,19 @@
 
 // ===== STATE =====
 const state = {
-  remainingSeconds: 31 * 60 + 24,   // 31:24
+  remainingSeconds: 31 * 60,         // 31 min
   totalSeconds: (45 + 12) * 60,      // 45 base + 12 earned
   earnedMinutes: 12,
   streakDays: 12,
   dailyAllowanceMinutes: 45,
   selectedApps: ['TikTok', 'Instagram', 'YouTube'],
-  isPlaying: true,
+  isPlaying: false,
   currentTab: 'today',
   dailyHours: 3.5,
+  actualDailyHours: null,
+  earnRateMultiplier: 1,
+  expiresAtMidnight: true,
+  healthConnected: null,
   promoUsed: false,
   laElapsed: 12 * 60 + 43,          // Live activity elapsed seconds
   worktimeLoggedToday: [{ label: 'Morning walk', mins: 12 }],
@@ -63,8 +67,8 @@ function resumeCountdown() {
 }
 
 function updatePlayPause() {
-  const icon = document.getElementById('play-pause-icon');
-  if (icon) icon.textContent = state.isPlaying ? '⏸' : '▶';
+  const btn = document.getElementById('play-pause-btn');
+  if (btn) btn.textContent = state.isPlaying ? '⏸ Stop simulation' : '▶ Demo: simulate scrolling';
 }
 
 // ===== RING DISPLAY =====
@@ -73,11 +77,19 @@ function updateRingDisplay() {
   const total = state.totalSeconds;
   const pct = total > 0 ? remaining / total : 0;
 
-  // Countdown text
+  // Countdown text - format based on isPlaying
   const mins = Math.floor(remaining / 60);
   const secs = remaining % 60;
-  const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+  let timeStr, labelStr;
+  if (state.isPlaying) {
+    timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+    labelStr = 'remaining';
+  } else {
+    timeStr = `${mins} min`;
+    labelStr = 'left today';
+  }
   setTextContent('ring-countdown', timeStr);
+  setTextContent('ring-label-sm', labelStr);
 
   // Hero arc
   const arc = document.getElementById('hero-ring-arc');
@@ -260,7 +272,7 @@ function initOnboardingStepC() {
   if (shockState) shockState.style.display = 'none';
 
   // Compute years
-  const hours = state.dailyHours;
+  const hours = state.actualDailyHours !== null ? state.actualDailyHours : state.dailyHours;
   const yearsRemaining = 50;
   const wakingHoursPerDay = 16;
   const years = (hours / wakingHoursPerDay) * yearsRemaining;
@@ -273,7 +285,9 @@ function initOnboardingStepC() {
   const h = Math.floor(hours);
   const m = Math.round((hours - h) * 60);
   const timeLabel = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
-  if (leadText) leadText.textContent = `At ${timeLabel} a day, you will spend`;
+  if (leadText) leadText.textContent = state.actualDailyHours !== null
+    ? `At ${timeLabel} a day (your real average), you will spend`
+    : `At ${timeLabel} a day, you will spend`;
   if (yearsEl) yearsEl.textContent = `${yearsStr} years`;
 
   // Show computing for 1.5s
@@ -314,14 +328,21 @@ function handlePromoCode() {
 }
 
 function proceedToApp() {
+  saveState();
   localStorage.setItem('balance_onboarded', '1');
   localStorage.setItem('balance_selected_apps', JSON.stringify(state.selectedApps));
   showScreen('app-shell');
+  state.remainingSeconds = state.dailyAllowanceMinutes * 60;
+  state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
   renderAppTiles();
   buildWeekChart();
   updateRingDisplay();
+  updatePlayPause();
+  updateHealthBadge();
   startCountdown();
   updateDateLabel();
+  const caption = document.querySelector('.ring-caption');
+  if (caption) caption.innerHTML = `${state.dailyAllowanceMinutes} min allowance + <span id="earned-display">${state.earnedMinutes}</span> min earned · expires midnight`;
 }
 
 // ===== APP TILES =====
@@ -558,10 +579,44 @@ function replayDemo() {
   location.reload();
 }
 
+// ===== HEALTH BADGE =====
+function updateHealthBadge() {
+  const badge = document.querySelector('.health-badge');
+  if (!badge) return;
+  if (state.healthConnected === true) {
+    badge.innerHTML = `
+      <span class="health-icon">❤️</span>
+      <div class="health-text">
+        <div class="health-title">Synced with Apple Health</div>
+        <div class="health-sub">Workouts auto-detected</div>
+      </div>
+      <span class="health-check">✓</span>
+    `;
+  } else {
+    badge.innerHTML = `
+      <span class="health-icon">🔗</span>
+      <div class="health-text">
+        <div class="health-title">Health not connected</div>
+        <div class="health-sub">Connect in Settings</div>
+      </div>
+    `;
+  }
+}
+
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
 
   loadState();
+
+  // Reset selectedApps to empty so onboarding starts fresh
+  if (!localStorage.getItem('balance_onboarded')) {
+    state.selectedApps = [];
+  }
+
+  document.getElementById('welcome-cta').addEventListener('click', () => {
+    showScreen('onboarding-screen');
+    showObStep('ob-step-a');
+  });
 
   // Check if already onboarded
   const onboarded = localStorage.getItem('balance_onboarded');
@@ -589,8 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setTextContent('earned-display', state.earnedMinutes);
       setTextContent('earn-today-display', state.earnedMinutes);
     } else {
-      showScreen('onboarding-screen');
-      document.getElementById('ob-step-a').classList.add('active');
+      showScreen('welcome-screen');
     }
   }, 1800);
 
@@ -617,6 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.selectedApps.length === 0) {
       state.selectedApps = ['Instagram', 'TikTok', 'YouTube'];
     }
+    saveState();
     showObStep('ob-step-b');
   });
 
@@ -636,6 +691,62 @@ document.addEventListener('DOMContentLoaded', () => {
   updateSliderDisplay(slider.value);
 
   document.getElementById('ob-b-next').addEventListener('click', () => {
+    const stPopup = document.getElementById('screen-time-popup');
+    if (stPopup) stPopup.style.display = 'flex';
+  });
+
+  // Screen Time popup
+  document.getElementById('st-allow-btn').addEventListener('click', () => {
+    const stPopup = document.getElementById('screen-time-popup');
+    if (stPopup) stPopup.style.display = 'none';
+
+    // Show loading toast
+    showToast('Reading your last 30 days…');
+
+    setTimeout(() => {
+      // Compute actual = guess * 1.27, rounded to nearest 5 min
+      const guessMins = Math.round(state.dailyHours * 60);
+      const actualMins = Math.round((guessMins * 1.27) / 5) * 5;
+      state.actualDailyHours = actualMins / 60;
+
+      // Format guess
+      const gh = Math.floor(guessMins / 60);
+      const gm = guessMins % 60;
+      const guessStr = gh > 0 ? (gm > 0 ? `${gh}h ${gm}m` : `${gh}h`) : `${gm}m`;
+
+      // Format actual
+      const ah = Math.floor(actualMins / 60);
+      const am = actualMins % 60;
+      const actualStr = ah > 0 ? (am > 0 ? `${ah}h ${am}m` : `${ah}h`) : `${am}m`;
+
+      setTextContent('reveal-guess-text', guessStr);
+      setTextContent('reveal-actual-value', actualStr);
+
+      const pill = document.getElementById('reveal-delta-pill');
+      if (pill) {
+        if (actualMins > guessMins) {
+          pill.textContent = '↑ 27% more than you thought';
+          pill.className = 'reveal-delta-pill red';
+        } else {
+          pill.textContent = '↓ Less than you thought';
+          pill.className = 'reveal-delta-pill green';
+        }
+      }
+
+      showObStep('ob-step-b2');
+    }, 1500);
+  });
+
+  document.getElementById('st-deny-btn').addEventListener('click', () => {
+    const stPopup = document.getElementById('screen-time-popup');
+    if (stPopup) stPopup.style.display = 'none';
+    showToast('No problem — we\'ll use your estimate');
+    showObStep('ob-step-c');
+    initOnboardingStepC();
+  });
+
+  // ob-step-b2 continue
+  document.getElementById('ob-b2-next').addEventListener('click', () => {
     showObStep('ob-step-c');
     initOnboardingStepC();
   });
@@ -647,6 +758,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Step D: let's do this
   document.getElementById('ob-d-next').addEventListener('click', () => {
+    const healthPopup = document.getElementById('health-popup');
+    if (healthPopup) healthPopup.style.display = 'flex';
+  });
+
+  // Plan step D handlers
+  const planSlider = document.getElementById('plan-allowance-slider');
+  if (planSlider) {
+    planSlider.addEventListener('input', () => {
+      state.dailyAllowanceMinutes = parseInt(planSlider.value);
+      setTextContent('plan-allowance-display', `${state.dailyAllowanceMinutes} min`);
+    });
+  }
+
+  document.querySelectorAll('.earn-rate-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.earn-rate-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      state.earnRateMultiplier = parseFloat(btn.dataset.rate);
+    });
+  });
+
+  const expiresToggle = document.getElementById('expires-toggle');
+  if (expiresToggle) {
+    expiresToggle.addEventListener('change', () => {
+      state.expiresAtMidnight = expiresToggle.checked;
+    });
+  }
+
+  // Health popup
+  document.getElementById('health-allow-btn').addEventListener('click', () => {
+    const healthPopup = document.getElementById('health-popup');
+    if (healthPopup) healthPopup.style.display = 'none';
+    state.healthConnected = true;
+    showToast('✓ Synced with Apple Health');
+    setTimeout(() => showScreen('paywall-screen'), 1500);
+  });
+
+  document.getElementById('health-deny-btn').addEventListener('click', () => {
+    const healthPopup = document.getElementById('health-popup');
+    if (healthPopup) healthPopup.style.display = 'none';
+    state.healthConnected = false;
+    showToast('You can connect Health later in Settings');
     showScreen('paywall-screen');
   });
 
@@ -692,7 +845,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('play-pause-btn').addEventListener('click', () => {
     state.isPlaying = !state.isPlaying;
     updatePlayPause();
+    updateRingDisplay();
   });
+  updatePlayPause();
 
   // Earn more time button → go to Earn tab
   document.getElementById('earn-more-btn').addEventListener('click', () => switchTab('earn'));
@@ -739,7 +894,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const picker = document.getElementById('duration-picker');
       if (picker) picker.style.display = 'block';
       setTextContent('dp-workout-name', selectedWorkout);
-      setTextContent('dp-earn-preview', selectedDuration);
+      setTextContent('dp-earn-preview', Math.round(selectedDuration * state.earnRateMultiplier));
     });
   });
 
@@ -748,7 +903,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.dp-chip').forEach(c => c.classList.remove('selected'));
       chip.classList.add('selected');
       selectedDuration = parseInt(chip.dataset.dur);
-      setTextContent('dp-earn-preview', selectedDuration);
+      setTextContent('dp-earn-preview', Math.round(selectedDuration * state.earnRateMultiplier));
     });
   });
 
@@ -869,14 +1024,14 @@ function logWorkout(workoutName, duration) {
 
     const fly = document.createElement('div');
     fly.className = 'earn-fly-label';
-    fly.textContent = `+${duration} min`;
+    fly.textContent = `+${Math.round(duration * state.earnRateMultiplier)} min`;
     fly.style.left = `${rect.left - frameRect.left + 80}px`;
     fly.style.top = `${rect.top - frameRect.top - 20}px`;
     frame.appendChild(fly);
     setTimeout(() => fly.remove(), 1000);
   }
 
-  addEarnedMinutes(duration);
+  addEarnedMinutes(Math.round(duration * state.earnRateMultiplier));
   launchConfetti();
 
   // Log to earned list
@@ -888,12 +1043,12 @@ function logWorkout(workoutName, duration) {
     item.innerHTML = `
       <span class="earned-icon">💪</span>
       <span class="earned-label">${workoutName}</span>
-      <span class="earned-mins">+${duration} min</span>
+      <span class="earned-mins">+${Math.round(duration * state.earnRateMultiplier)} min</span>
     `;
     list.appendChild(item);
   }
 
-  showToast(`${workoutName} logged! +${duration} min earned 🎉`);
+  showToast(`${workoutName} logged! +${Math.round(duration * state.earnRateMultiplier)} min earned 🎉`);
 
   // Reset picker
   document.querySelectorAll('.workout-tile').forEach(t => t.classList.remove('selected'));
