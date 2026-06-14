@@ -234,6 +234,10 @@ function switchTab(tabName) {
   if (btn) btn.classList.add('active');
 
   state.currentTab = tabName;
+
+  if (tabName === 'earn') {
+    requestAnimationFrame(() => renderEarnAnalytics(currentEarnRange));
+  }
 }
 
 // ===== ONBOARDING =====
@@ -342,7 +346,8 @@ function proceedToApp() {
   startCountdown();
   updateDateLabel();
   const caption = document.querySelector('.ring-caption');
-  if (caption) caption.innerHTML = `${state.dailyAllowanceMinutes} min allowance + <span id="earned-display">${state.earnedMinutes}</span> min earned · expires midnight`;
+  if (caption) caption.innerHTML = `${state.dailyAllowanceMinutes} min allowance + <span id="earned-display">${state.earnedMinutes}</span> min earned · resets at midnight`;
+  renderEarnAnalytics('month');
 }
 
 // ===== APP TILES =====
@@ -579,6 +584,321 @@ function replayDemo() {
   location.reload();
 }
 
+// ===== EARN ANALYTICS DATA =====
+// 56 days of historical data (deterministic, no random)
+// Screen time: starts ~240 min/day, trends down to ~105 min/day
+// Workout: starts ~3 min/day, trends up to ~45 min/day
+const SCREEN_TIME_SERIES = [
+  238, 252, 231, 245, 260, 248, 255, // week 1 (high baseline)
+  242, 228, 244, 230, 235, 218, 229, // week 2
+  226, 215, 232, 218, 210, 224, 216, // week 3
+  205, 195, 212, 198, 207, 188, 202, // week 4 (start of big drop)
+  180, 192, 175, 185, 170, 195, 178, // week 5
+  162, 175, 158, 168, 155, 178, 160, // week 6
+  148, 162, 140, 152, 145, 168, 150, // week 7
+  128, 142, 115, 135, 122, 145, 118, // week 8 (most recent)
+];
+
+const WORKOUT_SERIES = [
+   3,  0,  5,  0,  8,  0,  4, // week 1
+   6,  0, 10,  5,  0, 12,  8, // week 2
+   8, 15,  0, 12, 10,  0, 18, // week 3
+  12,  0, 20, 15,  5, 22, 10, // week 4
+  18, 25,  0, 20, 28,  0, 22, // week 5
+  25, 30, 10, 28, 32,  0, 30, // week 6
+  30, 35, 15, 38, 30, 20, 42, // week 7
+  35, 45,  0, 40, 48, 30, 45, // week 8
+];
+
+let currentEarnRange = 'month';
+
+function getEarnRangeSlice(range) {
+  if (range === 'week') {
+    return {
+      screen: SCREEN_TIME_SERIES.slice(-7),
+      workout: WORKOUT_SERIES.slice(-7),
+    };
+  } else if (range === 'month') {
+    return {
+      screen: SCREEN_TIME_SERIES.slice(-30),
+      workout: WORKOUT_SERIES.slice(-30),
+    };
+  } else {
+    // All time — downsample to 8 weekly averages
+    const screenWeekly = [];
+    const workoutWeekly = [];
+    for (let w = 0; w < 8; w++) {
+      const slice = SCREEN_TIME_SERIES.slice(w * 7, w * 7 + 7);
+      const wSlice = WORKOUT_SERIES.slice(w * 7, w * 7 + 7);
+      screenWeekly.push(Math.round(slice.reduce((a, b) => a + b, 0) / slice.length));
+      workoutWeekly.push(Math.round(wSlice.reduce((a, b) => a + b, 0) / wSlice.length));
+    }
+    return { screen: screenWeekly, workout: workoutWeekly };
+  }
+}
+
+function countUpTo(el, target, suffix, duration) {
+  if (!el) return;
+  const start = performance.now();
+  function step(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    // ease out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(eased * target);
+    el.textContent = current + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+    else el.textContent = target + suffix;
+  }
+  requestAnimationFrame(step);
+}
+
+function buildAnalyticsSVG(svgId, data, color, isScreenTime) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  svg.innerHTML = '';
+
+  const W = 320, H = 120;
+  const padL = 4, padR = 4, padT = 16, padB = 20;
+
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+
+  function xPos(i) {
+    return padL + (i / (data.length - 1)) * (W - padL - padR);
+  }
+  function yPos(val) {
+    return padT + (1 - (val - min) / range) * (H - padT - padB);
+  }
+
+  // Draw subtle gridlines
+  const gridNS = 'http://www.w3.org/2000/svg';
+  const midY = yPos((min + max) / 2);
+  const gridLine = document.createElementNS(gridNS, 'line');
+  gridLine.setAttribute('x1', padL); gridLine.setAttribute('x2', W - padR);
+  gridLine.setAttribute('y1', midY); gridLine.setAttribute('y2', midY);
+  gridLine.setAttribute('stroke', 'rgba(255,255,255,0.06)');
+  gridLine.setAttribute('stroke-width', '1');
+  svg.appendChild(gridLine);
+
+  // Build path points
+  const points = data.map((val, i) => `${xPos(i).toFixed(1)},${yPos(val).toFixed(1)}`);
+
+  // Area fill path (closed)
+  const areaPoints = [
+    `${padL},${H - padB}`,
+    ...data.map((val, i) => `${xPos(i).toFixed(1)},${yPos(val).toFixed(1)}`),
+    `${xPos(data.length - 1).toFixed(1)},${H - padB}`,
+  ];
+
+  // Area gradient
+  const defs = document.createElementNS(gridNS, 'defs');
+  const gradId = `grad-${svgId}`;
+  const linearGrad = document.createElementNS(gridNS, 'linearGradient');
+  linearGrad.setAttribute('id', gradId);
+  linearGrad.setAttribute('x1', '0'); linearGrad.setAttribute('y1', '0');
+  linearGrad.setAttribute('x2', '0'); linearGrad.setAttribute('y2', '1');
+  const stop1 = document.createElementNS(gridNS, 'stop');
+  stop1.setAttribute('offset', '0%');
+  stop1.setAttribute('stop-color', color);
+  stop1.setAttribute('stop-opacity', '0.25');
+  const stop2 = document.createElementNS(gridNS, 'stop');
+  stop2.setAttribute('offset', '100%');
+  stop2.setAttribute('stop-color', color);
+  stop2.setAttribute('stop-opacity', '0.0');
+  linearGrad.appendChild(stop1);
+  linearGrad.appendChild(stop2);
+  defs.appendChild(linearGrad);
+  svg.appendChild(defs);
+
+  // Area
+  const area = document.createElementNS(gridNS, 'polygon');
+  area.setAttribute('points', areaPoints.join(' '));
+  area.setAttribute('fill', `url(#${gradId})`);
+  svg.appendChild(area);
+
+  // Line path
+  const totalLen = data.reduce((acc, val, i) => {
+    if (i === 0) return 0;
+    const dx = xPos(i) - xPos(i - 1);
+    const dy = yPos(val) - yPos(data[i - 1]);
+    return acc + Math.sqrt(dx * dx + dy * dy);
+  }, 0);
+
+  const polyline = document.createElementNS(gridNS, 'polyline');
+  polyline.setAttribute('points', points.join(' '));
+  polyline.setAttribute('fill', 'none');
+  polyline.setAttribute('stroke', color);
+  polyline.setAttribute('stroke-width', '2.5');
+  polyline.setAttribute('stroke-linecap', 'round');
+  polyline.setAttribute('stroke-linejoin', 'round');
+  // Animate stroke-dashoffset
+  polyline.setAttribute('stroke-dasharray', totalLen.toFixed(1));
+  polyline.setAttribute('stroke-dashoffset', totalLen.toFixed(1));
+  polyline.style.transition = 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)';
+  svg.appendChild(polyline);
+
+  // Latest point dot
+  const lastX = xPos(data.length - 1);
+  const lastY = yPos(data[data.length - 1]);
+  const dot = document.createElementNS(gridNS, 'circle');
+  dot.setAttribute('cx', lastX.toFixed(1));
+  dot.setAttribute('cy', lastY.toFixed(1));
+  dot.setAttribute('r', '5');
+  dot.setAttribute('fill', '#34D399');
+  dot.setAttribute('stroke', '#0B0F1A');
+  dot.setAttribute('stroke-width', '2');
+  dot.style.opacity = '0';
+  dot.style.transition = 'opacity 0.3s ease 0.7s';
+  svg.appendChild(dot);
+
+  // Y min/max hints (right side)
+  const minLabel = document.createElementNS(gridNS, 'text');
+  minLabel.setAttribute('x', W - padR - 2);
+  minLabel.setAttribute('y', (H - padB - 2).toFixed(1));
+  minLabel.setAttribute('text-anchor', 'end');
+  minLabel.setAttribute('font-size', '9');
+  minLabel.setAttribute('fill', 'rgba(240,244,255,0.35)');
+  minLabel.textContent = `${min}m`;
+  svg.appendChild(minLabel);
+
+  const maxLabel = document.createElementNS(gridNS, 'text');
+  maxLabel.setAttribute('x', W - padR - 2);
+  maxLabel.setAttribute('y', (padT + 9).toFixed(1));
+  maxLabel.setAttribute('text-anchor', 'end');
+  maxLabel.setAttribute('font-size', '9');
+  maxLabel.setAttribute('fill', 'rgba(240,244,255,0.35)');
+  maxLabel.textContent = `${max}m`;
+  svg.appendChild(maxLabel);
+
+  // Animate on next frame
+  requestAnimationFrame(() => {
+    polyline.setAttribute('stroke-dashoffset', '0');
+    dot.style.opacity = '1';
+  });
+}
+
+function buildAxisLabels(containerId, data, range) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+
+  if (range === 'week') {
+    const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    dayLabels.forEach(d => {
+      const span = document.createElement('span');
+      span.textContent = d;
+      el.appendChild(span);
+    });
+  } else if (range === 'month') {
+    const labels = ['30d ago', '23d', '16d', '9d', '3d', 'Today'];
+    labels.forEach(d => {
+      const span = document.createElement('span');
+      span.textContent = d;
+      el.appendChild(span);
+    });
+  } else {
+    const labels = ['Wk 1','Wk 2','Wk 3','Wk 4','Wk 5','Wk 6','Wk 7','Wk 8'];
+    labels.forEach(d => {
+      const span = document.createElement('span');
+      span.textContent = d;
+      el.appendChild(span);
+    });
+  }
+}
+
+function renderEarnAnalytics(range) {
+  currentEarnRange = range;
+  const { screen, workout } = getEarnRangeSlice(range);
+
+  // Compute stats (all-time references for headline stats)
+  const allScreen = SCREEN_TIME_SERIES;
+  const allWorkout = WORKOUT_SERIES;
+
+  // Headline: screen time % drop from week 1 average to week 8 average (all-time)
+  const w1Screen = allScreen.slice(0, 7).reduce((a, b) => a + b, 0) / 7;
+  const w8Screen = allScreen.slice(-7).reduce((a, b) => a + b, 0) / 7;
+  const screenPctDrop = Math.round(((w1Screen - w8Screen) / w1Screen) * 100);
+
+  // Headline: workout mult from week 1 avg to week 8 avg
+  const w1Workout = Math.max(1, allWorkout.slice(0, 7).reduce((a, b) => a + b, 0) / 7);
+  const w8Workout = allWorkout.slice(-7).reduce((a, b) => a + b, 0) / 7;
+  const workoutMult = Math.round(w8Workout / w1Workout);
+
+  // Supporting: total earned this period (workout minutes summed)
+  const totalEarned = workout.reduce((a, b) => a + b, 0);
+
+  // Update stat values with count-up animation
+  const screenPctEl = document.getElementById('stat-screen-pct');
+  const workoutMultEl = document.getElementById('stat-workout-mult');
+  const earnedTotalEl = document.getElementById('stat-earned-total');
+  const streakEl = document.getElementById('stat-streak');
+  const earnedLabelEl = document.getElementById('stat-earned-label');
+
+  if (screenPctEl) {
+    screenPctEl.textContent = '—';
+    countUpTo(screenPctEl, screenPctDrop, '%', 700);
+    screenPctEl.style.color = 'var(--mint)';
+    setTimeout(() => {
+      if (screenPctEl) screenPctEl.textContent = `↓ ${screenPctDrop}%`;
+    }, 720);
+  }
+
+  if (workoutMultEl) {
+    workoutMultEl.textContent = '—';
+    countUpTo(workoutMultEl, workoutMult, '×', 700);
+    workoutMultEl.style.color = 'var(--mint)';
+    setTimeout(() => {
+      if (workoutMultEl) workoutMultEl.textContent = `↑ ${workoutMult}×`;
+    }, 720);
+  }
+
+  if (earnedTotalEl) {
+    earnedTotalEl.textContent = '—';
+    countUpTo(earnedTotalEl, totalEarned, 'm', 600);
+  }
+
+  if (earnedLabelEl) {
+    earnedLabelEl.textContent = range === 'week' ? 'Minutes earned this week' :
+      range === 'month' ? 'Minutes earned this month' : 'Minutes earned total';
+  }
+
+  if (streakEl) {
+    streakEl.textContent = '—';
+    countUpTo(streakEl, state.streakDays, ' days', 500);
+  }
+
+  // Build charts
+  buildAnalyticsSVG('chart-screen', screen, '#F87171', true);
+  buildAnalyticsSVG('chart-workout', workout, '#34D399', false);
+
+  // Axis labels
+  buildAxisLabels('acc-screen-axis', screen, range);
+  buildAxisLabels('acc-workout-axis', workout, range);
+
+  // Update segmented control indicator
+  positionSegIndicator(range);
+}
+
+function positionSegIndicator(range) {
+  const seg = document.getElementById('earn-range-seg');
+  const indicator = document.getElementById('seg-indicator');
+  if (!seg || !indicator) return;
+
+  const btns = seg.querySelectorAll('.seg-btn');
+  btns.forEach(b => b.classList.remove('active'));
+
+  const activeBtn = seg.querySelector(`[data-range="${range}"]`);
+  if (!activeBtn) return;
+  activeBtn.classList.add('active');
+
+  const segRect = seg.getBoundingClientRect();
+  const btnRect = activeBtn.getBoundingClientRect();
+  indicator.style.left = (btnRect.left - segRect.left) + 'px';
+  indicator.style.width = btnRect.width + 'px';
+}
+
 // ===== HEALTH BADGE =====
 function updateHealthBadge() {
   const badge = document.querySelector('.health-badge');
@@ -637,6 +957,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showScreen('app-shell');
       renderAppTiles();
       buildWeekChart();
+      renderEarnAnalytics('month');
       updateRingDisplay();
       startCountdown();
       updateDateLabel();
@@ -812,7 +1133,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('start-trial-btn').addEventListener('click', () => {
-    showToast('Demo mode — no charge, obviously 😄');
+    showToast('This is a demo — no charge 😄');
     setTimeout(() => proceedToApp(), 1200);
   });
 
@@ -828,7 +1149,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('restore-link').addEventListener('click', () => {
-    showToast('No purchases found for this account.');
+    showToast('No purchases found.');
   });
 
   // ── APP SHELL ──
@@ -882,6 +1203,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── EARN TAB ──
+
+  // Earn analytics range control
+  document.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const range = btn.dataset.range;
+      renderEarnAnalytics(range);
+    });
+  });
+
   let selectedWorkout = null;
   let selectedDuration = 20;
 
@@ -918,7 +1248,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('share-code-btn').addEventListener('click', () => {
-    showToast('Share code copied: FRIENDS 🎉');
+    showToast('Invite code copied: FRIENDS 🎉');
   });
 
   // ── SETTINGS SHEET ──
@@ -957,7 +1287,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── SHARE SCREEN ──
   document.getElementById('share-save-btn').addEventListener('click', () => {
-    showToast('Saved to Photos (demo)');
+    showToast('Saved to Camera Roll (demo)');
   });
 
   document.getElementById('share-close-btn').addEventListener('click', hideShareScreen);
@@ -993,7 +1323,7 @@ function startInterceptExercise(mins) {
 
     setTimeout(() => {
       hideIntercept();
-      showToast(`Nice. ${mins} minutes added — they expire at midnight.`);
+      showToast(`Nice work! +${mins} min added, resets at midnight.`);
       // Restore options for next time
       if (options) options.style.display = 'flex';
       if (optionsLabel) optionsLabel.style.display = 'block';
@@ -1048,7 +1378,7 @@ function logWorkout(workoutName, duration) {
     list.appendChild(item);
   }
 
-  showToast(`${workoutName} logged! +${Math.round(duration * state.earnRateMultiplier)} min earned 🎉`);
+  showToast(`Logged! +${Math.round(duration * state.earnRateMultiplier)} min earned 🎉`);
 
   // Reset picker
   document.querySelectorAll('.workout-tile').forEach(t => t.classList.remove('selected'));

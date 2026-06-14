@@ -263,7 +263,7 @@ input {
   font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.5px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .ob-subtitle {
@@ -486,7 +486,7 @@ input {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255,255,255,0.10);
   border-radius: var(--radius-card);
-  padding: 18px 20px;
+  padding: 20px 20px;
   margin-bottom: 14px;
 }
 
@@ -870,7 +870,7 @@ input {
   font-size: 12px;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
 }
 
 .play-pause-btn {
@@ -1126,10 +1126,12 @@ input {
 }
 
 .intercept-options-label {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-muted);
   font-weight: 600;
   align-self: flex-start;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
 }
 
 .intercept-options {
@@ -1254,6 +1256,7 @@ input {
 .earn-header-title {
   font-size: 17px;
   font-weight: 700;
+  letter-spacing: -0.3px;
 }
 
 .earn-header-sub {
@@ -1961,9 +1964,9 @@ a { color: inherit; text-decoration: none; }
   line-height: 1.1;
 }
 .welcome-body {
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text-muted);
-  line-height: 1.65;
+  line-height: 1.6;
   max-width: 320px;
 }
 
@@ -2073,6 +2076,7 @@ a { color: inherit; text-decoration: none; }
   border-right: 1px solid rgba(255,255,255,0.1);
 }
 .earn-rate-btn:last-child { border-right: none; }
+.earn-rate-btn:active { opacity: 0.7; }
 .earn-rate-btn.selected {
   background: rgba(99,102,241,0.3);
   color: var(--text);
@@ -2119,3 +2123,144 @@ a { color: inherit; text-decoration: none; }
 .lb-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; margin-top: -6px; }
 
 .tiles-shared-caption { font-size: 12px; color: var(--text-muted); text-align: center; margin-bottom: 16px; margin-top: -8px; }
+
+/* ===== EARN ANALYTICS ===== */
+.earn-analytics-section {
+  padding-bottom: 20px;
+}
+
+/* Segmented control */
+.earn-range-seg {
+  position: relative;
+  display: flex;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  padding: 3px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.seg-btn {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-radius: 9px;
+  position: relative;
+  z-index: 1;
+  transition: color 0.2s;
+  min-height: 36px;
+}
+
+.seg-btn.active {
+  color: var(--text);
+}
+
+.seg-indicator {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 9px;
+  transition: left 0.22s cubic-bezier(0.4,0,0.2,1), width 0.22s cubic-bezier(0.4,0,0.2,1);
+  z-index: 0;
+}
+
+/* Stat cards */
+.analytics-stat-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.analytics-stat-row .glass-card {
+  flex: 1;
+  margin-bottom: 10px;
+  padding: 14px 14px;
+}
+
+.analytics-stat-card {
+  text-align: center;
+}
+
+.asc-value {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: var(--mint);
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.asc-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.analytics-support-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.analytics-mini-card {
+  flex: 1;
+  margin-bottom: 10px;
+  padding: 14px 14px;
+  text-align: center;
+}
+
+.amc-value {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.amc-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Chart cards */
+.analytics-chart-card {
+  margin-bottom: 10px;
+  padding: 16px 16px 12px;
+}
+
+.acc-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acc-trend {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.acc-trend.coral { color: var(--coral); }
+.acc-trend.mint { color: var(--mint); }
+
+.analytics-chart-wrap {
+  overflow: hidden;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.acc-axis-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 0 2px;
+}

@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Balance — Move to Scroll</title>
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=4" />
 
   <!-- SVG Favicon -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%236366F1' stroke-width='3' stroke-dasharray='66 8' stroke-linecap='round' transform='rotate(-90 16 16)'/%3E%3C/svg%3E" />
@@ -58,7 +58,7 @@
           </svg>
         </div>
         <div class="welcome-headline">Welcome to Balance</div>
-        <p class="welcome-body">Social media isn't the enemy — everything is okay in moderation. But the average person scrolls 2.5 hours a day, and that adds up. Balance is here to restore balance: you get your scroll time every day, and you earn more by moving your body.</p>
+        <p class="welcome-body">You're scrolling about 2.5 hours a day. Balance gives you a daily allowance and lets you earn more by moving your body.</p>
         <button class="btn-primary" id="welcome-cta">Let's restore balance →</button>
       </div>
     </div>
@@ -109,7 +109,7 @@
           <div class="ob-progress">
             <div class="ob-progress-bar" style="width:50%"></div>
           </div>
-          <h2 class="ob-title">How many hours a day do you THINK you spend on these apps?</h2>
+          <h2 class="ob-title">How much time do you think you spend?</h2>
           <p class="ob-subtitle">Take your best guess — no judgment.</p>
         </div>
         <div class="slider-hero">
@@ -131,11 +131,11 @@
             <div class="ob-progress-bar" style="width:75%"></div>
           </div>
           <h2 class="ob-title">Your real usage</h2>
-          <p class="ob-subtitle">Here's what Screen Time found</p>
+          <p class="ob-subtitle">Straight from Screen Time</p>
         </div>
         <div class="reveal-card glass-card">
           <div class="reveal-guess">You guessed <span id="reveal-guess-text">3h 30m</span></div>
-          <div class="reveal-actual-label">Your real daily average:</div>
+          <div class="reveal-actual-label">Your daily average:</div>
           <div class="reveal-actual-value" id="reveal-actual-value">4h 26m</div>
           <div class="reveal-delta-pill" id="reveal-delta-pill">↑ 27% more than you thought</div>
         </div>
@@ -152,7 +152,7 @@
           <p class="shock-lead" id="shock-lead-text">At 3h 30m a day, you will spend</p>
           <div class="shock-years" id="shock-years">9.2 years</div>
           <p class="shock-tail">of your remaining waking life<br>on these apps.</p>
-          <p class="shock-mint" id="shock-mint">Balance gives those years back.</p>
+          <p class="shock-mint" id="shock-mint">Balance helps you take those years back.</p>
           <button class="btn-primary ob-next" id="ob-c-next" style="margin-top:32px">I want my time back</button>
         </div>
       </div>
@@ -296,15 +296,15 @@
             </div>
 
             <p class="ring-caption">45 min allowance + <span id="earned-display">12</span> min earned · expires midnight</p>
-            <a class="widget-link" id="widget-link-today">🔒 See your Lock Screen</a>
+            <a class="widget-link" id="widget-link-today">🔒 See Lock Screen widget</a>
 
             <!-- App tiles -->
             <div class="section-title">Your apps</div>
             <div class="app-tiles-row" id="app-tiles-row"></div>
-            <p class="tiles-shared-caption">One shared daily allowance across all your apps</p>
+            <p class="tiles-shared-caption">Shared allowance across all your apps</p>
 
             <!-- Earn more button -->
-            <button class="btn-primary btn-earn-pulse" id="earn-more-btn">+ Earn more time</button>
+            <button class="btn-primary btn-earn-pulse" id="earn-more-btn">+ Earn more</button>
 
             <!-- Weekly chart -->
             <div class="glass-card chart-card">
@@ -321,7 +321,7 @@
               <div class="bonus-row">
                 <span class="bonus-icon">🚶</span>
                 <div class="bonus-text">
-                  <div class="bonus-title">Walk 8,000 steps today</div>
+                  <div class="bonus-title">Hit 8,000 steps today</div>
                   <div class="bonus-sub">+10 min tomorrow</div>
                 </div>
                 <span class="bonus-reward">+10m</span>
@@ -350,7 +350,7 @@
                 </svg>
               </div>
               <div class="earn-header-text">
-                <div class="earn-header-title">Turn movement into minutes.</div>
+                <div class="earn-header-title">Move more, scroll more.</div>
                 <div class="earn-header-sub">Earned today: <span id="earn-today-display">12</span> min</div>
               </div>
             </div>
@@ -397,6 +397,61 @@
               </div>
               <span class="health-check">✓</span>
             </div>
+
+            <!-- Analytics section -->
+            <div class="earn-analytics-section" id="earn-analytics-section">
+              <div class="section-title" style="margin-top:24px">Your progress</div>
+
+              <!-- Range segmented control -->
+              <div class="earn-range-seg" id="earn-range-seg" role="tablist">
+                <button class="seg-btn" data-range="week" role="tab">Week</button>
+                <button class="seg-btn active" data-range="month" role="tab">Month</button>
+                <button class="seg-btn" data-range="all" role="tab">All time</button>
+                <div class="seg-indicator" id="seg-indicator"></div>
+              </div>
+
+              <!-- Stat cards row -->
+              <div class="analytics-stat-row" id="analytics-stat-row">
+                <div class="glass-card analytics-stat-card">
+                  <div class="asc-value" id="stat-screen-pct">—</div>
+                  <div class="asc-label">Screen time since you started</div>
+                </div>
+                <div class="glass-card analytics-stat-card">
+                  <div class="asc-value" id="stat-workout-mult">—</div>
+                  <div class="asc-label">Workout minutes since week 1</div>
+                </div>
+              </div>
+
+              <!-- Supporting stats row -->
+              <div class="analytics-support-row" id="analytics-support-row">
+                <div class="glass-card analytics-mini-card">
+                  <div class="amc-value" id="stat-earned-total">—</div>
+                  <div class="amc-label" id="stat-earned-label">Minutes earned</div>
+                </div>
+                <div class="glass-card analytics-mini-card">
+                  <div class="amc-value" id="stat-streak">—</div>
+                  <div class="amc-label">Current streak</div>
+                </div>
+              </div>
+
+              <!-- Screen time chart -->
+              <div class="glass-card analytics-chart-card">
+                <div class="acc-title">Screen time <span class="acc-trend coral">trending down ↓</span></div>
+                <div class="analytics-chart-wrap" id="chart-screen-wrap">
+                  <svg id="chart-screen" viewBox="0 0 320 120" preserveAspectRatio="none" width="100%" height="120"></svg>
+                </div>
+                <div class="acc-axis-row" id="acc-screen-axis"></div>
+              </div>
+
+              <!-- Workout chart -->
+              <div class="glass-card analytics-chart-card">
+                <div class="acc-title">Workout minutes <span class="acc-trend mint">trending up ↑</span></div>
+                <div class="analytics-chart-wrap" id="chart-workout-wrap">
+                  <svg id="chart-workout" viewBox="0 0 320 120" preserveAspectRatio="none" width="100%" height="120"></svg>
+                </div>
+                <div class="acc-axis-row" id="acc-workout-axis"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -439,7 +494,7 @@
 
             <!-- Leaderboard -->
             <div class="section-title">Least scroll time this week</div>
-            <p class="lb-subtitle">Total social media time — lowest wins</p>
+            <p class="lb-subtitle">Lowest total scroll time wins</p>
             <div class="glass-card leaderboard-card">
               <div class="lb-row">
                 <span class="lb-rank trophy">🏆</span>
@@ -515,9 +570,9 @@
       <div class="intercept-content">
         <div class="intercept-app-icon" id="intercept-app-icon">🎵</div>
         <h2 class="intercept-title">Time's up, Blake.</h2>
-        <p class="intercept-sub">You've used your <span id="intercept-allowance">45</span> minutes today.</p>
+        <p class="intercept-sub">You've used up your <span id="intercept-allowance">45</span> minutes for today.</p>
 
-        <div class="intercept-options-label">Earn your way back in:</div>
+        <div class="intercept-options-label">Move to get back in:</div>
 
         <div class="intercept-options" id="intercept-options">
           <button class="intercept-row" data-exercise="walk" data-mins="15">
@@ -570,8 +625,8 @@
         </div>
 
         <div class="intercept-bottom" id="intercept-bottom">
-          <button class="ask-partner-btn" id="ask-partner-btn">Ask Sarah to unlock 🔓</button>
-          <p class="wait-tomorrow">Or wait until tomorrow</p>
+          <button class="ask-partner-btn" id="ask-partner-btn">Ask Sarah to unlock you 🔓</button>
+          <p class="wait-tomorrow">Or come back tomorrow</p>
         </div>
 
         <!-- Partner response -->
@@ -585,7 +640,7 @@
     <!-- ===== LOCK SCREEN DEMO ===== -->
     <div id="lockscreen-screen" class="screen overlay-screen">
       <div class="lockscreen-bg">
-        <div class="ls-caption-pill">Live Widget preview — updates in real time</div>
+        <div class="ls-caption-pill">Lock Screen widget · updates live</div>
 
         <div class="ls-clock-area">
           <div class="ls-time" id="ls-time">12:00</div>
@@ -635,7 +690,7 @@
           <div class="ls-corner-btn">📷</div>
         </div>
 
-        <p class="ls-tap-hint">Tap anywhere to return</p>
+        <p class="ls-tap-hint">Tap to go back</p>
       </div>
     </div>
 
@@ -656,7 +711,7 @@
           </div>
           <div class="share-headline">This week I traded<br><span class="share-highlight">3.2 hours of TikTok</span><br>for 4 workouts</div>
           <div class="share-streak">🔥 12-day streak</div>
-          <div class="share-footer">balance — move to scroll</div>
+          <div class="share-footer">balance · move to scroll</div>
         </div>
         <button class="btn-primary share-save-btn" id="share-save-btn">Save image</button>
         <button class="share-close-btn" id="share-close-btn">Close</button>
@@ -706,7 +761,7 @@
       <div style="background:#1C1C1E;border-radius:14px;width:270px;overflow:hidden;">
         <div style="padding:20px 16px 16px;text-align:center;">
           <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px;">"Balance" Would Like to Access Your Screen Time</div>
-          <div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.5;">Balance uses your Screen Time data to show your real usage and enforce the limits you set. Your data never leaves your iPhone.</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.5;">Balance reads your Screen Time to show your real usage. Your data stays on your iPhone.</div>
         </div>
         <div style="height:1px;background:rgba(255,255,255,0.15);"></div>
         <div style="display:flex;">
@@ -721,7 +776,7 @@
       <div style="background:#1C1C1E;border-radius:14px;width:270px;overflow:hidden;">
         <div style="padding:20px 16px 16px;text-align:center;">
           <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px;">"Balance" Would Like to Access Apple Health</div>
-          <div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.5;">Balance reads your workouts and steps so movement automatically becomes scroll time.</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.5;">Balance reads your workouts so every active minute becomes scroll time.</div>
         </div>
         <div style="height:1px;background:rgba(255,255,255,0.15);"></div>
         <div style="display:flex;">
@@ -742,6 +797,6 @@
   <!-- Confetti canvas -->
   <canvas id="confetti-canvas"></canvas>
 
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
