@@ -234,6 +234,8 @@
 
         <button class="btn-primary btn-cta" id="start-trial-btn">Start my free trial</button>
 
+        <div class="trial-billing-line" id="trial-billing-line">&nbsp;</div>
+
         <div class="promo-section">
           <button class="promo-toggle" id="promo-toggle">Have a promo code?</button>
           <div class="promo-input-wrap" id="promo-input-wrap" style="display:none">
@@ -366,6 +368,7 @@
               <div class="earn-header-text">
                 <div class="earn-header-title">Move more, scroll more.</div>
                 <div class="earn-header-sub">Earned today: <span id="earn-today-display">12</span> min</div>
+                <div class="earn-anticheat-line">Steps don't count — real workouts do. Verified through Apple Health.</div>
               </div>
             </div>
 
@@ -518,6 +521,18 @@
                     <div class="duel-count">9</div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- Partner surprise gift (session-only, intentionally not persisted) -->
+            <div class="glass-card partner-gift-card" id="partner-gift-card">
+              <div class="gift-row">
+                <span class="gift-icon">🎁</span>
+                <div class="gift-text">
+                  <div class="gift-title">Sarah sent you +5 min</div>
+                  <div class="gift-sub">"proud of your streak!"</div>
+                </div>
+                <button class="gift-accept-btn" id="gift-accept-btn">Accept</button>
               </div>
             </div>
 

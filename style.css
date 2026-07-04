@@ -2484,3 +2484,38 @@ a { color: inherit; text-decoration: none; }
   padding: 10px;
   min-height: 44px;
 }
+
+/* ===== BATCH 2: trial billing, anti-cheat, partner gift ===== */
+.trial-billing-line {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.4;
+}
+
+.earn-anticheat-line {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.partner-gift-card { margin-bottom: 16px; padding: 14px 16px; }
+.gift-row { display: flex; align-items: center; gap: 12px; }
+.gift-icon { font-size: 26px; }
+.gift-text { flex: 1; min-width: 0; }
+.gift-title { font-size: 14px; font-weight: 700; }
+.gift-sub { font-size: 12px; color: var(--text-muted); font-style: italic; }
+.gift-accept-btn {
+  margin-left: auto;
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 44px;
+  color: var(--mint);
+}
+.partner-gift-card.accepted { opacity: 0.55; }
+.partner-gift-card.accepted .gift-accept-btn { color: var(--text-muted); }

@@ -387,6 +387,7 @@ function proceedToApp() {
   updateAllStreakDisplays();
   updateShieldChip();
   updateRingCaption();
+  setTextContent('earn-today-display', state.earnedMinutes);
   renderEarnAnalytics('month');
   saveState();
 }
@@ -1538,12 +1539,29 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── PAYWALL ──
+
+  // Transparent trial billing — date computed at render time, phrasing follows
+  // the selected plan card, re-rendered on every selection change.
+  function updateTrialBillingLine() {
+    const el = document.getElementById('trial-billing-line');
+    if (!el) return;
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    const dateStr = `${months[d.getMonth()]} ${d.getDate()}`;
+    const yearlySelected = !!document.querySelector('#plan-yearly.selected');
+    const priceText = yearlySelected ? 'then $39.99/yr' : 'then $7.99/mo';
+    el.textContent = `Free until ${dateStr} — ${priceText}. We'll remind you the day before. Cancel anytime in Settings.`;
+  }
+
   document.querySelectorAll('.price-card').forEach(card => {
     card.addEventListener('click', () => {
       document.querySelectorAll('.price-card').forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
+      updateTrialBillingLine();
     });
   });
+  updateTrialBillingLine();
 
   document.getElementById('start-trial-btn').addEventListener('click', () => {
     showToast('This is a demo — no charge 😄');
@@ -1663,6 +1681,26 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── FRIENDS TAB ──
   document.getElementById('nudge-btn').addEventListener('click', () => {
     showToast('Nudge sent 👋');
+  });
+
+  // Partner surprise gift — +5 min flat (NOT multiplied by earn rate).
+  // Accepted state is session-only on purpose: it may reappear next session.
+  document.getElementById('gift-accept-btn').addEventListener('click', () => {
+    addEarnedMinutes(5);
+    launchConfetti();
+    showToast('+5 min from Sarah 💚');
+    const card = document.getElementById('partner-gift-card');
+    if (card) {
+      card.classList.add('accepted');
+      card.innerHTML = `
+        <div class="gift-row">
+          <span class="gift-icon">🎁</span>
+          <div class="gift-text">
+            <div class="gift-title">Accepted ✓</div>
+          </div>
+        </div>
+      `;
+    }
   });
 
   // B5(c) — invite code chip: real clipboard copy, with a graceful fallback.
