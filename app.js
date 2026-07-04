@@ -23,7 +23,9 @@ const state = {
   userName: '',
   lastWorkout: null,                 // { name, mins, at } — for honest Live Activity (B6)
   paywallYears: null,                // computed during onboarding step C, shown on paywall (B4)
-  worktimeLoggedToday: [{ label: 'Morning walk', mins: 12 }],
+  worktimeLoggedToday: [],
+  stepsToday: 0,                     // real steps, driven by logged workouts (fix 9)
+  stepBonusTomorrow: false,          // set true when stepsToday crosses 8,000 (fix 9)
 };
 
 const APP_ICONS = {
@@ -38,11 +40,12 @@ const APP_ICONS = {
 const EXERCISE_LABELS = { walk: 'Walk', workout: 'Workout', stretch: 'Stretch' };
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
-// Toast queued from a daily-reset streak-shield save, shown once the app shell is ready
-let pendingToastMessage = null;
+// Toasts queued from a daily-reset (streak-shield save, steps bonus), shown
+// once the app shell is ready.
+let pendingToastMessages = [];
 
-// Earn-tab quick-log selection (module scope so the settings-sheet ratio
-// stepper can also refresh the preview — A1, A6).
+// Earn-tab quick-log selection (module scope so the settings-sheet earn-rate
+// control can also refresh the preview — A1, A6, fix 6).
 let selectedWorkout = null;
 let selectedDuration = 20;
 
@@ -66,6 +69,7 @@ function startCountdown() {
     } else {
       // Time's up — show intercept
       pauseCountdown();
+      renderAppTiles(); // fix 5 — lock badges appear the instant time actually hits 0
       showIntercept(state.selectedApps[0] || 'TikTok');
     }
   }, 1000);
@@ -190,7 +194,10 @@ function updateClock() {
   setTextContent('ls-date', dateStr);
 }
 
-// Live Activity — honest version (B6): only shows if a workout was logged < 60 min ago
+// Live Activity — honest version (B6, fix 10): only shows if a workout was
+// logged < 60 min ago, and the progress denominator is the ACTUAL logged
+// workout's duration (not a fixed 30-min guess), so it always hits 100% when
+// the workout is really done.
 function updateLiveActivityCard() {
   const card = document.getElementById('ls-live-activity');
   if (!card) return;
@@ -202,14 +209,18 @@ function updateLiveActivityCard() {
   const elapsedSec = Math.max(0, Math.floor((Date.now() - state.lastWorkout.at) / 1000));
   const m = Math.floor(elapsedSec / 60);
   const s = elapsedSec % 60;
-  setTextContent('la-title', `${state.lastWorkout.name} in progress`);
+  const durationSec = Math.max(1, state.lastWorkout.mins * 60);
+  const done = elapsedSec >= durationSec;
+  setTextContent('la-title', done ? `${state.lastWorkout.name} done ✓` : `${state.lastWorkout.name} in progress`);
   setTextContent('la-mins-earned', state.lastWorkout.mins);
   setTextContent('la-elapsed', `${m}:${s.toString().padStart(2, '0')}`);
   const fill = document.getElementById('la-progress-fill');
   if (fill) {
-    const pct = Math.min((elapsedSec / (30 * 60)) * 100, 100);
+    const pct = Math.min((elapsedSec / durationSec) * 100, 100);
     fill.style.width = `${pct.toFixed(1)}%`;
   }
+  const badge = document.querySelector('.la-badge');
+  if (badge) badge.classList.toggle('la-badge-done', done);
 }
 
 function startLaElapsed() {
@@ -265,6 +276,9 @@ function switchTab(tabName) {
     requestAnimationFrame(() => renderEarnAnalytics(currentEarnRange));
   } else if (tabName === 'today') {
     refreshTodayNumbers();
+  } else if (tabName === 'friends') {
+    updateStreakDuel(); // fix 2 — recompute whenever Friends tab is shown
+    renderSarahStatus();
   }
 }
 
@@ -372,8 +386,7 @@ function proceedToApp() {
   showScreen('app-shell');
   state.remainingSeconds = state.dailyAllowanceMinutes * 60;
   state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
-  const earnedList = document.getElementById('earned-list');
-  if (earnedList) earnedList.innerHTML = '';
+  renderEarnedList();
   renderAppTiles();
   buildWeekChart();
   updateLeaderboard();
@@ -385,6 +398,7 @@ function proceedToApp() {
   updateDateLabel();
   updateGreeting();
   updateAllStreakDisplays();
+  updateStreakDuel();
   updateShieldChip();
   updateRingCaption();
   setTextContent('earn-today-display', state.earnedMinutes);
@@ -428,7 +442,7 @@ function renderAppTiles() {
   apps.forEach((appName, i) => {
     const info = APP_ICONS[appName] || { bg: '#333', emoji: '📱' };
     const used = appMins[i] || 0;
-    const isLocked = i === 0; // First app gets lock badge (TikTok usually)
+    const isLocked = state.remainingSeconds === 0; // fix 5 — truthful: only when time is actually up
 
     const tile = document.createElement('button');
     tile.className = 'app-used-tile';
@@ -468,6 +482,10 @@ function getWeekSeries() {
   return { social, earned };
 }
 
+// fix 7 — two slim side-by-side bars per day (social=mint, earned=amber),
+// a dashed reference line at the user's daily allowance, and a tiny mint ✓
+// on days that stayed under it. Today uses live numbers; the other 6 days
+// are labeled sample history so the fake part is honest about being fake.
 function buildWeekChart() {
   const chart = document.getElementById('week-chart');
   if (!chart) return;
@@ -476,24 +494,53 @@ function buildWeekChart() {
   const days = ['M','T','W','T','F','S','S'];
   const { social, earned } = getWeekSeries();
   const todayIdx = WEEK_TODAY_IDX;
+  const allowance = state.dailyAllowanceMinutes;
+  const scaleMax = Math.max(Math.max(...social), allowance) * 1.15;
+  const goalPct = Math.min(100, (allowance / scaleMax) * 100);
+
+  const barsRow = document.createElement('div');
+  barsRow.className = 'week-bars-row';
+  const labelsRow = document.createElement('div');
+  labelsRow.className = 'week-labels-row';
 
   days.forEach((day, i) => {
-    const maxVal = Math.max(...social);
-    const socialPct = (social[i] / (maxVal * 1.2)) * 100;
-    const earnedPct = (earned[i] / (maxVal * 1.2)) * 100;
+    const socialPct = Math.min(100, (social[i] / scaleMax) * 100);
+    const earnedPct = Math.min(100, (earned[i] / scaleMax) * 100);
     const isToday = i === todayIdx;
+    const underAllowance = social[i] <= allowance;
 
     const wrap = document.createElement('div');
     wrap.className = 'chart-bar-wrap';
     wrap.innerHTML = `
       <div class="chart-bar-bg">
-        <div class="chart-bar-fill${isToday ? ' today' : ''}" style="height:0%" data-target="${socialPct}"></div>
-        <div class="chart-bar-line" style="bottom:${earnedPct}%"></div>
+        <div class="chart-bar-col">
+          ${isToday ? `<span class="chart-bar-value">${social[i]}</span>` : ''}
+          <div class="chart-bar-fill social${isToday ? ' today' : ''}" style="height:0%" data-target="${socialPct}"></div>
+        </div>
+        <div class="chart-bar-col">
+          <div class="chart-bar-fill earned${isToday ? ' today' : ''}" style="height:0%" data-target="${earnedPct}"></div>
+        </div>
       </div>
-      <span class="chart-day-label">${isToday ? '<b style="color:#fff">'+day+'</b>' : day}</span>
     `;
-    chart.appendChild(wrap);
+    barsRow.appendChild(wrap);
+
+    const labelCol = document.createElement('div');
+    labelCol.className = 'week-label-col';
+    labelCol.innerHTML = `
+      <span class="chart-day-label">${isToday ? '<b style="color:#fff">'+day+'</b>' : day}</span>
+      <span class="chart-day-check"${underAllowance ? '' : ' style="visibility:hidden"'}>✓</span>
+    `;
+    labelsRow.appendChild(labelCol);
   });
+
+  const goalLine = document.createElement('div');
+  goalLine.className = 'chart-goal-line';
+  goalLine.style.bottom = `${goalPct}%`;
+  goalLine.innerHTML = `<span class="chart-goal-label">${allowance} min goal</span>`;
+  barsRow.appendChild(goalLine);
+
+  chart.appendChild(barsRow);
+  chart.appendChild(labelsRow);
 
   // Animate bars in after a frame
   requestAnimationFrame(() => {
@@ -502,7 +549,7 @@ function buildWeekChart() {
         setTimeout(() => {
           bar.style.height = bar.dataset.target + '%';
           bar.style.transition = 'height 0.6s cubic-bezier(0.4,0,0.2,1)';
-        }, i * 60);
+        }, i * 40);
       });
     }, 100);
   });
@@ -558,17 +605,94 @@ function updateLeaderboard() {
   card.innerHTML = rowsHtml + `<div class="lb-behind" id="lb-behind">${behindText}</div>`;
 }
 
-// ===== BONUS CARD (B8) =====
-// Bar width is derived from the same two numbers shown in the label, in one
-// place, so they can never disagree.
-const BONUS_STEPS = 5234;
-const BONUS_GOAL = 8000;
+// ===== BONUS CARD (fix 9) =====
+// state.stepsToday is real — it's incremented every time a workout is logged
+// (Quick log or an intercept exercise). Bar width is derived from the same
+// number shown in the label, in one place, so they can never disagree.
+const STEPS_GOAL = 8000;
+const STEP_RATE_OVERRIDES = { Walk: 100, Run: 170, Cycle: 60 }; // steps/min; everything else is 40/min
+
+function stepsForWorkout(name, mins) {
+  const rate = STEP_RATE_OVERRIDES[name] || 40;
+  return Math.round(rate * mins);
+}
+
+function bonusCardDefaultHTML() {
+  return `
+      <div class="bonus-row">
+        <span class="bonus-icon">🚶</span>
+        <div class="bonus-text">
+          <div class="bonus-title-row">
+            <div class="bonus-title">Hit 8,000 steps today</div>
+          </div>
+          <div class="bonus-sub">+10 min tomorrow</div>
+        </div>
+        <span class="bonus-reward">+10m</span>
+      </div>
+      <div class="bonus-progress-wrap">
+        <div class="bonus-progress-bar" id="bonus-progress-bar" style="width:0%"></div>
+      </div>
+      <div class="bonus-prog-label" id="bonus-prog-label">0 / 8,000 steps</div>`;
+}
+
+function bonusCardAchievedHTML() {
+  return `
+      <div class="bonus-row bonus-achieved-row">
+        <span class="bonus-icon">🎉</span>
+        <div class="bonus-text">
+          <div class="bonus-title">Goal hit! +10 min added to tomorrow 🎉</div>
+        </div>
+      </div>`;
+}
 
 function updateBonusCard() {
-  const pct = Math.min(100, (BONUS_STEPS / BONUS_GOAL) * 100);
+  const card = document.querySelector('.bonus-card');
+  if (!card) return;
+  const achieved = state.stepsToday >= STEPS_GOAL;
+
+  if (achieved) {
+    if (!card.classList.contains('achieved')) {
+      card.classList.add('achieved');
+      card.innerHTML = bonusCardAchievedHTML();
+    }
+    return;
+  }
+
+  if (card.classList.contains('achieved')) {
+    card.classList.remove('achieved');
+    card.innerHTML = bonusCardDefaultHTML();
+  }
+
+  const pct = Math.min(100, (state.stepsToday / STEPS_GOAL) * 100);
   const bar = document.getElementById('bonus-progress-bar');
   if (bar) bar.style.width = `${pct.toFixed(1)}%`;
-  setTextContent('bonus-prog-label', `${BONUS_STEPS.toLocaleString()} / ${BONUS_GOAL.toLocaleString()} steps`);
+  setTextContent('bonus-prog-label', `${state.stepsToday.toLocaleString()} / ${STEPS_GOAL.toLocaleString()} steps`);
+}
+
+// ===== EARNED TODAY LIST (fix 3) =====
+// Single source of truth: state.worktimeLoggedToday. Rebuilt from state (not
+// appended DOM-only) so a page reload always reflects reality, and an empty
+// day shows an honest empty state instead of a phantom seeded entry.
+function renderEarnedList() {
+  const list = document.getElementById('earned-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (state.worktimeLoggedToday.length === 0) {
+    list.innerHTML = `<div class="earned-empty" id="earned-empty">Nothing yet today — log a workout to earn time.</div>`;
+    return;
+  }
+
+  state.worktimeLoggedToday.forEach(entry => {
+    const item = document.createElement('div');
+    item.className = 'earned-item';
+    item.innerHTML = `
+      <span class="earned-icon">💪</span>
+      <span class="earned-label">${entry.label}</span>
+      <span class="earned-mins">+${entry.earned} min</span>
+    `;
+    list.appendChild(item);
+  });
 }
 
 // Cheap, event-driven refresh of everything derived from "used minutes today" (A8).
@@ -675,6 +799,8 @@ function askSarah() {
     } else {
       if (approved) approved.style.display = 'block';
       addEarnedMinutes(10);
+      sarahUnlockedToday = true; // fix 12 — reflected on her Friends-tab status line
+      renderSarahStatus();
       launchConfetti();
       setTimeout(() => {
         hideIntercept();
@@ -845,11 +971,16 @@ let settingsOpen = false;
 
 function openSettings() {
   document.getElementById('settings-overlay').style.display = 'block';
-  document.getElementById('settings-sheet').style.transform = 'translateY(0)';
+  const sheet = document.getElementById('settings-sheet');
+  sheet.classList.add('open');
+  sheet.style.transform = 'translateY(0)';
   settingsOpen = true;
   // A1 — initialize from state, not stale local vars
   setTextContent('allow-val', `${state.dailyAllowanceMinutes} min`);
-  setTextContent('ratio-val', `1:${Math.max(1, Math.round(state.earnRateMultiplier))}`);
+  // fix 6 — sync the earn-rate segmented control's selected button from state
+  document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(b => {
+    b.classList.toggle('selected', parseFloat(b.dataset.rate) === state.earnRateMultiplier);
+  });
 }
 
 // A1 — Daily-allowance stepper: writes state, recomputes total, clamps
@@ -869,7 +1000,9 @@ function applyAllowanceChange(newAllowance) {
 
 function closeSettings() {
   document.getElementById('settings-overlay').style.display = 'none';
-  document.getElementById('settings-sheet').style.transform = 'translateY(100%)';
+  const sheet = document.getElementById('settings-sheet');
+  sheet.style.transform = 'translateY(100%)';
+  sheet.classList.remove('open');
   settingsOpen = false;
 }
 
@@ -903,6 +1036,8 @@ function saveState() {
     userName: state.userName,
     lastWorkout: state.lastWorkout,
     worktimeLoggedToday: state.worktimeLoggedToday,
+    stepsToday: state.stepsToday,
+    stepBonusTomorrow: state.stepBonusTomorrow,
     savedDate: todayStr(),
   }));
 }
@@ -924,10 +1059,22 @@ function applyDailyReset(prevDateStr, curDateStr) {
     if (state.streakShields > 0) {
       state.streakShields -= 1;
       state.streakDays += 1;
-      pendingToastMessage = `🛡️ Streak Shield used — ${state.streakDays}-day streak saved!`;
+      pendingToastMessages.push(`🛡️ Streak Shield used — ${state.streakDays}-day streak saved!`);
     } else {
       state.streakDays = 1;
     }
+  }
+
+  // fix 9 — steps reset every day; yesterday's 8,000-step bonus (if earned)
+  // applies to today's totals exactly once.
+  state.stepsToday = 0;
+  if (state.stepBonusTomorrow) {
+    const bonus = 10;
+    state.earnedMinutes += bonus;
+    state.remainingSeconds += bonus * 60;
+    state.totalSeconds += bonus * 60;
+    state.stepBonusTomorrow = false;
+    pendingToastMessages.push("Bonus applied: +10 min from yesterday's steps 🚶");
   }
 
   saveState(); // persist the reset with today's savedDate right away
@@ -1033,34 +1180,48 @@ function countUpTo(el, target, suffix, duration) {
   requestAnimationFrame(step);
 }
 
-function buildAnalyticsSVG(svgId, data, color, isScreenTime) {
+function buildAnalyticsSVG(svgId, data, color, isScreenTime, range) {
   const svg = document.getElementById(svgId);
   if (!svg) return;
   svg.innerHTML = '';
 
   const W = 320, H = 120;
-  const padL = 4, padR = 4, padT = 16, padB = 20;
+  const padL = 30, padR = 4, padT = 16, padB = 20; // fix 8 — room for left-side axis labels
 
   const min = Math.min(...data);
   const max = Math.max(...data);
-  const range = max - min || 1;
+  const range_ = max - min || 1;
+  const mid = (min + max) / 2;
 
   function xPos(i) {
     return padL + (i / (data.length - 1)) * (W - padL - padR);
   }
   function yPos(val) {
-    return padT + (1 - (val - min) / range) * (H - padT - padB);
+    return padT + (1 - (val - min) / range_) * (H - padT - padB);
   }
 
-  // Draw subtle gridlines
   const gridNS = 'http://www.w3.org/2000/svg';
-  const midY = yPos((min + max) / 2);
-  const gridLine = document.createElementNS(gridNS, 'line');
-  gridLine.setAttribute('x1', padL); gridLine.setAttribute('x2', W - padR);
-  gridLine.setAttribute('y1', midY); gridLine.setAttribute('y2', midY);
-  gridLine.setAttribute('stroke', 'rgba(255,255,255,0.06)');
-  gridLine.setAttribute('stroke-width', '1');
-  svg.appendChild(gridLine);
+
+  // fix 8 — 3 left-side gridline labels (bottom/mid/top, in minutes) with
+  // matching horizontal gridlines, replacing the old two tiny right-side hints.
+  [min, mid, max].forEach(val => {
+    const y = yPos(val);
+    const gridLine = document.createElementNS(gridNS, 'line');
+    gridLine.setAttribute('x1', padL); gridLine.setAttribute('x2', W - padR);
+    gridLine.setAttribute('y1', y.toFixed(1)); gridLine.setAttribute('y2', y.toFixed(1));
+    gridLine.setAttribute('stroke', 'rgba(255,255,255,0.07)');
+    gridLine.setAttribute('stroke-width', '1');
+    svg.appendChild(gridLine);
+
+    const label = document.createElementNS(gridNS, 'text');
+    label.setAttribute('x', padL - 6);
+    label.setAttribute('y', (y + 3).toFixed(1));
+    label.setAttribute('text-anchor', 'end');
+    label.setAttribute('font-size', '9');
+    label.setAttribute('fill', 'rgba(240,244,255,0.4)');
+    label.textContent = `${Math.round(val)}m`;
+    svg.appendChild(label);
+  });
 
   // Build path points
   const points = data.map((val, i) => `${xPos(i).toFixed(1)},${yPos(val).toFixed(1)}`);
@@ -1119,43 +1280,27 @@ function buildAnalyticsSVG(svgId, data, color, isScreenTime) {
   polyline.style.transition = 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)';
   svg.appendChild(polyline);
 
-  // Latest point dot
-  const lastX = xPos(data.length - 1);
-  const lastY = yPos(data[data.length - 1]);
-  const dot = document.createElementNS(gridNS, 'circle');
-  dot.setAttribute('cx', lastX.toFixed(1));
-  dot.setAttribute('cy', lastY.toFixed(1));
-  dot.setAttribute('r', '5');
-  dot.setAttribute('fill', '#34D399');
-  dot.setAttribute('stroke', '#0B0F1A');
-  dot.setAttribute('stroke-width', '2');
-  dot.style.opacity = '0';
-  dot.style.transition = 'opacity 0.3s ease 0.7s';
-  svg.appendChild(dot);
-
-  // Y min/max hints (right side)
-  const minLabel = document.createElementNS(gridNS, 'text');
-  minLabel.setAttribute('x', W - padR - 2);
-  minLabel.setAttribute('y', (H - padB - 2).toFixed(1));
-  minLabel.setAttribute('text-anchor', 'end');
-  minLabel.setAttribute('font-size', '9');
-  minLabel.setAttribute('fill', 'rgba(240,244,255,0.35)');
-  minLabel.textContent = `${min}m`;
-  svg.appendChild(minLabel);
-
-  const maxLabel = document.createElementNS(gridNS, 'text');
-  maxLabel.setAttribute('x', W - padR - 2);
-  maxLabel.setAttribute('y', (padT + 9).toFixed(1));
-  maxLabel.setAttribute('text-anchor', 'end');
-  maxLabel.setAttribute('font-size', '9');
-  maxLabel.setAttribute('fill', 'rgba(240,244,255,0.35)');
-  maxLabel.textContent = `${max}m`;
-  svg.appendChild(maxLabel);
+  // fix 8 — week range gets a dot on every data point (not just the last one);
+  // month/all-time keep a single "latest point" dot to avoid clutter.
+  const dotIndices = range === 'week' ? data.map((_, i) => i) : [data.length - 1];
+  dotIndices.forEach(i => {
+    const isLast = i === data.length - 1;
+    const dot = document.createElementNS(gridNS, 'circle');
+    dot.setAttribute('cx', xPos(i).toFixed(1));
+    dot.setAttribute('cy', yPos(data[i]).toFixed(1));
+    dot.setAttribute('r', isLast ? '5' : '3.5');
+    dot.setAttribute('fill', isLast ? '#34D399' : color);
+    dot.setAttribute('stroke', '#0B0F1A');
+    dot.setAttribute('stroke-width', '2');
+    dot.style.opacity = '0';
+    dot.style.transition = 'opacity 0.3s ease 0.7s';
+    svg.appendChild(dot);
+  });
 
   // Animate on next frame
   requestAnimationFrame(() => {
     polyline.setAttribute('stroke-dashoffset', '0');
-    dot.style.opacity = '1';
+    svg.querySelectorAll('circle').forEach(dot => { dot.style.opacity = '1'; });
   });
 }
 
@@ -1252,16 +1397,67 @@ function renderEarnAnalytics(range) {
     }, 520);
   }
 
+  // fix 8 — subtitle reflects what the chart is actually showing
+  const subtitleText = range === 'all' ? 'weekly average' : 'minutes per day';
+  setTextContent('screen-chart-subtitle', subtitleText);
+  setTextContent('workout-chart-subtitle', subtitleText);
+
   // Build charts
-  buildAnalyticsSVG('chart-screen', screen, '#F87171', true);
-  buildAnalyticsSVG('chart-workout', workout, '#34D399', false);
+  buildAnalyticsSVG('chart-screen', screen, '#F87171', true, range);
+  buildAnalyticsSVG('chart-workout', workout, '#34D399', false, range);
 
   // Axis labels
   buildAxisLabels('acc-screen-axis', screen, range);
   buildAxisLabels('acc-workout-axis', workout, range);
 
+  // fix 8 — trend badges computed from the VISIBLE range (not all-time)
+  applyTrendBadge('trend-screen', computeTrendBadge(screen, range, 'screen'));
+  applyTrendBadge('trend-workout', computeTrendBadge(workout, range, 'workout'));
+
   // Update segmented control indicator
   positionSegIndicator(range);
+}
+
+// fix 8 — compares the first third vs last third of the currently displayed
+// series so the badge always describes what's actually on screen, not a
+// fixed all-time stat. Hidden entirely when the change is under 5%.
+function computeTrendBadge(data, range, kind) {
+  const n = data.length;
+  const thirdLen = Math.max(1, Math.floor(n / 3));
+  const firstAvg = data.slice(0, thirdLen).reduce((a, b) => a + b, 0) / thirdLen;
+  const lastAvg = data.slice(-thirdLen).reduce((a, b) => a + b, 0) / thirdLen;
+  const rangeLabel = range === 'week' ? 'this week' : range === 'month' ? 'this month' : 'all-time';
+  const safeFirst = Math.max(1, firstAvg);
+  const pctChange = ((lastAvg - firstAvg) / safeFirst) * 100;
+
+  if (Math.abs(pctChange) < 5) return null;
+
+  if (kind === 'screen') {
+    const pct = Math.round(Math.abs(pctChange));
+    return pctChange < 0
+      ? { text: `↓ ${pct}% ${rangeLabel}`, cls: 'mint' }
+      : { text: `↑ ${pct}% ${rangeLabel}`, cls: 'coral' };
+  }
+
+  // workout minutes — express growth as a multiplier, drop as a percent
+  const ratio = lastAvg / safeFirst;
+  if (ratio >= 1) {
+    return { text: `↑ ${Math.max(1, Math.round(ratio))}× ${rangeLabel}`, cls: 'mint' };
+  }
+  const pct = Math.round(Math.abs(pctChange));
+  return { text: `↓ ${pct}% ${rangeLabel}`, cls: 'coral' };
+}
+
+function applyTrendBadge(elId, trend) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!trend) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = '';
+  el.textContent = trend.text;
+  el.className = `acc-trend ${trend.cls}`;
 }
 
 function positionSegIndicator(range) {
@@ -1296,11 +1492,13 @@ function updateHealthBadge() {
       <span class="health-check">✓</span>
     `;
   } else {
+    // sweep (fix 13) — the old copy said "Connect in Settings" but Settings
+    // had no such control; the badge itself is now the control (tap to connect).
     badge.innerHTML = `
       <span class="health-icon">🔗</span>
       <div class="health-text">
         <div class="health-title">Health not connected</div>
-        <div class="health-sub">Connect in Settings</div>
+        <div class="health-sub">Tap to connect</div>
       </div>
     `;
   }
@@ -1338,6 +1536,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (onboarded) {
       showScreen('app-shell');
+      renderEarnedList(); // fix 3 — rebuild from persisted state, not stale DOM
       renderAppTiles();
       buildWeekChart();
       updateLeaderboard();
@@ -1350,13 +1549,14 @@ document.addEventListener('DOMContentLoaded', () => {
       updateDateLabel();
       updateGreeting();
       updateAllStreakDisplays();
+      updateStreakDuel();
       updateShieldChip();
       updateRingCaption();
       setTextContent('earned-display', state.earnedMinutes);
       setTextContent('earn-today-display', state.earnedMinutes);
-      if (pendingToastMessage) {
-        showToast(pendingToastMessage);
-        pendingToastMessage = null;
+      if (pendingToastMessages.length) {
+        pendingToastMessages.forEach(msg => showToast(msg));
+        pendingToastMessages = [];
       }
     } else {
       showScreen('welcome-screen');
@@ -1493,9 +1693,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  document.querySelectorAll('.earn-rate-btn').forEach(btn => {
+  // Onboarding's earn-rate control — scoped to its own container so it never
+  // touches the Settings sheet's copy of the same control (fix 6).
+  document.querySelectorAll('#earn-rate-ctrl .earn-rate-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.earn-rate-btn').forEach(b => b.classList.remove('selected'));
+      document.querySelectorAll('#earn-rate-ctrl .earn-rate-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       state.earnRateMultiplier = parseFloat(btn.dataset.rate);
     });
@@ -1623,8 +1825,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.intercept-row').forEach(row => {
     row.addEventListener('click', () => {
       const mins = parseInt(row.dataset.mins, 10);
+      const baseMins = parseInt(row.dataset.baseMins, 10);
       const exercise = row.dataset.exercise;
-      startInterceptExercise(mins, exercise);
+      startInterceptExercise(mins, exercise, baseMins);
     });
   });
 
@@ -1678,13 +1881,26 @@ document.addEventListener('DOMContentLoaded', () => {
     logWorkout(selectedWorkout, selectedDuration);
   });
 
-  // ── FRIENDS TAB ──
-  document.getElementById('nudge-btn').addEventListener('click', () => {
-    showToast('Nudge sent 👋');
-  });
+  // sweep (fix 13) — health badge is now itself the "connect" control, since
+  // Settings never had one despite the old copy pointing there.
+  const healthBadgeEl = document.querySelector('.health-badge');
+  if (healthBadgeEl) {
+    healthBadgeEl.addEventListener('click', () => {
+      if (state.healthConnected) return;
+      state.healthConnected = true;
+      updateHealthBadge();
+      showToast('✓ Synced with Apple Health');
+      saveState();
+    });
+  }
+
+  // ── FRIENDS TAB (fix 1, 2, 12) ──
+  document.getElementById('nudge-btn').addEventListener('click', handleNudge);
+  document.getElementById('send-time-btn').addEventListener('click', handleSendTime);
 
   // Partner surprise gift — +5 min flat (NOT multiplied by earn rate).
   // Accepted state is session-only on purpose: it may reappear next session.
+  // The card itself only appears after a nudge (fix 1) — see showPartnerGift().
   document.getElementById('gift-accept-btn').addEventListener('click', () => {
     addEarnedMinutes(5);
     launchConfetti();
@@ -1724,23 +1940,17 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('allow-inc').addEventListener('click', () => {
     if (state.dailyAllowanceMinutes < 120) applyAllowanceChange(state.dailyAllowanceMinutes + 5);
   });
-  document.getElementById('ratio-dec').addEventListener('click', () => {
-    const r = Math.max(1, Math.round(state.earnRateMultiplier));
-    if (r > 1) {
-      state.earnRateMultiplier = r - 1;
-      setTextContent('ratio-val', `1:${state.earnRateMultiplier}`);
+  // fix 6 — single earn-rate control: same segmented buttons as onboarding,
+  // reused inside Settings. Writes state, refreshes the duration-picker
+  // preview, and persists.
+  document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      state.earnRateMultiplier = parseFloat(btn.dataset.rate);
       updateDpEarnPreview();
       saveState();
-    }
-  });
-  document.getElementById('ratio-inc').addEventListener('click', () => {
-    const r = Math.max(1, Math.round(state.earnRateMultiplier));
-    if (r < 3) {
-      state.earnRateMultiplier = r + 1;
-      setTextContent('ratio-val', `1:${state.earnRateMultiplier}`);
-      updateDpEarnPreview();
-      saveState();
-    }
+    });
   });
 
   document.getElementById('settings-widget-btn').addEventListener('click', () => {
@@ -1765,8 +1975,92 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 
+// ===== FRIENDS TAB — PARTNER (fix 1, 2, 12) =====
+// Session-only (not persisted) by design, same as the gift card itself —
+// Sarah's state is a "beat" that can replay next session.
+const SARAH_STREAK_DAYS = 9;
+let sarahMinutesLeft = 14;
+let partnerNudgeState = 'idle'; // idle -> nudged -> moving -> gifted
+let sarahUnlockedToday = false;
+
+// fix 1(b), 12 — composes Sarah's one status line from whatever's true right
+// now: idle/moving, plus an "unlocked you today" suffix if she approved an
+// intercept ask this session.
+function renderSarahStatus() {
+  const el = document.getElementById('partner-status');
+  if (!el) return;
+  let text = (partnerNudgeState === 'moving' || partnerNudgeState === 'gifted')
+    ? '🚶 Moving now — your nudge worked'
+    : `🟢 ${sarahMinutesLeft} min left · 🔥 ${SARAH_STREAK_DAYS} days`;
+  if (sarahUnlockedToday) text += ' · 🔓 unlocked you today';
+  el.textContent = text;
+}
+
+// fix 2 — streak duel is computed from real numbers: your actual streak vs
+// Sarah's fixed 9-day streak (matches her status line). Bar widths are
+// proportional, so a Day-1 user honestly sees 1 vs 9.
+function updateStreakDuel() {
+  const you = state.streakDays;
+  const total = you + SARAH_STREAK_DAYS;
+  const youPct = total > 0 ? (you / total) * 100 : 50;
+  const youFill = document.querySelector('.you-fill');
+  const sarahFill = document.querySelector('.sarah-fill');
+  if (youFill) youFill.style.width = `${youPct.toFixed(1)}%`;
+  if (sarahFill) sarahFill.style.width = `${(100 - youPct).toFixed(1)}%`;
+  const youCount = document.querySelector('.duel-side.you .duel-count');
+  const sarahCount = document.querySelector('.duel-side.sarah .duel-count');
+  if (youCount) youCount.textContent = you;
+  if (sarahCount) sarahCount.textContent = SARAH_STREAK_DAYS;
+}
+
+// fix 1(b) — nudge → toast → (3s) Sarah starts moving → (3s) she gifts you
+// +5 back. Once per session; a repeat nudge just acknowledges she's moving.
+function handleNudge() {
+  if (partnerNudgeState !== 'idle') {
+    showToast("Sarah's already moving 🚶");
+    return;
+  }
+  partnerNudgeState = 'nudged';
+  showToast('Nudge sent 👋');
+  setTimeout(() => {
+    partnerNudgeState = 'moving';
+    renderSarahStatus();
+    setTimeout(() => {
+      partnerNudgeState = 'gifted';
+      showPartnerGift();
+    }, 3000);
+  }, 3000);
+}
+
+function showPartnerGift() {
+  const card = document.getElementById('partner-gift-card');
+  if (!card) return;
+  setTextContent('gift-title', 'Sarah sent you +5 min');
+  setTextContent('gift-sub', 'right back at you 💪');
+  card.classList.remove('accepted');
+  card.style.display = 'block';
+  card.classList.remove('gift-entrance');
+  void card.offsetWidth; // reflow so the entrance animation replays cleanly
+  card.classList.add('gift-entrance');
+}
+
+// fix 1(c) — reciprocal: sending Sarah time costs YOUR real remaining time.
+function handleSendTime() {
+  if (state.remainingSeconds < 5 * 60) {
+    showToast('Not enough time left to gift');
+    return;
+  }
+  state.remainingSeconds = Math.max(0, state.remainingSeconds - 5 * 60);
+  sarahMinutesLeft += 5;
+  renderSarahStatus();
+  updateRingDisplay();
+  refreshTodayNumbers();
+  showToast('You sent Sarah 5 min 💚');
+  saveState();
+}
+
 // ===== INTERCEPT EXERCISE FLOW =====
-function startInterceptExercise(mins, exercise) {
+function startInterceptExercise(mins, exercise, baseMins) {
   const options = document.getElementById('intercept-options');
   const tracking = document.getElementById('tracking-state');
   const success = document.getElementById('intercept-success');
@@ -1790,7 +2084,16 @@ function startInterceptExercise(mins, exercise) {
 
     // Add minutes
     addEarnedMinutes(mins);
-    state.lastWorkout = { name: EXERCISE_LABELS[exercise] || 'Workout', mins, at: Date.now() }; // B6
+    const label = EXERCISE_LABELS[exercise] || 'Workout';
+    state.lastWorkout = { name: label, mins, at: Date.now() }; // B6
+
+    // sweep (fix 13) — intercept exercises now count toward Earned Today and
+    // steps too, same as Quick-log workouts, so they can't disagree.
+    state.worktimeLoggedToday.push({ label, mins: baseMins, earned: mins });
+    renderEarnedList();
+    state.stepsToday += stepsForWorkout(label, baseMins);
+    updateBonusCard();
+
     saveState();
     launchConfetti();
 
@@ -1840,19 +2143,13 @@ function logWorkout(workoutName, duration) {
   state.lastWorkout = { name: workoutName, mins: earnedMins, at: Date.now() }; // B6
   launchConfetti();
 
-  // Log to earned list
-  state.worktimeLoggedToday.push({ label: workoutName, mins: duration });
-  const list = document.getElementById('earned-list');
-  if (list) {
-    const item = document.createElement('div');
-    item.className = 'earned-item';
-    item.innerHTML = `
-      <span class="earned-icon">💪</span>
-      <span class="earned-label">${workoutName}</span>
-      <span class="earned-mins">+${Math.round(duration * state.earnRateMultiplier)} min</span>
-    `;
-    list.appendChild(item);
-  }
+  // Log to earned list — rebuilt from state, not appended DOM-only (fix 3)
+  state.worktimeLoggedToday.push({ label: workoutName, mins: duration, earned: earnedMins });
+  renderEarnedList();
+
+  // Real steps, driven by this workout (fix 9)
+  state.stepsToday += stepsForWorkout(workoutName, duration);
+  updateBonusCard();
 
   showToast(`Logged! +${earnedMins} min earned 🎉`);
 
@@ -1887,13 +2184,13 @@ function hideLockScreen() {
 
 // ===== SHARE SCREEN (B5) =====
 
-// (a) Share card numbers come straight from state — no invented figures.
+// (a) Share card numbers come straight from state — no invented figures (fix 4).
 function getShareStats() {
   const { earned } = getWeekSeries();
   const totalEarnedMins = earned.reduce((a, b) => a + b, 0);
   const hours = (totalEarnedMins / 60);
   const firstApp = state.selectedApps[0] || 'TikTok';
-  const workouts = state.worktimeLoggedToday.length + 3; // +3 sample baseline
+  const workouts = state.worktimeLoggedToday.length;
   return { hours, firstApp, workouts, streak: state.streakDays };
 }
 
@@ -1902,7 +2199,9 @@ function updateShareCard() {
   const hoursStr = hours.toFixed(1);
   const headline = document.getElementById('share-headline');
   if (headline) {
-    headline.innerHTML = `This week I traded<br><span class="share-highlight">${hoursStr} hours of ${firstApp}</span><br>for ${workouts} workouts`;
+    headline.innerHTML = workouts === 0
+      ? `I'm on a <b>${streak}-day streak</b><br>of scrolling less`
+      : `This week I traded<br><span class="share-highlight">${hoursStr} hours of ${firstApp}</span><br>for ${workouts} workouts`;
   }
   setTextContent('share-streak', `🔥 ${streak}-day streak`);
 }
@@ -1980,10 +2279,13 @@ function renderShareCanvas() {
 
   ctx.textAlign = 'center';
 
-  // Headline
+  // Headline (fix 4 — same real-or-fallback logic as the on-screen card)
   ctx.fillStyle = '#fff';
   ctx.font = '700 30px -apple-system, BlinkMacSystemFont, sans-serif';
-  wrapCenteredText(ctx, `This week I traded ${hours.toFixed(1)} hours of ${firstApp} for ${workouts} workouts`, cx, 360, 480, 40);
+  const headlineText = workouts === 0
+    ? `I'm on a ${streak}-day streak of scrolling less`
+    : `This week I traded ${hours.toFixed(1)} hours of ${firstApp} for ${workouts} workouts`;
+  wrapCenteredText(ctx, headlineText, cx, 360, 480, 40);
 
   // Streak
   ctx.font = '700 28px -apple-system, BlinkMacSystemFont, sans-serif';

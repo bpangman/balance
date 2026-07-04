@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Balance — Move to Scroll</title>
-  <link rel="stylesheet" href="style.css?v=5" />
+  <link rel="stylesheet" href="style.css?v=6" />
 
   <!-- SVG Favicon -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%236366F1' stroke-width='3' stroke-dasharray='66 8' stroke-linecap='round' transform='rotate(-90 16 16)'/%3E%3C/svg%3E" />
@@ -321,7 +321,10 @@
 
             <!-- Weekly chart -->
             <div class="glass-card chart-card">
-              <div class="card-title">This week</div>
+              <div class="chart-title-row">
+                <div class="card-title">This week</div>
+                <span class="sample-chip sample-chip-sm">sample history</span>
+              </div>
               <div class="week-chart" id="week-chart"></div>
               <div class="chart-legend">
                 <span class="legend-dot mint"></span><span>Social mins</span>
@@ -329,23 +332,22 @@
               </div>
             </div>
 
-            <!-- Bonus card -->
+            <!-- Bonus card (real — driven by state.stepsToday, fix 9) -->
             <div class="glass-card bonus-card">
               <div class="bonus-row">
                 <span class="bonus-icon">🚶</span>
                 <div class="bonus-text">
                   <div class="bonus-title-row">
                     <div class="bonus-title">Hit 8,000 steps today</div>
-                    <span class="sample-chip sample-chip-sm">Sample goal</span>
                   </div>
                   <div class="bonus-sub">+10 min tomorrow</div>
                 </div>
                 <span class="bonus-reward">+10m</span>
               </div>
               <div class="bonus-progress-wrap">
-                <div class="bonus-progress-bar" id="bonus-progress-bar" style="width:65.4%"></div>
+                <div class="bonus-progress-bar" id="bonus-progress-bar" style="width:0%"></div>
               </div>
-              <div class="bonus-prog-label" id="bonus-prog-label">5,234 / 8,000 steps</div>
+              <div class="bonus-prog-label" id="bonus-prog-label">0 / 8,000 steps</div>
             </div>
           </div>
         </div>
@@ -374,12 +376,12 @@
 
             <div class="section-title">Quick log</div>
             <div class="workout-grid">
-              <button class="workout-tile" data-workout="Walk" data-mins-per-min="1">🚶<span>Walk</span></button>
-              <button class="workout-tile" data-workout="Run" data-mins-per-min="1">🏃<span>Run</span></button>
-              <button class="workout-tile" data-workout="Lift" data-mins-per-min="1">🏋️<span>Lift</span></button>
-              <button class="workout-tile" data-workout="Yoga" data-mins-per-min="1">🧘<span>Yoga</span></button>
-              <button class="workout-tile" data-workout="Cycle" data-mins-per-min="1">🚴<span>Cycle</span></button>
-              <button class="workout-tile" data-workout="Class" data-mins-per-min="1">🤸<span>Class</span></button>
+              <button class="workout-tile" data-workout="Walk">🚶<span>Walk</span></button>
+              <button class="workout-tile" data-workout="Run">🏃<span>Run</span></button>
+              <button class="workout-tile" data-workout="Lift">🏋️<span>Lift</span></button>
+              <button class="workout-tile" data-workout="Yoga">🧘<span>Yoga</span></button>
+              <button class="workout-tile" data-workout="Cycle">🚴<span>Cycle</span></button>
+              <button class="workout-tile" data-workout="Class">🤸<span>Class</span></button>
             </div>
 
             <!-- Streak Shield explainer -->
@@ -409,11 +411,7 @@
             <!-- Earned today list -->
             <div class="section-title" style="margin-top:20px">Earned today</div>
             <div class="earned-list" id="earned-list">
-              <div class="earned-item">
-                <span class="earned-icon">🚶</span>
-                <span class="earned-label">Morning walk</span>
-                <span class="earned-mins">+12 min</span>
-              </div>
+              <div class="earned-empty" id="earned-empty">Nothing yet today — log a workout to earn time.</div>
             </div>
 
             <!-- Health badge -->
@@ -442,13 +440,15 @@
                 <div class="seg-indicator" id="seg-indicator"></div>
               </div>
 
-              <!-- Stat cards row -->
+              <!-- Stat cards row — always all-time, tagged so they're not confused with the range toggle -->
               <div class="analytics-stat-row" id="analytics-stat-row">
                 <div class="glass-card analytics-stat-card">
+                  <span class="asc-alltime-tag">All-time</span>
                   <div class="asc-value" id="stat-screen-pct">—</div>
                   <div class="asc-label">Screen time since you started</div>
                 </div>
                 <div class="glass-card analytics-stat-card">
+                  <span class="asc-alltime-tag">All-time</span>
                   <div class="asc-value" id="stat-workout-mult">—</div>
                   <div class="asc-label">Workout minutes since week 1</div>
                 </div>
@@ -468,7 +468,8 @@
 
               <!-- Screen time chart -->
               <div class="glass-card analytics-chart-card">
-                <div class="acc-title">Screen time <span class="acc-trend coral">trending down ↓</span></div>
+                <div class="acc-title">Screen time <span class="acc-trend coral" id="trend-screen">trending down ↓</span></div>
+                <div class="acc-subtitle" id="screen-chart-subtitle">minutes per day</div>
                 <div class="analytics-chart-wrap" id="chart-screen-wrap">
                   <svg id="chart-screen" viewBox="0 0 320 120" preserveAspectRatio="none" width="100%" height="120"></svg>
                 </div>
@@ -477,7 +478,8 @@
 
               <!-- Workout chart -->
               <div class="glass-card analytics-chart-card">
-                <div class="acc-title">Workout minutes <span class="acc-trend mint">trending up ↑</span></div>
+                <div class="acc-title">Workout minutes <span class="acc-trend mint" id="trend-workout">trending up ↑</span></div>
+                <div class="acc-subtitle" id="workout-chart-subtitle">minutes per day</div>
                 <div class="analytics-chart-wrap" id="chart-workout-wrap">
                   <svg id="chart-workout" viewBox="0 0 320 120" preserveAspectRatio="none" width="100%" height="120"></svg>
                 </div>
@@ -498,9 +500,12 @@
                 <div class="partner-avatar">S</div>
                 <div class="partner-info">
                   <div class="partner-name">Sarah</div>
-                  <div class="partner-status">🟢 14 min left · 🔥 9 days</div>
+                  <div class="partner-status" id="partner-status">🟢 14 min left · 🔥 9 days</div>
                 </div>
+              </div>
+              <div class="partner-actions">
                 <button class="nudge-btn" id="nudge-btn">Nudge 👋</button>
+                <button class="send-time-btn" id="send-time-btn">Send 5 min</button>
               </div>
               <div class="streak-duel">
                 <div class="duel-label">Streak Duel</div>
@@ -524,13 +529,13 @@
               </div>
             </div>
 
-            <!-- Partner surprise gift (session-only, intentionally not persisted) -->
-            <div class="glass-card partner-gift-card" id="partner-gift-card">
+            <!-- Partner surprise gift — hidden until a nudge causes it (fix 1); session-only, intentionally not persisted -->
+            <div class="glass-card partner-gift-card" id="partner-gift-card" style="display:none">
               <div class="gift-row">
                 <span class="gift-icon">🎁</span>
                 <div class="gift-text">
-                  <div class="gift-title">Sarah sent you +5 min</div>
-                  <div class="gift-sub">"proud of your streak!"</div>
+                  <div class="gift-title" id="gift-title">Sarah sent you +5 min</div>
+                  <div class="gift-sub" id="gift-sub">right back at you 💪</div>
                 </div>
                 <button class="gift-accept-btn" id="gift-accept-btn">Accept</button>
               </div>
@@ -652,6 +657,7 @@
             <div class="tracking-bar"></div>
           </div>
           <p class="tracking-label">Tracking your movement…</p>
+          <p class="tracking-microcopy">Demo shortcut — the real app verifies with Apple Health.</p>
         </div>
 
         <!-- Success state -->
@@ -797,11 +803,11 @@
       </div>
 
       <div class="setting-row">
-        <div class="setting-label">Workout ratio</div>
-        <div class="stepper">
-          <button class="stepper-btn" id="ratio-dec">−</button>
-          <span class="stepper-val" id="ratio-val">1:1</span>
-          <button class="stepper-btn" id="ratio-inc">+</button>
+        <div class="setting-label">Earn rate</div>
+        <div class="earn-rate-ctrl" id="settings-earn-rate-ctrl">
+          <button class="earn-rate-btn" data-rate="0.5">0.5×</button>
+          <button class="earn-rate-btn selected" data-rate="1">1×</button>
+          <button class="earn-rate-btn" data-rate="2">2×</button>
         </div>
       </div>
 
@@ -860,6 +866,6 @@
   <!-- Confetti canvas -->
   <canvas id="confetti-canvas"></canvas>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

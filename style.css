@@ -979,58 +979,137 @@ input {
   margin-bottom: 14px;
 }
 
+/* fix 7 — title row with the "sample history" chip */
+.chart-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.chart-title-row .card-title { margin-bottom: 0; }
+
+/* fix 7 — week chart rebuilt: two slim side-by-side bars per day
+   (mint = social used, amber = earned), a dashed allowance reference line,
+   and a separate label row below so the goal line only spans the bars. */
 .week-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.week-bars-row {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 6px;
   height: 80px;
-  margin-bottom: 10px;
+}
+
+.week-labels-row {
+  display: flex;
+  gap: 6px;
 }
 
 .chart-bar-wrap {
   flex: 1;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
   height: 100%;
 }
 
 .chart-bar-bg {
   flex: 1;
   width: 100%;
+  height: 100%;
   border-radius: 6px;
   background: rgba(255,255,255,0.06);
   display: flex;
   align-items: flex-end;
-  overflow: hidden;
+  gap: 3px;
+  overflow: visible;
+  position: relative;
+  padding: 0 3px;
+}
+
+.chart-bar-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
   position: relative;
 }
 
 .chart-bar-fill {
   width: 100%;
-  background: linear-gradient(to top, var(--accent-indigo), var(--accent-violet));
-  border-radius: 6px;
+  border-radius: 4px 4px 2px 2px;
   transition: height 0.6s cubic-bezier(0.4,0,0.2,1);
 }
 
-.chart-bar-fill.today {
+.chart-bar-fill.social {
+  background: linear-gradient(to top, var(--mint), #6ee7c9);
+  opacity: 0.55;
+}
+.chart-bar-fill.social.today {
   background: linear-gradient(to top, var(--mint), var(--accent-teal));
+  opacity: 1;
 }
 
-.chart-bar-line {
+.chart-bar-fill.earned {
+  background: linear-gradient(to top, var(--amber), #fbbf24);
+  opacity: 0.55;
+}
+.chart-bar-fill.earned.today {
+  opacity: 1;
+}
+
+.chart-bar-value {
   position: absolute;
-  bottom: 0;
+  top: -16px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.chart-goal-line {
+  position: absolute;
   left: 0;
   right: 0;
-  background: var(--amber);
-  opacity: 0.6;
-  height: 2px;
+  border-top: 1px dashed rgba(245,158,11,0.55);
+  pointer-events: none;
+}
+
+.chart-goal-label {
+  position: absolute;
+  right: 0;
+  top: -13px;
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--amber);
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
+.week-label-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
 .chart-day-label {
   font-size: 10px;
   color: var(--text-muted);
+}
+
+.chart-day-check {
+  font-size: 9px;
+  line-height: 1;
+  color: var(--mint);
 }
 
 .chart-legend {
@@ -1360,6 +1439,15 @@ input {
 .earned-label { flex: 1; font-size: 14px; }
 .earned-mins { font-size: 14px; font-weight: 700; color: var(--mint); }
 
+/* fix 3 — honest empty state instead of a phantom seeded entry */
+.earned-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  text-align: center;
+  padding: 16px 0;
+}
+
 .health-badge {
   display: flex;
   align-items: center;
@@ -1398,15 +1486,28 @@ input {
 .partner-name { font-size: 16px; font-weight: 700; }
 .partner-status { font-size: 13px; color: var(--text-muted); }
 
-.nudge-btn {
-  margin-left: auto;
-  padding: 8px 16px;
+/* fix 1(c) — Nudge + Send-5-min sit side by side below the partner row */
+.partner-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.nudge-btn,
+.send-time-btn {
+  flex: 1;
+  padding: 10px 12px;
   background: var(--surface);
   border: 1px solid var(--surface-border);
   border-radius: 20px;
   font-size: 13px;
   font-weight: 600;
+  text-align: center;
   min-height: 44px;
+}
+
+.send-time-btn {
+  color: var(--mint);
 }
 
 .streak-duel { }
@@ -1787,7 +1888,16 @@ input {
   border-radius: 28px 28px 0 0;
   padding: 12px 20px max(var(--safe-bottom), 24px);
   z-index: 201;
-  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  /* sweep (fix 13) — belt-and-suspenders: visibility:hidden (same pattern
+     already used by .screen) guarantees this never paints while closed,
+     independent of the translateY(100%) positioning trick. */
+  visibility: hidden;
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), visibility 0s linear 0.35s;
+}
+
+.bottom-sheet.open {
+  visibility: visible;
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), visibility 0s;
 }
 
 .sheet-handle {
@@ -2518,4 +2628,65 @@ a { color: inherit; text-decoration: none; }
   color: var(--mint);
 }
 .partner-gift-card.accepted { opacity: 0.55; }
+
+/* fix 1(b) — subtle entrance when the gift appears as a response to a nudge */
+@keyframes giftSlideIn {
+  from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.partner-gift-card.gift-entrance {
+  animation: giftSlideIn 0.45s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* fix 9 — steps bonus card flips to an achieved style once the goal is hit */
+.bonus-card.achieved {
+  background: rgba(52,211,153,0.08);
+  border-color: rgba(52,211,153,0.35);
+}
+.bonus-achieved-row .bonus-title {
+  color: var(--mint);
+  font-weight: 700;
+}
+
+/* fix 8 — y-axis subtitle + all-time tag on the earn-tab headline stat cards */
+.acc-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: -8px 0 12px;
+  opacity: 0.75;
+}
+
+.analytics-stat-row .analytics-stat-card {
+  position: relative;
+  padding-top: 26px;
+}
+
+.asc-alltime-tag {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 2px 8px;
+}
+
+/* fix 10 — Live Activity dims once the workout is actually done */
+.la-badge.la-badge-done {
+  opacity: 0.4;
+}
+
+/* fix 11 — honest microcopy under the intercept's tracking state */
+.tracking-microcopy {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  margin-top: 6px;
+}
 .partner-gift-card.accepted .gift-accept-btn { color: var(--text-muted); }
