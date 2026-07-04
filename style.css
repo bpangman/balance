@@ -1230,8 +1230,44 @@ input {
 
 .wait-tomorrow {
   font-size: 13px;
-  color: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.4);
+  min-height: 44px;
+  padding: 8px;
 }
+
+/* Intercept close button (A2) */
+.intercept-close-btn {
+  position: absolute;
+  top: max(var(--safe-top), 54px);
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-muted);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+/* Name input on onboarding step D (A9) */
+.plan-name-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: var(--text);
+  font-size: 16px; /* A10 — keep >=16px to avoid iOS zoom */
+  outline: none;
+  transition: border-color 0.2s;
+}
+.plan-name-input:focus { border-color: var(--accent-indigo); }
 
 .partner-response {
   text-align: center;

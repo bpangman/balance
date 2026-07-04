@@ -9,6 +9,7 @@ const state = {
   totalSeconds: (45 + 12) * 60,      // 45 base + 12 earned
   earnedMinutes: 12,
   streakDays: 12,
+  streakShields: 0,
   dailyAllowanceMinutes: 45,
   selectedApps: ['TikTok', 'Instagram', 'YouTube'],
   isPlaying: false,
@@ -19,6 +20,7 @@ const state = {
   expiresAtMidnight: true,
   healthConnected: null,
   promoUsed: false,
+  userName: '',
   laElapsed: 12 * 60 + 43,          // Live activity elapsed seconds
   worktimeLoggedToday: [{ label: 'Morning walk', mins: 12 }],
 };
@@ -32,14 +34,23 @@ const APP_ICONS = {
   Reddit:    { bg: '#FF4500', emoji: '👾' },
 };
 
-const APP_USED_MINS = {
-  TikTok: 24, Instagram: 11, YouTube: 8, X: 2, Snapchat: 5, Reddit: 7,
-};
+// Toast queued from a daily-reset streak-shield save, shown once the app shell is ready
+let pendingToastMessage = null;
+
+// Earn-tab quick-log selection (module scope so the settings-sheet ratio
+// stepper can also refresh the preview — A1, A6).
+let selectedWorkout = null;
+let selectedDuration = 20;
+
+function updateDpEarnPreview() {
+  setTextContent('dp-earn-preview', Math.round(selectedDuration * state.earnRateMultiplier));
+}
 
 // ===== COUNTDOWN TIMER =====
 let countdownInterval = null;
 let widgetInterval = null;
 let laElapsedInterval = null;
+let interceptWasPlaying = false; // A3 — remember play state so hideIntercept doesn't force-resume
 
 function startCountdown() {
   if (countdownInterval) return;
@@ -237,6 +248,8 @@ function switchTab(tabName) {
 
   if (tabName === 'earn') {
     requestAnimationFrame(() => renderEarnAnalytics(currentEarnRange));
+  } else if (tabName === 'today') {
+    refreshTodayNumbers();
   }
 }
 
@@ -332,35 +345,70 @@ function handlePromoCode() {
 }
 
 function proceedToApp() {
-  saveState();
+  // Honest numbers for new users (A9, A13): a freshly onboarded user starts
+  // at Day 1 with 0 minutes earned — the seed demo values are for the
+  // pre-onboarding splash/demo state only.
+  state.streakDays = 1;
+  state.streakShields = 0;
+  state.earnedMinutes = 0;
+  state.worktimeLoggedToday = [];
   localStorage.setItem('balance_onboarded', '1');
-  localStorage.setItem('balance_selected_apps', JSON.stringify(state.selectedApps));
   showScreen('app-shell');
   state.remainingSeconds = state.dailyAllowanceMinutes * 60;
   state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
+  const earnedList = document.getElementById('earned-list');
+  if (earnedList) earnedList.innerHTML = '';
   renderAppTiles();
   buildWeekChart();
+  updateLeaderboard();
   updateRingDisplay();
   updatePlayPause();
   updateHealthBadge();
   startCountdown();
   updateDateLabel();
-  const caption = document.querySelector('.ring-caption');
-  if (caption) caption.innerHTML = `${state.dailyAllowanceMinutes} min allowance + <span id="earned-display">${state.earnedMinutes}</span> min earned · resets at midnight`;
+  updateGreeting();
+  updateAllStreakDisplays();
+  updateRingCaption();
   renderEarnAnalytics('month');
+  saveState();
 }
 
 // ===== APP TILES =====
+// ===== NUMBERS ENGINE (A8) =====
+// Single source of truth: minutes used today derives from the ring's own numbers.
+function getUsedMinutesToday() {
+  return Math.max(0, Math.round((state.totalSeconds - state.remainingSeconds) / 60));
+}
+
+// Split "used minutes" across selected apps with fixed weights so the tiles
+// can never silently disagree with the ring: first app 55%, second 30%,
+// remaining apps split the rest evenly; round, then true up the first tile.
+function computeAppMinutes(apps, usedMinutes) {
+  const n = apps.length;
+  if (n === 0) return [];
+  let weights;
+  if (n === 1) weights = [1];
+  else if (n === 2) weights = [0.55, 0.45];
+  else weights = [0.55, 0.30, ...Array(n - 2).fill(0.15 / (n - 2))];
+
+  const mins = weights.map(w => Math.round(w * usedMinutes));
+  const sum = mins.reduce((a, b) => a + b, 0);
+  mins[0] += (usedMinutes - sum);
+  return mins;
+}
+
 function renderAppTiles() {
   const container = document.getElementById('app-tiles-row');
   if (!container) return;
   container.innerHTML = '';
 
   const apps = state.selectedApps.length > 0 ? state.selectedApps : ['TikTok', 'Instagram', 'YouTube'];
+  const usedMinutes = getUsedMinutesToday();
+  const appMins = computeAppMinutes(apps, usedMinutes);
 
   apps.forEach((appName, i) => {
     const info = APP_ICONS[appName] || { bg: '#333', emoji: '📱' };
-    const used = APP_USED_MINS[appName] || 0;
+    const used = appMins[i] || 0;
     const isLocked = i === 0; // First app gets lock badge (TikTok usually)
 
     const tile = document.createElement('button');
@@ -378,15 +426,29 @@ function renderAppTiles() {
 }
 
 // ===== WEEKLY CHART =====
+// The 6 historical days stay hardcoded for the demo; today's bar is always
+// the real, live "used minutes" / earned minutes so it can never disagree
+// with the ring (A8).
+const WEEK_SOCIAL_HISTORICAL = [42, 38, 45, 29, 45, 22, 31];
+const WEEK_EARNED_HISTORICAL = [8, 12, 0, 15, 5, 20, 12];
+const WEEK_TODAY_IDX = 6;
+
+function getWeekSeries() {
+  const social = WEEK_SOCIAL_HISTORICAL.slice();
+  const earned = WEEK_EARNED_HISTORICAL.slice();
+  social[WEEK_TODAY_IDX] = getUsedMinutesToday();
+  earned[WEEK_TODAY_IDX] = state.earnedMinutes;
+  return { social, earned };
+}
+
 function buildWeekChart() {
   const chart = document.getElementById('week-chart');
   if (!chart) return;
   chart.innerHTML = '';
 
   const days = ['M','T','W','T','F','S','S'];
-  const social = [42, 38, 45, 29, 45, 22, 31];
-  const earned = [8, 12, 0, 15, 5, 20, 12];
-  const todayIdx = 6; // Sunday = today
+  const { social, earned } = getWeekSeries();
+  const todayIdx = WEEK_TODAY_IDX;
 
   days.forEach((day, i) => {
     const maxVal = Math.max(...social);
@@ -428,12 +490,83 @@ function updateDateLabel() {
   el.textContent = `Today, ${months[now.getMonth()]} ${now.getDate()}`;
 }
 
+function formatHM(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+// ===== LEADERBOARD (A8) =====
+// "You" row is computed from the same week series as the chart, so the
+// leaderboard and the "behind/ahead" line can never disagree with reality.
+function updateLeaderboard() {
+  const card = document.getElementById('leaderboard-card');
+  if (!card) return;
+
+  const { social } = getWeekSeries();
+  const youMins = social.reduce((a, b) => a + b, 0);
+
+  const others = [
+    { name: 'Lauren', mins: 134, avatar: 'linear-gradient(135deg,#A855F7,#6366F1)', initial: 'L' },
+    { name: 'Jake', mins: 352, avatar: 'linear-gradient(135deg,#F59E0B,#F87171)', initial: 'J' },
+    { name: 'Marcus', mins: 381, avatar: 'linear-gradient(135deg,#6366F1,#A855F7)', initial: 'M' },
+  ];
+  const rows = [...others, { name: 'You', mins: youMins, avatar: 'linear-gradient(135deg,#2DD4BF,#34D399)', initial: 'B', isYou: true }];
+  rows.sort((a, b) => a.mins - b.mins);
+
+  const rowsHtml = rows.map((r, i) => {
+    const rankHtml = i === 0
+      ? `<span class="lb-rank trophy">🏆</span>`
+      : `<span class="lb-rank${r.isYou ? ' you-rank' : ''}">${i + 1}</span>`;
+    return `
+      <div class="lb-row${r.isYou ? ' you-row' : ''}">
+        ${rankHtml}
+        <div class="lb-avatar" style="background:${r.avatar}">${r.initial}</div>
+        <span class="lb-name">${r.name}</span>
+        <span class="lb-mins">${formatHM(r.mins)}</span>
+      </div>`;
+  }).join('');
+
+  const youIndex = rows.findIndex(r => r.isYou);
+  let behindText = '';
+  if (youIndex === rows.length - 1) {
+    const prev = rows[youIndex - 1];
+    if (prev) behindText = `${formatHM(rows[youIndex].mins - prev.mins)} behind ${prev.name}`;
+  } else {
+    const next = rows[youIndex + 1];
+    if (next) behindText = `${formatHM(next.mins - rows[youIndex].mins)} ahead of ${next.name}`;
+  }
+
+  card.innerHTML = rowsHtml + `<div class="lb-behind" id="lb-behind">${behindText}</div>`;
+}
+
+// Cheap, event-driven refresh of everything derived from "used minutes today" (A8).
+function refreshTodayNumbers() {
+  renderAppTiles();
+  buildWeekChart();
+  updateLeaderboard();
+}
+
 // ===== INTERCEPT SCREEN =====
+function updateInterceptRewards() {
+  document.querySelectorAll('.intercept-row').forEach(row => {
+    const base = parseInt(row.dataset.baseMins, 10);
+    const mins = Math.round(base * state.earnRateMultiplier);
+    row.dataset.mins = mins;
+    const rewardEl = row.querySelector('.ex-reward');
+    if (rewardEl) rewardEl.textContent = `+${mins} min`;
+  });
+}
+
 function showIntercept(appName) {
+  interceptWasPlaying = state.isPlaying; // A3 — don't force-resume on close
   pauseCountdown();
+
   const info = APP_ICONS[appName] || { emoji: '📱' };
   setTextContent('intercept-app-icon', info.emoji);
   setTextContent('intercept-allowance', state.dailyAllowanceMinutes);
+  setTextContent('intercept-title', state.userName ? `Time's up, ${state.userName}.` : `Time's up.`);
+  updateInterceptRewards(); // A6 — reward rows reflect the current earn-rate multiplier
 
   // Reset states
   const options = document.getElementById('intercept-options');
@@ -441,19 +574,34 @@ function showIntercept(appName) {
   const success = document.getElementById('intercept-success');
   const bottom = document.getElementById('intercept-bottom');
   const partnerResp = document.getElementById('partner-response');
+  const waiting = document.getElementById('pr-waiting');
+  const declined = document.getElementById('pr-declined');
 
   if (options) options.style.display = 'flex';
   if (tracking) tracking.style.display = 'none';
   if (success) success.style.display = 'none';
   if (bottom) bottom.style.display = 'flex';
   if (partnerResp) partnerResp.style.display = 'none';
+  if (waiting) waiting.style.display = 'block';
+  if (declined) declined.style.display = 'none';
 
   showOverlay('intercept-screen');
 }
 
 function hideIntercept() {
   hideOverlay('intercept-screen');
-  resumeCountdown();
+  if (interceptWasPlaying) resumeCountdown();
+  else updatePlayPause();
+}
+
+// A2 — ✕ / "I'll wait until tomorrow" both close without earning, and reset
+// the partner-response state so the next open starts clean.
+function closeInterceptNoEarn() {
+  hideIntercept();
+  const bottom = document.getElementById('intercept-bottom');
+  const partnerResp = document.getElementById('partner-response');
+  if (bottom) bottom.style.display = 'flex';
+  if (partnerResp) partnerResp.style.display = 'none';
 }
 
 // ===== EARN MINUTES (shared logic) =====
@@ -464,6 +612,8 @@ function addEarnedMinutes(mins) {
   setTextContent('earned-display', state.earnedMinutes);
   setTextContent('earn-today-display', state.earnedMinutes);
   updateRingDisplay();
+  refreshTodayNumbers(); // A8 — chart/leaderboard/tiles stay consistent
+  saveState(); // A7
 }
 
 // ===== CONFETTI =====
@@ -544,6 +694,38 @@ function setTextContent(id, text) {
   if (el) el.textContent = text;
 }
 
+// ===== DISPLAY HELPERS (A5, A9, A13) =====
+
+// A5 — ring caption honors the expires-at-midnight toggle.
+function updateRingCaption() {
+  const caption = document.querySelector('.ring-caption');
+  if (!caption) return;
+  const expiryText = state.expiresAtMidnight ? 'resets at midnight' : 'rolls over tomorrow';
+  caption.innerHTML = `${state.dailyAllowanceMinutes} min allowance + <span id="earned-display">${state.earnedMinutes}</span> min earned · ${expiryText}`;
+}
+
+// A9 — time-aware greeting, name only shown if the user gave one.
+function getGreeting() {
+  const h = new Date().getHours();
+  const period = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  return state.userName ? `${period}, ${state.userName} 👋` : `${period} 👋`;
+}
+
+function updateGreeting() {
+  setTextContent('greeting-text', getGreeting());
+}
+
+// A13 — "Day 1" reads better than "1 days".
+function formatStreakText(n) {
+  return n === 1 ? 'Day 1' : `${n} days`;
+}
+
+function updateAllStreakDisplays() {
+  setTextContent('streak-display', formatStreakText(state.streakDays));
+  const duelCount = document.querySelector('.duel-side.you .duel-count');
+  if (duelCount) duelCount.textContent = state.streakDays;
+}
+
 // ===== SETTINGS SHEET =====
 let settingsOpen = false;
 
@@ -551,6 +733,24 @@ function openSettings() {
   document.getElementById('settings-overlay').style.display = 'block';
   document.getElementById('settings-sheet').style.transform = 'translateY(0)';
   settingsOpen = true;
+  // A1 — initialize from state, not stale local vars
+  setTextContent('allow-val', `${state.dailyAllowanceMinutes} min`);
+  setTextContent('ratio-val', `1:${Math.max(1, Math.round(state.earnRateMultiplier))}`);
+}
+
+// A1 — Daily-allowance stepper: writes state, recomputes total, clamps
+// remaining, and keeps every display of it (ring, caption, intercept) in sync.
+function applyAllowanceChange(newAllowance) {
+  const usedSeconds = state.totalSeconds - state.remainingSeconds;
+  state.dailyAllowanceMinutes = newAllowance;
+  state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
+  state.remainingSeconds = Math.max(0, Math.min(state.totalSeconds, state.totalSeconds - usedSeconds));
+  setTextContent('allow-val', `${state.dailyAllowanceMinutes} min`);
+  setTextContent('intercept-allowance', state.dailyAllowanceMinutes);
+  updateRingDisplay();
+  updateRingCaption();
+  refreshTodayNumbers();
+  saveState();
 }
 
 function closeSettings() {
@@ -559,24 +759,90 @@ function closeSettings() {
   settingsOpen = false;
 }
 
-// ===== SAVE/LOAD =====
+// ===== SAVE/LOAD (A4, A11) =====
+function todayStr() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function daysBetween(dateStr1, dateStr2) {
+  const d1 = new Date(dateStr1 + 'T00:00:00');
+  const d2 = new Date(dateStr2 + 'T00:00:00');
+  return Math.round((d2 - d1) / 86400000);
+}
+
+// Single storage key (A11) — everything lives in balance_state.
 function saveState() {
   localStorage.setItem('balance_state', JSON.stringify({
     earnedMinutes: state.earnedMinutes,
     streakDays: state.streakDays,
+    streakShields: state.streakShields,
     dailyAllowanceMinutes: state.dailyAllowanceMinutes,
     selectedApps: state.selectedApps,
+    healthConnected: state.healthConnected,
+    earnRateMultiplier: state.earnRateMultiplier,
+    expiresAtMidnight: state.expiresAtMidnight,
+    remainingSeconds: state.remainingSeconds,
+    userName: state.userName,
+    worktimeLoggedToday: state.worktimeLoggedToday,
+    savedDate: todayStr(),
   }));
+}
+
+// A13 — honest streak growth/decay on a new day, with streak-shield rescue.
+// (Shield *earning* UI comes in the feature pass; the rescue mechanic itself
+// is part of making the streak honest, so it belongs here.)
+function applyDailyReset(prevDateStr, curDateStr) {
+  const daysElapsed = daysBetween(prevDateStr, curDateStr);
+
+  const carriedEarned = state.expiresAtMidnight ? 0 : state.earnedMinutes;
+  state.earnedMinutes = carriedEarned;
+  state.remainingSeconds = (state.dailyAllowanceMinutes + carriedEarned) * 60;
+  state.totalSeconds = state.remainingSeconds;
+  state.worktimeLoggedToday = [];
+
+  if (daysElapsed === 1) {
+    state.streakDays += 1;
+  } else if (daysElapsed > 1) {
+    if (state.streakShields > 0) {
+      state.streakShields -= 1;
+      state.streakDays += 1;
+      pendingToastMessage = `🛡️ Streak Shield used — ${state.streakDays}-day streak saved!`;
+    } else {
+      state.streakDays = 1;
+    }
+  }
+
+  saveState(); // persist the reset with today's savedDate right away
 }
 
 function loadState() {
   const raw = localStorage.getItem('balance_state');
-  if (!raw) return;
-  try {
-    const saved = JSON.parse(raw);
-    Object.assign(state, saved);
+  let saved = null;
+  if (raw) {
+    try { saved = JSON.parse(raw); } catch (e) { saved = null; }
+  }
+
+  if (!saved) {
+    // One-time legacy fallback (A11) — read the old key once, then never again.
+    const legacyApps = localStorage.getItem('balance_selected_apps');
+    if (legacyApps) {
+      try { state.selectedApps = JSON.parse(legacyApps); } catch (e) { /* ignore */ }
+    }
+    return;
+  }
+
+  Object.assign(state, saved);
+  const today = todayStr();
+
+  if (!saved.savedDate || saved.savedDate === today) {
     state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
-  } catch (e) { /* ignore */ }
+  } else {
+    applyDailyReset(saved.savedDate, today);
+  }
 }
 
 function replayDemo() {
@@ -866,7 +1132,10 @@ function renderEarnAnalytics(range) {
 
   if (streakEl) {
     streakEl.textContent = '—';
-    countUpTo(streakEl, state.streakDays, ' days', 500);
+    countUpTo(streakEl, state.streakDays, '', 500);
+    setTimeout(() => {
+      if (streakEl) streakEl.textContent = formatStreakText(state.streakDays);
+    }, 520);
   }
 
   // Build charts
@@ -957,13 +1226,22 @@ document.addEventListener('DOMContentLoaded', () => {
       showScreen('app-shell');
       renderAppTiles();
       buildWeekChart();
+      updateLeaderboard();
       renderEarnAnalytics('month');
       updateRingDisplay();
+      updatePlayPause();
+      updateHealthBadge();
       startCountdown();
       updateDateLabel();
-      setTextContent('streak-display', state.streakDays);
+      updateGreeting();
+      updateAllStreakDisplays();
+      updateRingCaption();
       setTextContent('earned-display', state.earnedMinutes);
       setTextContent('earn-today-display', state.earnedMinutes);
+      if (pendingToastMessage) {
+        showToast(pendingToastMessage);
+        pendingToastMessage = null;
+      }
     } else {
       showScreen('welcome-screen');
     }
@@ -1084,6 +1362,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Plan step D handlers
+  const planNameInput = document.getElementById('plan-name-input');
+  if (planNameInput) {
+    planNameInput.addEventListener('input', () => {
+      state.userName = planNameInput.value.trim().slice(0, 20);
+    });
+  }
+
   const planSlider = document.getElementById('plan-allowance-slider');
   if (planSlider) {
     planSlider.addEventListener('input', () => {
@@ -1184,6 +1469,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // A2 — ✕ and "I'll wait until tomorrow" both close without earning.
+  document.getElementById('intercept-close-btn').addEventListener('click', closeInterceptNoEarn);
+  document.getElementById('wait-tomorrow-btn').addEventListener('click', closeInterceptNoEarn);
+
   document.getElementById('ask-partner-btn').addEventListener('click', () => {
     const bottom = document.getElementById('intercept-bottom');
     const resp = document.getElementById('partner-response');
@@ -1212,8 +1501,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  let selectedWorkout = null;
-  let selectedDuration = 20;
+  // A12 — keep the segmented-control indicator aligned across viewport resizes.
+  window.addEventListener('resize', () => {
+    if (state.currentTab === 'earn') positionSegIndicator(currentEarnRange);
+  });
 
   document.querySelectorAll('.workout-tile').forEach(tile => {
     tile.addEventListener('click', () => {
@@ -1224,7 +1515,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const picker = document.getElementById('duration-picker');
       if (picker) picker.style.display = 'block';
       setTextContent('dp-workout-name', selectedWorkout);
-      setTextContent('dp-earn-preview', Math.round(selectedDuration * state.earnRateMultiplier));
+      updateDpEarnPreview();
     });
   });
 
@@ -1232,8 +1523,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chip.addEventListener('click', () => {
       document.querySelectorAll('.dp-chip').forEach(c => c.classList.remove('selected'));
       chip.classList.add('selected');
-      selectedDuration = parseInt(chip.dataset.dur);
-      setTextContent('dp-earn-preview', Math.round(selectedDuration * state.earnRateMultiplier));
+      selectedDuration = parseInt(chip.dataset.dur, 10);
+      updateDpEarnPreview();
     });
   });
 
@@ -1254,20 +1545,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── SETTINGS SHEET ──
   document.getElementById('settings-overlay').addEventListener('click', closeSettings);
 
-  let allowance = state.dailyAllowanceMinutes;
-  let ratio = 1;
-
+  // A1 — steppers write straight to state; openSettings() re-syncs the display.
   document.getElementById('allow-dec').addEventListener('click', () => {
-    if (allowance > 15) { allowance -= 5; setTextContent('allow-val', `${allowance} min`); }
+    if (state.dailyAllowanceMinutes > 15) applyAllowanceChange(state.dailyAllowanceMinutes - 5);
   });
   document.getElementById('allow-inc').addEventListener('click', () => {
-    if (allowance < 120) { allowance += 5; setTextContent('allow-val', `${allowance} min`); }
+    if (state.dailyAllowanceMinutes < 120) applyAllowanceChange(state.dailyAllowanceMinutes + 5);
   });
   document.getElementById('ratio-dec').addEventListener('click', () => {
-    if (ratio > 1) { ratio--; setTextContent('ratio-val', `1:${ratio}`); }
+    const r = Math.max(1, Math.round(state.earnRateMultiplier));
+    if (r > 1) {
+      state.earnRateMultiplier = r - 1;
+      setTextContent('ratio-val', `1:${state.earnRateMultiplier}`);
+      updateDpEarnPreview();
+      saveState();
+    }
   });
   document.getElementById('ratio-inc').addEventListener('click', () => {
-    if (ratio < 3) { ratio++; setTextContent('ratio-val', `1:${ratio}`); }
+    const r = Math.max(1, Math.round(state.earnRateMultiplier));
+    if (r < 3) {
+      state.earnRateMultiplier = r + 1;
+      setTextContent('ratio-val', `1:${state.earnRateMultiplier}`);
+      updateDpEarnPreview();
+      saveState();
+    }
   });
 
   document.getElementById('settings-widget-btn').addEventListener('click', () => {
@@ -1323,7 +1624,8 @@ function startInterceptExercise(mins) {
 
     setTimeout(() => {
       hideIntercept();
-      showToast(`Nice work! +${mins} min added, resets at midnight.`);
+      const expiryText = state.expiresAtMidnight ? 'resets at midnight' : 'rolls over tomorrow';
+      showToast(`Nice work! +${mins} min added, ${expiryText}.`); // A5
       // Restore options for next time
       if (options) options.style.display = 'flex';
       if (optionsLabel) optionsLabel.style.display = 'block';
