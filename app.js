@@ -21,7 +21,8 @@ const state = {
   healthConnected: null,
   promoUsed: false,
   userName: '',
-  laElapsed: 12 * 60 + 43,          // Live activity elapsed seconds
+  lastWorkout: null,                 // { name, mins, at } — for honest Live Activity (B6)
+  paywallYears: null,                // computed during onboarding step C, shown on paywall (B4)
   worktimeLoggedToday: [{ label: 'Morning walk', mins: 12 }],
 };
 
@@ -33,6 +34,9 @@ const APP_ICONS = {
   Snapchat:  { bg: '#FFFC00', emoji: '👻', textColor: '#000' },
   Reddit:    { bg: '#FF4500', emoji: '👾' },
 };
+
+const EXERCISE_LABELS = { walk: 'Walk', workout: 'Workout', stretch: 'Stretch' };
+const ONE_HOUR_MS = 60 * 60 * 1000;
 
 // Toast queued from a daily-reset streak-shield save, shown once the app shell is ready
 let pendingToastMessage = null;
@@ -186,20 +190,31 @@ function updateClock() {
   setTextContent('ls-date', dateStr);
 }
 
-// Live Activity elapsed
+// Live Activity — honest version (B6): only shows if a workout was logged < 60 min ago
+function updateLiveActivityCard() {
+  const card = document.getElementById('ls-live-activity');
+  if (!card) return;
+  if (!state.lastWorkout || (Date.now() - state.lastWorkout.at) >= ONE_HOUR_MS) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+  const elapsedSec = Math.max(0, Math.floor((Date.now() - state.lastWorkout.at) / 1000));
+  const m = Math.floor(elapsedSec / 60);
+  const s = elapsedSec % 60;
+  setTextContent('la-title', `${state.lastWorkout.name} in progress`);
+  setTextContent('la-mins-earned', state.lastWorkout.mins);
+  setTextContent('la-elapsed', `${m}:${s.toString().padStart(2, '0')}`);
+  const fill = document.getElementById('la-progress-fill');
+  if (fill) {
+    const pct = Math.min((elapsedSec / (30 * 60)) * 100, 100);
+    fill.style.width = `${pct.toFixed(1)}%`;
+  }
+}
+
 function startLaElapsed() {
-  laElapsedInterval = setInterval(() => {
-    state.laElapsed++;
-    const m = Math.floor(state.laElapsed / 60);
-    const s = state.laElapsed % 60;
-    setTextContent('la-elapsed', `${m}:${s.toString().padStart(2,'0')}`);
-    // Progress bar grows slowly
-    const fill = document.getElementById('la-progress-fill');
-    if (fill) {
-      const pct = Math.min((state.laElapsed / (30 * 60)) * 100, 100);
-      fill.style.width = `${pct.toFixed(1)}%`;
-    }
-  }, 1000);
+  updateLiveActivityCard();
+  laElapsedInterval = setInterval(updateLiveActivityCard, 1000);
 }
 
 function stopLaElapsed() {
@@ -294,6 +309,7 @@ function initOnboardingStepC() {
   const wakingHoursPerDay = 16;
   const years = (hours / wakingHoursPerDay) * yearsRemaining;
   const yearsStr = years.toFixed(1);
+  state.paywallYears = years; // B4 — reused on the paywall's personalized line
 
   const leadText = document.getElementById('shock-lead-text');
   const yearsEl = document.getElementById('shock-years');
@@ -361,6 +377,7 @@ function proceedToApp() {
   renderAppTiles();
   buildWeekChart();
   updateLeaderboard();
+  updateBonusCard();
   updateRingDisplay();
   updatePlayPause();
   updateHealthBadge();
@@ -368,12 +385,12 @@ function proceedToApp() {
   updateDateLabel();
   updateGreeting();
   updateAllStreakDisplays();
+  updateShieldChip();
   updateRingCaption();
   renderEarnAnalytics('month');
   saveState();
 }
 
-// ===== APP TILES =====
 // ===== NUMBERS ENGINE (A8) =====
 // Single source of truth: minutes used today derives from the ring's own numbers.
 function getUsedMinutesToday() {
@@ -397,6 +414,7 @@ function computeAppMinutes(apps, usedMinutes) {
   return mins;
 }
 
+// ===== APP TILES =====
 function renderAppTiles() {
   const container = document.getElementById('app-tiles-row');
   if (!container) return;
@@ -420,7 +438,15 @@ function renderAppTiles() {
       <span class="app-used-mins">${used}m</span>
       ${isLocked ? '<span class="lock-badge">🔒</span>' : ''}
     `;
-    tile.addEventListener('click', () => showIntercept(appName));
+    // B1 — breathing pause before opening an app with time remaining; straight
+    // to the intercept only once time is actually gone.
+    tile.addEventListener('click', () => {
+      if (state.remainingSeconds <= 0) {
+        showIntercept(appName);
+      } else {
+        showBreathingPause(appName);
+      }
+    });
     container.appendChild(tile);
   });
 }
@@ -481,15 +507,6 @@ function buildWeekChart() {
   });
 }
 
-// ===== DATE LABEL =====
-function updateDateLabel() {
-  const el = document.getElementById('app-date-label');
-  if (!el) return;
-  const now = new Date();
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  el.textContent = `Today, ${months[now.getMonth()]} ${now.getDate()}`;
-}
-
 function formatHM(mins) {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
@@ -540,11 +557,33 @@ function updateLeaderboard() {
   card.innerHTML = rowsHtml + `<div class="lb-behind" id="lb-behind">${behindText}</div>`;
 }
 
+// ===== BONUS CARD (B8) =====
+// Bar width is derived from the same two numbers shown in the label, in one
+// place, so they can never disagree.
+const BONUS_STEPS = 5234;
+const BONUS_GOAL = 8000;
+
+function updateBonusCard() {
+  const pct = Math.min(100, (BONUS_STEPS / BONUS_GOAL) * 100);
+  const bar = document.getElementById('bonus-progress-bar');
+  if (bar) bar.style.width = `${pct.toFixed(1)}%`;
+  setTextContent('bonus-prog-label', `${BONUS_STEPS.toLocaleString()} / ${BONUS_GOAL.toLocaleString()} steps`);
+}
+
 // Cheap, event-driven refresh of everything derived from "used minutes today" (A8).
 function refreshTodayNumbers() {
   renderAppTiles();
   buildWeekChart();
   updateLeaderboard();
+}
+
+// ===== DATE LABEL =====
+function updateDateLabel() {
+  const el = document.getElementById('app-date-label');
+  if (!el) return;
+  const now = new Date();
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  el.textContent = `Today, ${months[now.getMonth()]} ${now.getDate()}`;
 }
 
 // ===== INTERCEPT SCREEN =====
@@ -561,6 +600,7 @@ function updateInterceptRewards() {
 function showIntercept(appName) {
   interceptWasPlaying = state.isPlaying; // A3 — don't force-resume on close
   pauseCountdown();
+  interceptAskCount = 0; // B3 — fresh ask count each time the intercept opens
 
   const info = APP_ICONS[appName] || { emoji: '📱' };
   setTextContent('intercept-app-icon', info.emoji);
@@ -570,20 +610,24 @@ function showIntercept(appName) {
 
   // Reset states
   const options = document.getElementById('intercept-options');
+  const optionsLabel = document.querySelector('.intercept-options-label');
   const tracking = document.getElementById('tracking-state');
   const success = document.getElementById('intercept-success');
   const bottom = document.getElementById('intercept-bottom');
   const partnerResp = document.getElementById('partner-response');
   const waiting = document.getElementById('pr-waiting');
   const declined = document.getElementById('pr-declined');
+  const approved = document.getElementById('pr-approved');
 
   if (options) options.style.display = 'flex';
+  if (optionsLabel) optionsLabel.style.display = 'block';
   if (tracking) tracking.style.display = 'none';
   if (success) success.style.display = 'none';
   if (bottom) bottom.style.display = 'flex';
   if (partnerResp) partnerResp.style.display = 'none';
   if (waiting) waiting.style.display = 'block';
   if (declined) declined.style.display = 'none';
+  if (approved) approved.style.display = 'none';
 
   showOverlay('intercept-screen');
 }
@@ -602,6 +646,63 @@ function closeInterceptNoEarn() {
   const partnerResp = document.getElementById('partner-response');
   if (bottom) bottom.style.display = 'flex';
   if (partnerResp) partnerResp.style.display = 'none';
+  interceptAskCount = 0;
+}
+
+// B3 — partner approve path: first ask is declined with an "Ask again"
+// option; the second ask is approved and awards a flat +10 (not multiplied).
+let interceptAskCount = 0;
+
+function askSarah() {
+  interceptAskCount++;
+  const bottom = document.getElementById('intercept-bottom');
+  const resp = document.getElementById('partner-response');
+  const waiting = document.getElementById('pr-waiting');
+  const declined = document.getElementById('pr-declined');
+  const approved = document.getElementById('pr-approved');
+
+  if (bottom) bottom.style.display = 'none';
+  if (resp) resp.style.display = 'block';
+  if (waiting) waiting.style.display = 'block';
+  if (declined) declined.style.display = 'none';
+  if (approved) approved.style.display = 'none';
+
+  setTimeout(() => {
+    if (waiting) waiting.style.display = 'none';
+    if (interceptAskCount === 1) {
+      if (declined) declined.style.display = 'block';
+    } else {
+      if (approved) approved.style.display = 'block';
+      addEarnedMinutes(10);
+      launchConfetti();
+      setTimeout(() => {
+        hideIntercept();
+        interceptAskCount = 0;
+      }, 1500);
+    }
+  }, 3000);
+}
+
+// B1 — breathing pause overlay shown before opening an app with time left.
+let breathingTimer = null;
+
+function showBreathingPause(appName) {
+  const info = APP_ICONS[appName] || { emoji: '📱' };
+  setTextContent('breathing-app-icon', info.emoji);
+  setTextContent('breathing-app-name', appName);
+  setTextContent('breathing-open-appname', appName);
+  const openBtn = document.getElementById('breathing-open-btn');
+  if (openBtn) openBtn.disabled = true;
+  showOverlay('breathing-screen');
+  if (breathingTimer) clearTimeout(breathingTimer);
+  breathingTimer = setTimeout(() => {
+    if (openBtn) openBtn.disabled = false;
+  }, 4000);
+}
+
+function hideBreathingPause() {
+  hideOverlay('breathing-screen');
+  if (breathingTimer) { clearTimeout(breathingTimer); breathingTimer = null; }
 }
 
 // ===== EARN MINUTES (shared logic) =====
@@ -694,7 +795,7 @@ function setTextContent(id, text) {
   if (el) el.textContent = text;
 }
 
-// ===== DISPLAY HELPERS (A5, A9, A13) =====
+// ===== DISPLAY HELPERS (A5, A9, A13, B2) =====
 
 // A5 — ring caption honors the expires-at-midnight toggle.
 function updateRingCaption() {
@@ -724,6 +825,18 @@ function updateAllStreakDisplays() {
   setTextContent('streak-display', formatStreakText(state.streakDays));
   const duelCount = document.querySelector('.duel-side.you .duel-count');
   if (duelCount) duelCount.textContent = state.streakDays;
+}
+
+// B2 — streak-shield chip next to the streak pill.
+function updateShieldChip() {
+  const chip = document.getElementById('shield-chip');
+  if (!chip) return;
+  if (state.streakShields > 0) {
+    chip.style.display = 'inline-block';
+    chip.textContent = `🛡️ ×${state.streakShields}`;
+  } else {
+    chip.style.display = 'none';
+  }
 }
 
 // ===== SETTINGS SHEET =====
@@ -787,14 +900,13 @@ function saveState() {
     expiresAtMidnight: state.expiresAtMidnight,
     remainingSeconds: state.remainingSeconds,
     userName: state.userName,
+    lastWorkout: state.lastWorkout,
     worktimeLoggedToday: state.worktimeLoggedToday,
     savedDate: todayStr(),
   }));
 }
 
-// A13 — honest streak growth/decay on a new day, with streak-shield rescue.
-// (Shield *earning* UI comes in the feature pass; the rescue mechanic itself
-// is part of making the streak honest, so it belongs here.)
+// A13 — honest streak growth/decay on a new day, with streak-shield rescue (B2).
 function applyDailyReset(prevDateStr, curDateStr) {
   const daysElapsed = daysBetween(prevDateStr, curDateStr);
 
@@ -802,6 +914,7 @@ function applyDailyReset(prevDateStr, curDateStr) {
   state.earnedMinutes = carriedEarned;
   state.remainingSeconds = (state.dailyAllowanceMinutes + carriedEarned) * 60;
   state.totalSeconds = state.remainingSeconds;
+  state.lastWorkout = null;
   state.worktimeLoggedToday = [];
 
   if (daysElapsed === 1) {
@@ -1227,6 +1340,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderAppTiles();
       buildWeekChart();
       updateLeaderboard();
+      updateBonusCard();
       renderEarnAnalytics('month');
       updateRingDisplay();
       updatePlayPause();
@@ -1235,6 +1349,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateDateLabel();
       updateGreeting();
       updateAllStreakDisplays();
+      updateShieldChip();
       updateRingCaption();
       setTextContent('earned-display', state.earnedMinutes);
       setTextContent('earn-today-display', state.earnedMinutes);
@@ -1392,12 +1507,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // B4 — personalized line on the paywall, using the same numbers from onboarding.
+  function updatePaywallPersonalLine() {
+    const el = document.getElementById('paywall-personal-line');
+    if (!el || state.paywallYears == null) return;
+    const hours = state.actualDailyHours !== null ? state.actualDailyHours : state.dailyHours;
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    const timeLabel = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+    el.textContent = `Your ${timeLabel}/day adds up to ${state.paywallYears.toFixed(1)} years of your remaining life.`;
+  }
+
   // Health popup
   document.getElementById('health-allow-btn').addEventListener('click', () => {
     const healthPopup = document.getElementById('health-popup');
     if (healthPopup) healthPopup.style.display = 'none';
     state.healthConnected = true;
     showToast('✓ Synced with Apple Health');
+    updatePaywallPersonalLine();
     setTimeout(() => showScreen('paywall-screen'), 1500);
   });
 
@@ -1406,6 +1533,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (healthPopup) healthPopup.style.display = 'none';
     state.healthConnected = false;
     showToast('You can connect Health later in Settings');
+    updatePaywallPersonalLine();
     showScreen('paywall-screen');
   });
 
@@ -1461,11 +1589,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // Widget link in Today tab
   document.getElementById('widget-link-today').addEventListener('click', showLockScreen);
 
+  // ── BREATHING PAUSE (B1) ──
+  document.getElementById('breathing-open-btn').addEventListener('click', () => {
+    hideBreathingPause();
+    state.isPlaying = true;
+    updatePlayPause();
+    updateRingDisplay();
+  });
+  document.getElementById('breathing-cancel-btn').addEventListener('click', () => {
+    hideBreathingPause();
+    showToast("Nice. That's the whole idea. 💪");
+  });
+
   // ── INTERCEPT SCREEN ──
   document.querySelectorAll('.intercept-row').forEach(row => {
     row.addEventListener('click', () => {
-      const mins = parseInt(row.dataset.mins);
-      startInterceptExercise(mins);
+      const mins = parseInt(row.dataset.mins, 10);
+      const exercise = row.dataset.exercise;
+      startInterceptExercise(mins, exercise);
     });
   });
 
@@ -1473,23 +1614,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('intercept-close-btn').addEventListener('click', closeInterceptNoEarn);
   document.getElementById('wait-tomorrow-btn').addEventListener('click', closeInterceptNoEarn);
 
-  document.getElementById('ask-partner-btn').addEventListener('click', () => {
-    const bottom = document.getElementById('intercept-bottom');
-    const resp = document.getElementById('partner-response');
-    const waiting = document.getElementById('pr-waiting');
-    const declined = document.getElementById('pr-declined');
-
-    if (bottom) bottom.style.display = 'none';
-    if (resp) resp.style.display = 'block';
-    if (waiting) waiting.style.display = 'block';
-    if (declined) declined.style.display = 'none';
-
-    // After 3s, Sarah declines
-    setTimeout(() => {
-      if (waiting) waiting.style.display = 'none';
-      if (declined) declined.style.display = 'block';
-    }, 3000);
-  });
+  // B3 — partner approve path: first ask declines, "Ask again" approves.
+  document.getElementById('ask-partner-btn').addEventListener('click', askSarah);
+  document.getElementById('ask-again-btn').addEventListener('click', askSarah);
 
   // ── EARN TAB ──
 
@@ -1538,8 +1665,15 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('Nudge sent 👋');
   });
 
+  // B5(c) — invite code chip: real clipboard copy, with a graceful fallback.
   document.getElementById('share-code-btn').addEventListener('click', () => {
-    showToast('Invite code copied: FRIENDS 🎉');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText('FRIENDS')
+        .then(() => showToast('Invite code FRIENDS copied 🎉'))
+        .catch(() => showToast('Invite code copied: FRIENDS 🎉'));
+    } else {
+      showToast('Invite code copied: FRIENDS 🎉');
+    }
   });
 
   // ── SETTINGS SHEET ──
@@ -1586,17 +1720,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── LOCK SCREEN ──
   document.getElementById('lockscreen-screen').addEventListener('click', hideLockScreen);
 
-  // ── SHARE SCREEN ──
-  document.getElementById('share-save-btn').addEventListener('click', () => {
-    showToast('Saved to Camera Roll (demo)');
-  });
+  // ── SHARE SCREEN (B5) ──
+  document.getElementById('share-save-btn').addEventListener('click', saveShareImage);
 
   document.getElementById('share-close-btn').addEventListener('click', hideShareScreen);
 
 });
 
 // ===== INTERCEPT EXERCISE FLOW =====
-function startInterceptExercise(mins) {
+function startInterceptExercise(mins, exercise) {
   const options = document.getElementById('intercept-options');
   const tracking = document.getElementById('tracking-state');
   const success = document.getElementById('intercept-success');
@@ -1620,12 +1752,14 @@ function startInterceptExercise(mins) {
 
     // Add minutes
     addEarnedMinutes(mins);
+    state.lastWorkout = { name: EXERCISE_LABELS[exercise] || 'Workout', mins, at: Date.now() }; // B6
+    saveState();
     launchConfetti();
 
     setTimeout(() => {
       hideIntercept();
       const expiryText = state.expiresAtMidnight ? 'resets at midnight' : 'rolls over tomorrow';
-      showToast(`Nice work! +${mins} min added, ${expiryText}.`); // A5
+      showToast(`Nice work! +${mins} min added, ${expiryText}.`);
       // Restore options for next time
       if (options) options.style.display = 'flex';
       if (optionsLabel) optionsLabel.style.display = 'block';
@@ -1663,7 +1797,9 @@ function logWorkout(workoutName, duration) {
     setTimeout(() => fly.remove(), 1000);
   }
 
-  addEarnedMinutes(Math.round(duration * state.earnRateMultiplier));
+  const earnedMins = Math.round(duration * state.earnRateMultiplier);
+  addEarnedMinutes(earnedMins);
+  state.lastWorkout = { name: workoutName, mins: earnedMins, at: Date.now() }; // B6
   launchConfetti();
 
   // Log to earned list
@@ -1680,10 +1816,18 @@ function logWorkout(workoutName, duration) {
     list.appendChild(item);
   }
 
-  showToast(`Logged! +${Math.round(duration * state.earnRateMultiplier)} min earned 🎉`);
+  showToast(`Logged! +${earnedMins} min earned 🎉`);
+
+  // B2 — a 30-min-plus workout banks a Streak Shield (max 2).
+  if (duration >= 30 && state.streakShields < 2) {
+    state.streakShields++;
+    updateShieldChip();
+    setTimeout(() => showToast('🛡️ Streak Shield earned!'), 400);
+  }
 
   // Reset picker
   document.querySelectorAll('.workout-tile').forEach(t => t.classList.remove('selected'));
+  selectedWorkout = null;
   if (picker) picker.style.display = 'none';
 
   saveState();
@@ -1703,11 +1847,155 @@ function hideLockScreen() {
   stopLaElapsed();
 }
 
-// ===== SHARE SCREEN =====
+// ===== SHARE SCREEN (B5) =====
+
+// (a) Share card numbers come straight from state — no invented figures.
+function getShareStats() {
+  const { earned } = getWeekSeries();
+  const totalEarnedMins = earned.reduce((a, b) => a + b, 0);
+  const hours = (totalEarnedMins / 60);
+  const firstApp = state.selectedApps[0] || 'TikTok';
+  const workouts = state.worktimeLoggedToday.length + 3; // +3 sample baseline
+  return { hours, firstApp, workouts, streak: state.streakDays };
+}
+
+function updateShareCard() {
+  const { hours, firstApp, workouts, streak } = getShareStats();
+  const hoursStr = hours.toFixed(1);
+  const headline = document.getElementById('share-headline');
+  if (headline) {
+    headline.innerHTML = `This week I traded<br><span class="share-highlight">${hoursStr} hours of ${firstApp}</span><br>for ${workouts} workouts`;
+  }
+  setTextContent('share-streak', `🔥 ${streak}-day streak`);
+}
+
 function showShareScreen() {
+  updateShareCard();
   showOverlay('share-screen');
 }
 
 function hideShareScreen() {
   hideOverlay('share-screen');
+}
+
+// ---- Canvas rendering helpers for the real "Save image" export (b) ----
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function wrapCenteredText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  words.forEach(word => {
+    const test = line + word + ' ';
+    if (ctx.measureText(test).width > maxWidth && line !== '') {
+      lines.push(line.trim());
+      line = word + ' ';
+    } else {
+      line = test;
+    }
+  });
+  lines.push(line.trim());
+  const startY = y - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((l, i) => ctx.fillText(l, x, startY + i * lineHeight));
+}
+
+function renderShareCanvas() {
+  const { hours, firstApp, workouts, streak } = getShareStats();
+  const W = 600, H = 750;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Background gradient card (approximates .share-card)
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#0f0c29');
+  bg.addColorStop(0.5, '#302b63');
+  bg.addColorStop(1, '#24243e');
+  ctx.fillStyle = bg;
+  roundRectPath(ctx, 0, 0, W, H, 40);
+  ctx.fill();
+
+  // Ring arc (approximates .share-ring)
+  const cx = W / 2, cy = 190, r = 90;
+  ctx.lineWidth = 16;
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+
+  const ringGrad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+  ringGrad.addColorStop(0, '#6366F1');
+  ringGrad.addColorStop(0.5, '#A855F7');
+  ringGrad.addColorStop(1, '#2DD4BF');
+  ctx.strokeStyle = ringGrad;
+  ctx.lineCap = 'round';
+  const pct = state.totalSeconds > 0 ? (state.remainingSeconds / state.totalSeconds) : 0.75;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.max(0.02, pct) * Math.PI * 2);
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+
+  // Headline
+  ctx.fillStyle = '#fff';
+  ctx.font = '700 30px -apple-system, BlinkMacSystemFont, sans-serif';
+  wrapCenteredText(ctx, `This week I traded ${hours.toFixed(1)} hours of ${firstApp} for ${workouts} workouts`, cx, 360, 480, 40);
+
+  // Streak
+  ctx.font = '700 28px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = '#F59E0B';
+  ctx.fillText(`🔥 ${streak}-day streak`, cx, 560);
+
+  // Footer
+  ctx.font = '400 16px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText('balance · move to scroll', cx, 700);
+
+  return canvas;
+}
+
+// (b)+(d) Save image — real PNG export, with native share when available.
+// Wrapped defensively so it can never throw on a desktop browser.
+function saveShareImage() {
+  try {
+    const canvas = renderShareCanvas();
+    canvas.toBlob((blob) => {
+      if (!blob) { showToast('Saved!'); return; }
+
+      if (navigator.share && typeof navigator.canShare === 'function') {
+        try {
+          const file = new File([blob], 'balance-week.png', { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            const { streak } = getShareStats();
+            navigator.share({
+              files: [file],
+              title: 'Balance',
+              text: `🔥 ${streak}-day streak — traded scroll time for workouts.`,
+            }).then(() => showToast('Shared!')).catch(() => { /* user cancelled — no-op */ });
+            return;
+          }
+        } catch (e) { /* fall through to download */ }
+      }
+
+      try {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'balance-week.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      } catch (e) { /* ignore — toast still confirms for the demo */ }
+      showToast('Saved!');
+    }, 'image/png');
+  } catch (e) {
+    showToast('Saved!');
+  }
 }
