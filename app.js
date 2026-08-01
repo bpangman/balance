@@ -162,13 +162,56 @@ function updateClock() {
   setTextContent('ls-date', dateStr);
 }
 
-// Live Activity - honest version (B6, fix 10): only shows if a workout was
-// logged < 60 min ago, and the progress denominator is the ACTUAL logged
-// workout's duration (not a fixed 30-min guess), so it always hits 100% when
-// the workout is really done.
+// item 3b - shared timestamp math for the live workout timer. The source of
+// truth is always real Date.now() timestamps (startedAt + accumulated pause
+// time), never an interval's own counter, so a reload mid-workout recovers
+// the correct elapsed time.
+function computeActiveWorkoutElapsedMs(now) {
+  const aw = state.activeWorkout;
+  if (!aw) return 0;
+  const referenceNow = aw.pausedAt || (now || Date.now());
+  return Math.max(0, referenceNow - aw.startedAt - aw.pausedTotalMs);
+}
+
+function formatTimerMMSS(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// Live Activity - honest version (B6, fix 10, item 3b). While a workout is
+// actually running, this reflects the REAL elapsed time and the earn-rate
+// framing. Once it's over, it falls back to the existing post-completion
+// mock: only shows if a workout was logged < 60 min ago, and the progress
+// denominator is the ACTUAL logged workout's duration (not a fixed 30-min
+// guess), so it always hits 100% when the workout is really done.
 function updateLiveActivityCard() {
   const card = document.getElementById('ls-live-activity');
   if (!card) return;
+
+  if (state.activeWorkout) {
+    card.style.display = 'block';
+    const elapsedMs = computeActiveWorkoutElapsedMs();
+    const elapsedMinutes = Math.floor(elapsedMs / 60000);
+    const projected = Math.round(elapsedMinutes * state.earnRateMultiplier);
+    const paused = !!state.activeWorkout.pausedAt;
+    setTextContent('la-title', `${state.activeWorkout.name} ${paused ? 'paused' : 'in progress'}`);
+    setTextContent('la-mins-earned', projected);
+    setTextContent('la-elapsed', formatTimerMMSS(elapsedMs));
+    const fill = document.getElementById('la-progress-fill');
+    if (fill) {
+      // No fixed target while it's still running - a gentle ramp against a
+      // 30-min reference reads honestly without pretending to know when
+      // the user will actually stop.
+      const pct = Math.min((elapsedMinutes / 30) * 100, 100);
+      fill.style.width = `${pct.toFixed(1)}%`;
+    }
+    const badge = document.querySelector('.la-badge');
+    if (badge) badge.classList.remove('la-badge-done');
+    return;
+  }
+
   if (!state.lastWorkout || (Date.now() - state.lastWorkout.at) >= ONE_HOUR_MS) {
     card.style.display = 'none';
     return;
@@ -987,6 +1030,134 @@ function addEarnedMinutes(mins) {
   saveState(); // A7
 }
 
+// ===== LIVE WORKOUT TIMER (item 3b) =====
+// One workout runs at a time. The visible tick is a setInterval, but the
+// SOURCE OF TRUTH is always real timestamps (startedAt + pausedTotalMs), so
+// a reload mid-workout recovers the correct elapsed time instead of
+// resetting to 0 or freezing.
+function startWorkoutTimer(workoutName) {
+  if (state.activeWorkout) return; // one at a time
+  state.activeWorkout = { name: workoutName, startedAt: Date.now(), pausedTotalMs: 0, pausedAt: null };
+  saveState();
+  showWorkoutTimerUI();
+}
+
+function showWorkoutTimerUI() {
+  const aw = state.activeWorkout;
+  if (!aw) { hideWorkoutTimerUI(); return; }
+  const card = document.getElementById('live-timer-card');
+  if (card) card.style.display = 'block';
+  setTextContent('live-timer-workout-name', aw.name);
+  updatePauseResumeBtn();
+  tickLiveTimer();
+  clearInterval(liveTimerTickInterval);
+  liveTimerTickInterval = setInterval(tickLiveTimer, 1000);
+  // Disabling (not hiding) the quick-log tiles makes it visually obvious a
+  // workout is already running rather than silently ignoring a second tap.
+  document.querySelectorAll('.workout-tile').forEach(t => { t.disabled = true; });
+}
+
+function hideWorkoutTimerUI() {
+  const card = document.getElementById('live-timer-card');
+  if (card) card.style.display = 'none';
+  clearInterval(liveTimerTickInterval);
+  liveTimerTickInterval = null;
+  document.querySelectorAll('.workout-tile').forEach(t => { t.disabled = false; });
+}
+
+// Evident-on-return (item 3b): call once at app-shell entry so a workout
+// left running survives a reload instead of silently vanishing.
+function restoreActiveWorkoutIfAny() {
+  if (state.activeWorkout) showWorkoutTimerUI();
+  else hideWorkoutTimerUI();
+}
+
+function tickLiveTimer() {
+  if (!state.activeWorkout) return;
+  const elapsedMs = computeActiveWorkoutElapsedMs();
+  setTextContent('live-timer-display', formatTimerMMSS(elapsedMs));
+  updateLiveActivityCard(); // keeps the lock-screen mock in sync with the real timer
+}
+
+function updatePauseResumeBtn() {
+  const btn = document.getElementById('live-timer-pause-btn');
+  if (!btn) return;
+  btn.textContent = (state.activeWorkout && state.activeWorkout.pausedAt) ? '▶ Resume' : '⏸ Pause';
+}
+
+function toggleWorkoutPause() {
+  const aw = state.activeWorkout;
+  if (!aw) return;
+  if (aw.pausedAt) {
+    aw.pausedTotalMs += (Date.now() - aw.pausedAt);
+    aw.pausedAt = null;
+  } else {
+    aw.pausedAt = Date.now();
+  }
+  saveState();
+  updatePauseResumeBtn();
+  tickLiveTimer();
+}
+
+// Small fly-up "+N min" animation, reused from the old duration-picker flow
+// but anchored to whatever element is passed in (the live-timer card here).
+function flyEarnedMinsLabel(anchorEl, text) {
+  if (!anchorEl) return;
+  const frame = document.getElementById('phone-frame');
+  if (!frame) return;
+  const rect = anchorEl.getBoundingClientRect();
+  const frameRect = frame.getBoundingClientRect();
+  const fly = document.createElement('div');
+  fly.className = 'earn-fly-label';
+  fly.textContent = text;
+  fly.style.left = `${rect.left - frameRect.left + 80}px`;
+  fly.style.top = `${rect.top - frameRect.top - 20}px`;
+  frame.appendChild(fly);
+  setTimeout(() => fly.remove(), 1000);
+}
+
+function endWorkoutTimer() {
+  const aw = state.activeWorkout;
+  if (!aw) return;
+  const elapsedMs = computeActiveWorkoutElapsedMs();
+  const elapsedMinutes = Math.max(0, Math.round(elapsedMs / 60000));
+  const earnedPreview = Math.round(elapsedMinutes * state.earnRateMultiplier);
+  flyEarnedMinsLabel(document.getElementById('live-timer-card'), `+${earnedPreview} min`);
+
+  state.activeWorkout = null;
+  hideWorkoutTimerUI();
+  saveState();
+  creditWorkout(aw.name, elapsedMinutes);
+}
+
+// ===== SHARED WORKOUT CREDIT (drives Earned Today, steps, Streak Shield) =====
+// Every workout-completion path (Quick log's live timer, the "Other"
+// library) funnels through here so the downstream effects can never
+// diverge. duration is always REAL minutes, never a picked/retroactive value.
+function creditWorkout(workoutName, duration) {
+  const earnedMins = Math.round(duration * state.earnRateMultiplier);
+  addEarnedMinutes(earnedMins);
+  state.lastWorkout = { name: workoutName, mins: earnedMins, at: Date.now() }; // B6
+  launchConfetti();
+
+  state.worktimeLoggedToday.push({ label: workoutName, mins: duration, earned: earnedMins });
+  renderEarnedList();
+
+  state.stepsToday += stepsForWorkout(workoutName, duration);
+  updateBonusCard();
+
+  showToast(`Logged! +${earnedMins} min earned 🎉`);
+
+  // B2 - a 30-min-plus workout banks a Streak Shield (max 2).
+  if (duration >= 30 && state.streakShields < 2) {
+    state.streakShields++;
+    updateShieldChip();
+    setTimeout(() => showToast('🛡️ Streak Shield earned!'), 400);
+  }
+
+  saveState();
+}
+
 // ===== CONFETTI =====
 function launchConfetti() {
   const canvas = document.getElementById('confetti-canvas');
@@ -1302,6 +1473,22 @@ function closeSettings() {
   sheet.style.transform = 'translateY(100%)';
   sheet.classList.remove('open');
   settingsOpen = false;
+}
+
+// ===== OTHER WORKOUT LIBRARY SHEET (item 3c) =====
+// Same open/close pattern as the Settings sheet, its own overlay + sheet.
+function openOtherLibrary() {
+  document.getElementById('other-overlay').style.display = 'block';
+  const sheet = document.getElementById('other-sheet');
+  sheet.classList.add('open');
+  sheet.style.transform = 'translateY(0)';
+}
+
+function closeOtherLibrary() {
+  document.getElementById('other-overlay').style.display = 'none';
+  const sheet = document.getElementById('other-sheet');
+  sheet.style.transform = 'translateY(100%)';
+  sheet.classList.remove('open');
 }
 
 // ===== SAVE/LOAD (A4, A11) =====
@@ -2422,31 +2609,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.currentTab === 'earn') positionSegIndicator(currentEarnRange);
   });
 
+  // item 3b - tap a workout tile to start its live timer immediately
+  // (one clear tap-and-go). "Other" opens the workout-type library instead.
   document.querySelectorAll('.workout-tile').forEach(tile => {
     tile.addEventListener('click', () => {
-      document.querySelectorAll('.workout-tile').forEach(t => t.classList.remove('selected'));
-      tile.classList.add('selected');
-      selectedWorkout = tile.dataset.workout;
-
-      const picker = document.getElementById('duration-picker');
-      if (picker) picker.style.display = 'block';
-      setTextContent('dp-workout-name', selectedWorkout);
-      updateDpEarnPreview();
+      if (state.activeWorkout) return; // one workout at a time
+      const workout = tile.dataset.workout;
+      if (workout === 'Other') {
+        openOtherLibrary();
+        return;
+      }
+      startWorkoutTimer(workout);
     });
   });
 
-  document.querySelectorAll('.dp-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      document.querySelectorAll('.dp-chip').forEach(c => c.classList.remove('selected'));
-      chip.classList.add('selected');
-      selectedDuration = parseInt(chip.dataset.dur, 10);
-      updateDpEarnPreview();
-    });
-  });
+  document.getElementById('live-timer-pause-btn').addEventListener('click', toggleWorkoutPause);
+  document.getElementById('live-timer-end-btn').addEventListener('click', endWorkoutTimer);
 
-  document.getElementById('log-workout-btn').addEventListener('click', () => {
-    if (!selectedWorkout) return;
-    logWorkout(selectedWorkout, selectedDuration);
+  // item 3c - "Other" workout-type library sheet.
+  document.getElementById('other-overlay').addEventListener('click', closeOtherLibrary);
+  document.querySelectorAll('.other-workout-row').forEach(row => {
+    row.addEventListener('click', () => {
+      closeOtherLibrary();
+      if (state.activeWorkout) return;
+      startWorkoutTimer(row.dataset.workout);
+    });
   });
 
   // ── FRIENDS TAB (fix 1, 2, 12) ──
@@ -2536,14 +2723,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.dailyAllowanceMinutes < 120) applyAllowanceChange(state.dailyAllowanceMinutes + 5);
   });
   // fix 6 - single earn-rate control: same segmented buttons as onboarding,
-  // reused inside Settings. Writes state, refreshes the duration-picker
-  // preview, and persists.
+  // reused inside Settings. Writes state and persists; the live workout
+  // timer (item 3b) picks up the new multiplier on its next tick.
   document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       state.earnRateMultiplier = parseFloat(btn.dataset.rate);
-      updateDpEarnPreview();
       saveState();
     });
   });
@@ -2736,54 +2922,6 @@ function animateSuccessRing() {
   const offset = circumference - (pct * circumference);
   arc.style.transition = 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)';
   arc.setAttribute('stroke-dashoffset', offset.toFixed(2));
-}
-
-// ===== LOG WORKOUT (Earn tab) =====
-function logWorkout(workoutName, duration) {
-  // Fly-up animation
-  const picker = document.getElementById('duration-picker');
-  if (picker) {
-    const rect = picker.getBoundingClientRect();
-    const frame = document.getElementById('phone-frame');
-    const frameRect = frame.getBoundingClientRect();
-
-    const fly = document.createElement('div');
-    fly.className = 'earn-fly-label';
-    fly.textContent = `+${Math.round(duration * state.earnRateMultiplier)} min`;
-    fly.style.left = `${rect.left - frameRect.left + 80}px`;
-    fly.style.top = `${rect.top - frameRect.top - 20}px`;
-    frame.appendChild(fly);
-    setTimeout(() => fly.remove(), 1000);
-  }
-
-  const earnedMins = Math.round(duration * state.earnRateMultiplier);
-  addEarnedMinutes(earnedMins);
-  state.lastWorkout = { name: workoutName, mins: earnedMins, at: Date.now() }; // B6
-  launchConfetti();
-
-  // Log to earned list - rebuilt from state, not appended DOM-only (fix 3)
-  state.worktimeLoggedToday.push({ label: workoutName, mins: duration, earned: earnedMins });
-  renderEarnedList();
-
-  // Real steps, driven by this workout (fix 9)
-  state.stepsToday += stepsForWorkout(workoutName, duration);
-  updateBonusCard();
-
-  showToast(`Logged! +${earnedMins} min earned 🎉`);
-
-  // B2 - a 30-min-plus workout banks a Streak Shield (max 2).
-  if (duration >= 30 && state.streakShields < 2) {
-    state.streakShields++;
-    updateShieldChip();
-    setTimeout(() => showToast('🛡️ Streak Shield earned!'), 400);
-  }
-
-  // Reset picker
-  document.querySelectorAll('.workout-tile').forEach(t => t.classList.remove('selected'));
-  selectedWorkout = null;
-  if (picker) picker.style.display = 'none';
-
-  saveState();
 }
 
 // ===== LOCK SCREEN =====

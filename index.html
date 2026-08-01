@@ -435,7 +435,7 @@
               <button class="workout-tile" data-workout="Lift">🏋️<span>Lift</span></button>
               <button class="workout-tile" data-workout="Yoga">🧘<span>Yoga</span></button>
               <button class="workout-tile" data-workout="Cycle">🚴<span>Cycle</span></button>
-              <button class="workout-tile" data-workout="Class">🤸<span>Class</span></button>
+              <button class="workout-tile" id="other-workout-tile" data-workout="Other">➕<span>Other</span></button>
             </div>
 
             <!-- Streak Shield explainer -->
@@ -449,17 +449,17 @@
               </div>
             </div>
 
-            <!-- Duration picker (hidden until workout selected) -->
-            <div class="duration-picker glass-card" id="duration-picker" style="display:none">
-              <div class="dp-workout-name" id="dp-workout-name">Walk</div>
-              <div class="dp-chips">
-                <button class="dp-chip" data-dur="10">10 min</button>
-                <button class="dp-chip selected" data-dur="20">20 min</button>
-                <button class="dp-chip" data-dur="30">30 min</button>
-                <button class="dp-chip" data-dur="45">45 min</button>
+            <!-- Live counting-up timer (item 3b) - replaces the old retroactive
+                 duration picker. Hidden until a workout tile is tapped, and
+                 restored directly into the running/paused state on reload so
+                 an in-progress workout is always evident. -->
+            <div class="live-timer-card glass-card" id="live-timer-card" style="display:none">
+              <div class="live-timer-workout-name" id="live-timer-workout-name">Walk</div>
+              <div class="live-timer-display" id="live-timer-display">0:00</div>
+              <div class="live-timer-actions">
+                <button class="live-timer-btn live-timer-pause-btn" id="live-timer-pause-btn">⏸ Pause</button>
+                <button class="live-timer-btn live-timer-end-btn" id="live-timer-end-btn">End</button>
               </div>
-              <div class="dp-earn-preview">You'll earn <span id="dp-earn-preview">20</span> min</div>
-              <button class="btn-primary" id="log-workout-btn">Log workout</button>
             </div>
 
             <!-- Earned today list -->
@@ -914,6 +914,28 @@
       <div class="sheet-title" id="legal-sheet-title">Terms of Service</div>
       <div class="legal-scroll" id="legal-scroll-body"></div>
       <button class="btn-primary" id="legal-close-btn">Close</button>
+    </div>
+
+    <!-- ===== OTHER WORKOUT LIBRARY SHEET (item 3c) =====
+         Apple gives third-party apps no supported way to open the native
+         Fitness app's own workout picker, so this in-app library is the
+         deliberate stand-in. Same bottom-sheet pattern as Settings/Legal;
+         picking a type starts the identical live-timer flow as any
+         quick-log tile. -->
+    <div id="other-overlay" class="overlay-bg" style="display:none"></div>
+    <div id="other-sheet" class="bottom-sheet" style="transform:translateY(100%)">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">More workout types</div>
+      <div class="other-workout-list" id="other-workout-list">
+        <button class="other-workout-row" data-workout="Strength">🏋️<span>Strength</span></button>
+        <button class="other-workout-row" data-workout="Swim">🏊<span>Swim</span></button>
+        <button class="other-workout-row" data-workout="Hike">🥾<span>Hike</span></button>
+        <button class="other-workout-row" data-workout="Row">🚣<span>Row</span></button>
+        <button class="other-workout-row" data-workout="Dance">💃<span>Dance</span></button>
+        <button class="other-workout-row" data-workout="Martial Arts">🥋<span>Martial Arts</span></button>
+        <button class="other-workout-row" data-workout="Sports">⚽<span>Sports</span></button>
+        <button class="other-workout-row" data-workout="Climb">🧗<span>Climb</span></button>
+      </div>
     </div>
 
     <!-- ===== CONFIRM DIALOG (sign out / delete account) ===== -->

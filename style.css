@@ -1396,46 +1396,102 @@ input {
   background: rgba(99,102,241,0.12);
 }
 
-.duration-picker {
+/* item 3b - disabled (not hidden) while a live timer is already running, so
+   it reads as "something is in progress" rather than silently doing nothing. */
+.workout-tile:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ===== LIVE WORKOUT TIMER (item 3b) ===== */
+.live-timer-card {
   margin-bottom: 16px;
+  text-align: center;
 }
 
-.dp-workout-name {
-  font-size: 17px;
+.live-timer-workout-name {
+  font-size: 15px;
   font-weight: 700;
-  margin-bottom: 14px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 10px;
 }
 
-.dp-chips {
+.live-timer-display {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet), var(--accent-teal));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 18px;
+}
+
+.live-timer-actions {
   display: flex;
-  gap: 8px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.dp-chip {
-  padding: 8px 16px;
+.live-timer-btn {
+  flex: 1;
+  padding: 13px;
+  border-radius: 16px;
+  font-size: 15px;
+  font-weight: 700;
+  min-height: 44px;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.live-timer-btn:active {
+  transform: scale(0.96);
+}
+
+.live-timer-pause-btn {
   background: var(--surface);
   border: 1px solid var(--surface-border);
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
-  transition: all 0.15s;
-  min-height: 44px;
-}
-
-.dp-chip.selected {
-  background: rgba(99,102,241,0.2);
-  border-color: var(--accent-indigo);
   color: var(--text);
 }
 
-.dp-earn-preview {
-  font-size: 14px;
-  color: var(--mint);
-  margin-bottom: 14px;
+.live-timer-end-btn {
+  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+  color: white;
+}
+
+/* ===== OTHER WORKOUT LIBRARY SHEET (item 3c) ===== */
+.other-workout-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+}
+
+.other-workout-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 14px;
+  font-size: 22px;
+  min-height: 44px;
+  text-align: left;
+  transition: transform 0.12s ease, border-color 0.2s;
+}
+
+.other-workout-row:active { transform: scale(0.97); }
+
+.other-workout-row span {
+  font-size: 15px;
   font-weight: 600;
+  color: var(--text);
 }
 
 .earned-list {
