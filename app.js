@@ -1066,6 +1066,38 @@ function updateShieldChip() {
   }
 }
 
+// ===== KEYBOARD-AWARE CTA (item 4) =====
+// .btn-primary is normally bottom-pinned (margin-top:auto) so it reads well
+// with no keyboard on screen. On a real iPhone, focusing a text input can
+// bring up a keyboard tall enough that its accessory bar overlaps a
+// bottom-pinned CTA. Scoped to exactly the input+CTA pair passed in - every
+// other screen's CTA placement is untouched.
+function setupKeyboardAwareCTA(inputEl, containerEl, ctaEl) {
+  if (!inputEl || !containerEl || !ctaEl) return;
+
+  function reveal() {
+    if (document.activeElement !== inputEl) return;
+    let extraPad = 160;
+    if (window.visualViewport) {
+      const vv = window.visualViewport;
+      const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      extraPad = Math.max(160, Math.round(keyboardHeight) + 24);
+    }
+    containerEl.style.paddingBottom = `${extraPad}px`;
+    ctaEl.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  }
+
+  function clear() {
+    containerEl.style.paddingBottom = '';
+  }
+
+  inputEl.addEventListener('focus', () => setTimeout(reveal, 250));
+  inputEl.addEventListener('blur', clear);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', reveal);
+  }
+}
+
 // ===== SETTINGS SHEET =====
 let settingsOpen = false;
 
@@ -1979,6 +2011,21 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('restore-link').addEventListener('click', () => {
     showToast('No purchases found.');
   });
+
+  // item 4 - keyboard-aware CTA, scoped to exactly the two screens with a
+  // text input ahead of the primary button: the name-capture step (plan
+  // step D) and the promo-code input on the paywall. Every other screen's
+  // CTA placement is untouched.
+  setupKeyboardAwareCTA(
+    document.getElementById('plan-name-input'),
+    document.getElementById('ob-step-d'),
+    document.getElementById('ob-d-next')
+  );
+  setupKeyboardAwareCTA(
+    document.getElementById('promo-input'),
+    document.querySelector('.paywall-content'),
+    document.getElementById('start-trial-btn')
+  );
 
   // ── APP SHELL ──
 

@@ -531,7 +531,13 @@ input {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: max(var(--safe-top), 54px) 24px max(var(--safe-bottom), 24px);
+  /* item 5 - floor bumped from 54px to 78px: on notched/Dynamic-Island
+     iPhones this screen's ring was the very first element after the safe
+     inset and its top arc got clipped by the island. env(safe-area-inset-top)
+     should already clear it, but the wrapped app doesn't always report a
+     real value here, so the literal floor needs its own headroom. 24px
+     extra is negligible at the 390x844 desktop frame size. */
+  padding: max(var(--safe-top), 78px) 24px max(var(--safe-bottom), 24px);
   height: 100%;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -2094,6 +2100,16 @@ a { color: inherit; text-decoration: none; }
   text-align: center;
   height: 100%;
   justify-content: center;
+}
+/* item 6 - .btn-primary's global margin-top:auto pins it to the very
+   bottom of the screen; combined with .welcome-content's own
+   justify-content:center on the ring/headline/body above it, that left a
+   huge dead band in the middle on tall phones. Cancelling the auto margin
+   here lets the button join the same centered group via the parent's
+   `gap`, so the whole screen reads as one composed unit. Scoped to this
+   screen only - every other .btn-primary keeps its normal bottom pin. */
+.welcome-content .btn-primary {
+  margin-top: 0;
 }
 .welcome-ring-wrap { margin-bottom: 4px; }
 .welcome-headline {
