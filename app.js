@@ -1,5 +1,5 @@
 /* ============================================================
-   BALANCE APP — app.js
+   BALANCE APP - app.js
    Move to scroll. Earn social media time through exercise.
 ============================================================ */
 
@@ -21,7 +21,7 @@ const state = {
   healthConnected: null,
   promoUsed: false,
   userName: '',
-  lastWorkout: null,                 // { name, mins, at } — for honest Live Activity (B6)
+  lastWorkout: null,                 // { name, mins, at } - for honest Live Activity (B6)
   paywallYears: null,                // computed during onboarding step C, shown on paywall (B4)
   worktimeLoggedToday: [],
   stepsToday: 0,                     // real steps, driven by logged workouts (fix 9)
@@ -45,7 +45,7 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 let pendingToastMessages = [];
 
 // Earn-tab quick-log selection (module scope so the settings-sheet earn-rate
-// control can also refresh the preview — A1, A6, fix 6).
+// control can also refresh the preview - A1, A6, fix 6).
 let selectedWorkout = null;
 let selectedDuration = 20;
 
@@ -62,7 +62,7 @@ function updateDpEarnPreview() {
 let countdownInterval = null;
 let widgetInterval = null;
 let laElapsedInterval = null;
-let interceptWasPlaying = false; // A3 — remember play state so hideIntercept doesn't force-resume
+let interceptWasPlaying = false; // A3 - remember play state so hideIntercept doesn't force-resume
 
 function startCountdown() {
   if (countdownInterval) return;
@@ -72,9 +72,9 @@ function startCountdown() {
       state.remainingSeconds--;
       updateRingDisplay();
     } else {
-      // Time's up — show intercept
+      // Time's up - show intercept
       pauseCountdown();
-      renderAppTiles(); // fix 5 — lock badges appear the instant time actually hits 0
+      renderAppTiles(); // fix 5 - lock badges appear the instant time actually hits 0
       showIntercept(state.selectedApps[0] || 'TikTok');
     }
   }, 1000);
@@ -195,7 +195,7 @@ function updateClock() {
   setTextContent('ls-date', dateStr);
 }
 
-// Live Activity — honest version (B6, fix 10): only shows if a workout was
+// Live Activity - honest version (B6, fix 10): only shows if a workout was
 // logged < 60 min ago, and the progress denominator is the ACTUAL logged
 // workout's duration (not a fixed 30-min guess), so it always hits 100% when
 // the workout is really done.
@@ -278,7 +278,7 @@ function switchTab(tabName) {
   } else if (tabName === 'today') {
     refreshTodayNumbers();
   } else if (tabName === 'friends') {
-    updateStreakDuel(); // fix 2 — recompute whenever Friends tab is shown
+    updateStreakDuel(); // fix 2 - recompute whenever Friends tab is shown
     renderSarahStatus();
   }
 }
@@ -406,7 +406,7 @@ function initOnboardingStepC() {
   const wakingHoursPerDay = 16;
   const years = (hours / wakingHoursPerDay) * yearsRemaining;
   const yearsStr = years.toFixed(1);
-  state.paywallYears = years; // B4 — reused on the paywall's personalized line
+  state.paywallYears = years; // B4 - reused on the paywall's personalized line
 
   const leadText = document.getElementById('shock-lead-text');
   const yearsEl = document.getElementById('shock-years');
@@ -443,7 +443,7 @@ function handlePromoCode() {
   if (PROMO_CODES.includes(code)) {
     // Valid code
     launchConfetti();
-    showToast('Beta access unlocked — free forever 🎉');
+    showToast('Beta access unlocked - free forever 🎉');
     setTimeout(() => proceedToApp(), 1500);
     if (errorEl) errorEl.style.display = 'none';
   } else {
@@ -459,7 +459,7 @@ function handlePromoCode() {
 
 function proceedToApp() {
   // Honest numbers for new users (A9, A13): a freshly onboarded user starts
-  // at Day 1 with 0 minutes earned — the seed demo values are for the
+  // at Day 1 with 0 minutes earned - the seed demo values are for the
   // pre-onboarding splash/demo state only.
   state.streakDays = 1;
   state.streakShields = 0;
@@ -526,7 +526,7 @@ function renderAppTiles() {
   apps.forEach((appName, i) => {
     const info = APP_ICONS[appName] || { bg: '#333', emoji: '📱' };
     const used = appMins[i] || 0;
-    const isLocked = state.remainingSeconds === 0; // fix 5 — truthful: only when time is actually up
+    const isLocked = state.remainingSeconds === 0; // fix 5 - truthful: only when time is actually up
 
     const tile = document.createElement('button');
     tile.className = 'app-used-tile';
@@ -537,7 +537,7 @@ function renderAppTiles() {
       <span class="app-used-mins">${used}m</span>
       ${isLocked ? '<span class="lock-badge">🔒</span>' : ''}
     `;
-    // B1 — breathing pause before opening an app with time remaining; straight
+    // B1 - breathing pause before opening an app with time remaining; straight
     // to the intercept only once time is actually gone.
     tile.addEventListener('click', () => {
       if (state.remainingSeconds <= 0) {
@@ -566,7 +566,7 @@ function getWeekSeries() {
   return { social, earned };
 }
 
-// fix 7 — two slim side-by-side bars per day (social=mint, earned=amber),
+// fix 7 - two slim side-by-side bars per day (social=mint, earned=amber),
 // a dashed reference line at the user's daily allowance, and a tiny mint ✓
 // on days that stayed under it. Today uses live numbers; the other 6 days
 // are labeled sample history so the fake part is honest about being fake.
@@ -699,7 +699,7 @@ function updateLeaderboard() {
 }
 
 // ===== BONUS CARD (fix 9) =====
-// state.stepsToday is real — it's incremented every time a workout is logged
+// state.stepsToday is real - it's incremented every time a workout is logged
 // (Quick log or an intercept exercise). Bar width is derived from the same
 // number shown in the label, in one place, so they can never disagree.
 const STEPS_GOAL = 8000;
@@ -779,7 +779,7 @@ function renderEarnedList() {
   list.innerHTML = '';
 
   if (state.worktimeLoggedToday.length === 0) {
-    list.innerHTML = `<div class="earned-empty" id="earned-empty">Nothing yet today — log a workout to earn time.</div>`;
+    list.innerHTML = `<div class="earned-empty" id="earned-empty">Nothing yet today, log a workout to earn time.</div>`;
     return;
   }
 
@@ -823,15 +823,15 @@ function updateInterceptRewards() {
 }
 
 function showIntercept(appName) {
-  interceptWasPlaying = state.isPlaying; // A3 — don't force-resume on close
+  interceptWasPlaying = state.isPlaying; // A3 - don't force-resume on close
   pauseCountdown();
-  interceptAskCount = 0; // B3 — fresh ask count each time the intercept opens
+  interceptAskCount = 0; // B3 - fresh ask count each time the intercept opens
 
   const info = APP_ICONS[appName] || { emoji: '📱' };
   setTextContent('intercept-app-icon', info.emoji);
   setTextContent('intercept-allowance', state.dailyAllowanceMinutes);
   setTextContent('intercept-title', state.userName ? `Time's up, ${state.userName}.` : `Time's up.`);
-  updateInterceptRewards(); // A6 — reward rows reflect the current earn-rate multiplier
+  updateInterceptRewards(); // A6 - reward rows reflect the current earn-rate multiplier
 
   // Reset states
   const options = document.getElementById('intercept-options');
@@ -863,7 +863,7 @@ function hideIntercept() {
   else updatePlayPause();
 }
 
-// A2 — ✕ / "I'll wait until tomorrow" both close without earning, and reset
+// A2 - ✕ / "I'll wait until tomorrow" both close without earning, and reset
 // the partner-response state so the next open starts clean.
 function closeInterceptNoEarn() {
   hideIntercept();
@@ -874,7 +874,7 @@ function closeInterceptNoEarn() {
   interceptAskCount = 0;
 }
 
-// B3 — partner approve path: first ask is declined with an "Ask again"
+// B3 - partner approve path: first ask is declined with an "Ask again"
 // option; the second ask is approved and awards a flat +10 (not multiplied).
 let interceptAskCount = 0;
 
@@ -899,7 +899,7 @@ function askSarah() {
     } else {
       if (approved) approved.style.display = 'block';
       addEarnedMinutes(10);
-      sarahUnlockedToday = true; // fix 12 — reflected on her Friends-tab status line
+      sarahUnlockedToday = true; // fix 12 - reflected on her Friends-tab status line
       renderSarahStatus();
       launchConfetti();
       setTimeout(() => {
@@ -910,7 +910,7 @@ function askSarah() {
   }, 3000);
 }
 
-// B1 — breathing pause overlay shown before opening an app with time left.
+// B1 - breathing pause overlay shown before opening an app with time left.
 let breathingTimer = null;
 
 function showBreathingPause(appName) {
@@ -940,7 +940,7 @@ function addEarnedMinutes(mins) {
   setTextContent('earned-display', state.earnedMinutes);
   setTextContent('earn-today-display', state.earnedMinutes);
   updateRingDisplay();
-  refreshTodayNumbers(); // A8 — chart/leaderboard/tiles stay consistent
+  refreshTodayNumbers(); // A8 - chart/leaderboard/tiles stay consistent
   saveState(); // A7
 }
 
@@ -1024,7 +1024,7 @@ function setTextContent(id, text) {
 
 // ===== DISPLAY HELPERS (A5, A9, A13, B2) =====
 
-// A5 — ring caption honors the expires-at-midnight toggle.
+// A5 - ring caption honors the expires-at-midnight toggle.
 function updateRingCaption() {
   const caption = document.querySelector('.ring-caption');
   if (!caption) return;
@@ -1032,7 +1032,7 @@ function updateRingCaption() {
   caption.innerHTML = `${state.dailyAllowanceMinutes} min allowance + <span id="earned-display">${state.earnedMinutes}</span> min earned · ${expiryText}`;
 }
 
-// A9 — time-aware greeting, name only shown if the user gave one.
+// A9 - time-aware greeting, name only shown if the user gave one.
 function getGreeting() {
   const h = new Date().getHours();
   const period = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
@@ -1043,7 +1043,7 @@ function updateGreeting() {
   setTextContent('greeting-text', getGreeting());
 }
 
-// A13 — "Day 1" reads better than "1 days".
+// A13 - "Day 1" reads better than "1 days".
 function formatStreakText(n) {
   return n === 1 ? 'Day 1' : `${n} days`;
 }
@@ -1054,7 +1054,7 @@ function updateAllStreakDisplays() {
   if (duelCount) duelCount.textContent = state.streakDays;
 }
 
-// B2 — streak-shield chip next to the streak pill.
+// B2 - streak-shield chip next to the streak pill.
 function updateShieldChip() {
   const chip = document.getElementById('shield-chip');
   if (!chip) return;
@@ -1084,7 +1084,12 @@ function setupKeyboardAwareCTA(inputEl, containerEl, ctaEl) {
       extraPad = Math.max(160, Math.round(keyboardHeight) + 24);
     }
     containerEl.style.paddingBottom = `${extraPad}px`;
-    ctaEl.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    // keyboard-fix - 'end' used to force the container to its max scrollTop,
+    // which on short screens dragged the input (well above the CTA in the
+    // layout) up past the top safe-area padding and under the status bar /
+    // Dynamic Island. 'nearest' only scrolls as far as needed to clear the
+    // keyboard, so the input stays put once it's already visible.
+    ctaEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
   function clear() {
@@ -1107,16 +1112,16 @@ function openSettings() {
   sheet.classList.add('open');
   sheet.style.transform = 'translateY(0)';
   settingsOpen = true;
-  // A1 — initialize from state, not stale local vars
+  // A1 - initialize from state, not stale local vars
   setTextContent('allow-val', `${state.dailyAllowanceMinutes} min`);
-  // fix 6 — sync the earn-rate segmented control's selected button from state
+  // fix 6 - sync the earn-rate segmented control's selected button from state
   document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(b => {
     b.classList.toggle('selected', parseFloat(b.dataset.rate) === state.earnRateMultiplier);
   });
   updateSettingsHealthRow(); // item 8 - re-sync every time the sheet opens
 }
 
-// A1 — Daily-allowance stepper: writes state, recomputes total, clamps
+// A1 - Daily-allowance stepper: writes state, recomputes total, clamps
 // remaining, and keeps every display of it (ring, caption, intercept) in sync.
 function applyAllowanceChange(newAllowance) {
   const usedSeconds = state.totalSeconds - state.remainingSeconds;
@@ -1154,7 +1159,7 @@ function daysBetween(dateStr1, dateStr2) {
   return Math.round((d2 - d1) / 86400000);
 }
 
-// Single storage key (A11) — everything lives in balance_state.
+// Single storage key (A11) - everything lives in balance_state.
 function saveState() {
   localStorage.setItem('balance_state', JSON.stringify({
     earnedMinutes: state.earnedMinutes,
@@ -1175,7 +1180,7 @@ function saveState() {
   }));
 }
 
-// A13 — honest streak growth/decay on a new day, with streak-shield rescue (B2).
+// A13 - honest streak growth/decay on a new day, with streak-shield rescue (B2).
 function applyDailyReset(prevDateStr, curDateStr) {
   const daysElapsed = daysBetween(prevDateStr, curDateStr);
 
@@ -1192,13 +1197,13 @@ function applyDailyReset(prevDateStr, curDateStr) {
     if (state.streakShields > 0) {
       state.streakShields -= 1;
       state.streakDays += 1;
-      pendingToastMessages.push(`🛡️ Streak Shield used — ${state.streakDays}-day streak saved!`);
+      pendingToastMessages.push(`🛡️ Streak Shield used, ${state.streakDays}-day streak saved!`);
     } else {
       state.streakDays = 1;
     }
   }
 
-  // fix 9 — steps reset every day; yesterday's 8,000-step bonus (if earned)
+  // fix 9 - steps reset every day; yesterday's 8,000-step bonus (if earned)
   // applies to today's totals exactly once.
   state.stepsToday = 0;
   if (state.stepBonusTomorrow) {
@@ -1221,7 +1226,7 @@ function loadState() {
   }
 
   if (!saved) {
-    // One-time legacy fallback (A11) — read the old key once, then never again.
+    // One-time legacy fallback (A11) - read the old key once, then never again.
     const legacyApps = localStorage.getItem('balance_selected_apps');
     if (legacyApps) {
       try { state.selectedApps = JSON.parse(legacyApps); } catch (e) { /* ignore */ }
@@ -1316,7 +1321,7 @@ function getEarnRangeSlice(range) {
       workout: WORKOUT_SERIES.slice(-30),
     };
   } else {
-    // All time — downsample to 8 weekly averages
+    // All time - downsample to 8 weekly averages
     const screenWeekly = [];
     const workoutWeekly = [];
     for (let w = 0; w < 8; w++) {
@@ -1351,7 +1356,7 @@ function buildAnalyticsSVG(svgId, data, color, isScreenTime, range) {
   svg.innerHTML = '';
 
   const W = 320, H = 120;
-  const padL = 30, padR = 4, padT = 16, padB = 20; // fix 8 — room for left-side axis labels
+  const padL = 30, padR = 4, padT = 16, padB = 20; // fix 8 - room for left-side axis labels
 
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -1367,7 +1372,7 @@ function buildAnalyticsSVG(svgId, data, color, isScreenTime, range) {
 
   const gridNS = 'http://www.w3.org/2000/svg';
 
-  // fix 8 — 3 left-side gridline labels (bottom/mid/top, in minutes) with
+  // fix 8 - 3 left-side gridline labels (bottom/mid/top, in minutes) with
   // matching horizontal gridlines, replacing the old two tiny right-side hints.
   [min, mid, max].forEach(val => {
     const y = yPos(val);
@@ -1445,7 +1450,7 @@ function buildAnalyticsSVG(svgId, data, color, isScreenTime, range) {
   polyline.style.transition = 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)';
   svg.appendChild(polyline);
 
-  // fix 8 — week range gets a dot on every data point (not just the last one);
+  // fix 8 - week range gets a dot on every data point (not just the last one);
   // month/all-time keep a single "latest point" dot to avoid clutter.
   const dotIndices = range === 'week' ? data.map((_, i) => i) : [data.length - 1];
   dotIndices.forEach(i => {
@@ -1527,7 +1532,7 @@ function renderEarnAnalytics(range) {
   const earnedLabelEl = document.getElementById('stat-earned-label');
 
   if (screenPctEl) {
-    screenPctEl.textContent = '—';
+    screenPctEl.textContent = '-';
     countUpTo(screenPctEl, screenPctDrop, '%', 700);
     screenPctEl.style.color = 'var(--mint)';
     setTimeout(() => {
@@ -1536,7 +1541,7 @@ function renderEarnAnalytics(range) {
   }
 
   if (workoutMultEl) {
-    workoutMultEl.textContent = '—';
+    workoutMultEl.textContent = '-';
     countUpTo(workoutMultEl, workoutMult, '×', 700);
     workoutMultEl.style.color = 'var(--mint)';
     setTimeout(() => {
@@ -1545,7 +1550,7 @@ function renderEarnAnalytics(range) {
   }
 
   if (earnedTotalEl) {
-    earnedTotalEl.textContent = '—';
+    earnedTotalEl.textContent = '-';
     countUpTo(earnedTotalEl, totalEarned, 'm', 600);
   }
 
@@ -1555,14 +1560,14 @@ function renderEarnAnalytics(range) {
   }
 
   if (streakEl) {
-    streakEl.textContent = '—';
+    streakEl.textContent = '-';
     countUpTo(streakEl, state.streakDays, '', 500);
     setTimeout(() => {
       if (streakEl) streakEl.textContent = formatStreakText(state.streakDays);
     }, 520);
   }
 
-  // fix 8 — subtitle reflects what the chart is actually showing
+  // fix 8 - subtitle reflects what the chart is actually showing
   const subtitleText = range === 'all' ? 'weekly average' : 'minutes per day';
   setTextContent('screen-chart-subtitle', subtitleText);
   setTextContent('workout-chart-subtitle', subtitleText);
@@ -1575,7 +1580,7 @@ function renderEarnAnalytics(range) {
   buildAxisLabels('acc-screen-axis', screen, range);
   buildAxisLabels('acc-workout-axis', workout, range);
 
-  // fix 8 — trend badges computed from the VISIBLE range (not all-time)
+  // fix 8 - trend badges computed from the VISIBLE range (not all-time)
   applyTrendBadge('trend-screen', computeTrendBadge(screen, range, 'screen'));
   applyTrendBadge('trend-workout', computeTrendBadge(workout, range, 'workout'));
 
@@ -1583,7 +1588,7 @@ function renderEarnAnalytics(range) {
   positionSegIndicator(range);
 }
 
-// fix 8 — compares the first third vs last third of the currently displayed
+// fix 8 - compares the first third vs last third of the currently displayed
 // series so the badge always describes what's actually on screen, not a
 // fixed all-time stat. Hidden entirely when the change is under 5%.
 function computeTrendBadge(data, range, kind) {
@@ -1604,7 +1609,7 @@ function computeTrendBadge(data, range, kind) {
       : { text: `↑ ${pct}% ${rangeLabel}`, cls: 'coral' };
   }
 
-  // workout minutes — express growth as a multiplier, drop as a percent
+  // workout minutes - express growth as a multiplier, drop as a percent
   const ratio = lastAvg / safeFirst;
   if (ratio >= 1) {
     return { text: `↑ ${Math.max(1, Math.round(ratio))}× ${rangeLabel}`, cls: 'mint' };
@@ -1731,7 +1736,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (onboarded) {
       showScreen('app-shell');
-      renderEarnedList(); // fix 3 — rebuild from persisted state, not stale DOM
+      renderEarnedList(); // fix 3 - rebuild from persisted state, not stale DOM
       renderAppTiles();
       buildWeekChart();
       updateLeaderboard();
@@ -1856,7 +1861,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('st-deny-btn').addEventListener('click', () => {
     const stPopup = document.getElementById('screen-time-popup');
     if (stPopup) stPopup.style.display = 'none';
-    showToast('No problem — we\'ll use your estimate');
+    showToast('No problem - we\'ll use your estimate');
     showObStep('ob-step-c');
     initOnboardingStepC();
   });
@@ -1867,7 +1872,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initOnboardingStepC();
   });
 
-  // Step C: shock screen — continue
+  // Step C: shock screen - continue
   document.getElementById('ob-c-next').addEventListener('click', () => {
     showObStep('ob-step-d');
   });
@@ -1896,7 +1901,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Onboarding's earn-rate control — scoped to its own container so it never
+  // Onboarding's earn-rate control - scoped to its own container so it never
   // touches the Settings sheet's copy of the same control (fix 6).
   document.querySelectorAll('#earn-rate-ctrl .earn-rate-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1915,7 +1920,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // B4 — personalized line on the paywall, using the same numbers from onboarding.
+  // B4 - personalized line on the paywall, using the same numbers from onboarding.
   function updatePaywallPersonalLine() {
     const el = document.getElementById('paywall-personal-line');
     if (!el || state.paywallYears == null) return;
@@ -1969,7 +1974,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── PAYWALL ──
 
-  // Transparent trial billing — date computed at render time, phrasing follows
+  // Transparent trial billing - date computed at render time, phrasing follows
   // the selected plan card, re-rendered on every selection change.
   function updateTrialBillingLine() {
     const el = document.getElementById('trial-billing-line');
@@ -1980,7 +1985,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateStr = `${months[d.getMonth()]} ${d.getDate()}`;
     const yearlySelected = !!document.querySelector('#plan-yearly.selected');
     const priceText = yearlySelected ? 'then $39.99/yr' : 'then $7.99/mo';
-    el.textContent = `Free until ${dateStr} — ${priceText}. We'll remind you the day before. Cancel anytime in Settings.`;
+    el.textContent = `Free until ${dateStr} - ${priceText}. We'll remind you the day before. Cancel anytime in Settings.`;
   }
 
   document.querySelectorAll('.price-card').forEach(card => {
@@ -1993,7 +1998,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateTrialBillingLine();
 
   document.getElementById('start-trial-btn').addEventListener('click', () => {
-    showToast('This is a demo — no charge 😄');
+    showToast('This is a demo - no charge 😄');
     setTimeout(() => proceedToApp(), 1200);
   });
 
@@ -2073,11 +2078,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // A2 — ✕ and "I'll wait until tomorrow" both close without earning.
+  // A2 - ✕ and "I'll wait until tomorrow" both close without earning.
   document.getElementById('intercept-close-btn').addEventListener('click', closeInterceptNoEarn);
   document.getElementById('wait-tomorrow-btn').addEventListener('click', closeInterceptNoEarn);
 
-  // B3 — partner approve path: first ask declines, "Ask again" approves.
+  // B3 - partner approve path: first ask declines, "Ask again" approves.
   document.getElementById('ask-partner-btn').addEventListener('click', askSarah);
   document.getElementById('ask-again-btn').addEventListener('click', askSarah);
 
@@ -2091,7 +2096,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // A12 — keep the segmented-control indicator aligned across viewport resizes.
+  // A12 - keep the segmented-control indicator aligned across viewport resizes.
   window.addEventListener('resize', () => {
     if (state.currentTab === 'earn') positionSegIndicator(currentEarnRange);
   });
@@ -2123,7 +2128,7 @@ document.addEventListener('DOMContentLoaded', () => {
     logWorkout(selectedWorkout, selectedDuration);
   });
 
-  // sweep (fix 13) — health badge is now itself the "connect" control, since
+  // sweep (fix 13) - health badge is now itself the "connect" control, since
   // Settings never had one despite the old copy pointing there.
   const healthBadgeEl = document.querySelector('.health-badge');
   if (healthBadgeEl) {
@@ -2140,9 +2145,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('nudge-btn').addEventListener('click', handleNudge);
   document.getElementById('send-time-btn').addEventListener('click', handleSendTime);
 
-  // Partner surprise gift — +5 min flat (NOT multiplied by earn rate).
+  // Partner surprise gift - +5 min flat (NOT multiplied by earn rate).
   // Accepted state is session-only on purpose: it may reappear next session.
-  // The card itself only appears after a nudge (fix 1) — see showPartnerGift().
+  // The card itself only appears after a nudge (fix 1) - see showPartnerGift().
   document.getElementById('gift-accept-btn').addEventListener('click', () => {
     addEarnedMinutes(5);
     launchConfetti();
@@ -2161,7 +2166,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // B5(c) — invite code chip: real clipboard copy, with a graceful fallback.
+  // B5(c) - invite code chip: real clipboard copy, with a graceful fallback.
   document.getElementById('share-code-btn').addEventListener('click', () => {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText('FRIENDS')
@@ -2175,14 +2180,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── SETTINGS SHEET ──
   document.getElementById('settings-overlay').addEventListener('click', closeSettings);
 
-  // A1 — steppers write straight to state; openSettings() re-syncs the display.
+  // A1 - steppers write straight to state; openSettings() re-syncs the display.
   document.getElementById('allow-dec').addEventListener('click', () => {
     if (state.dailyAllowanceMinutes > 15) applyAllowanceChange(state.dailyAllowanceMinutes - 5);
   });
   document.getElementById('allow-inc').addEventListener('click', () => {
     if (state.dailyAllowanceMinutes < 120) applyAllowanceChange(state.dailyAllowanceMinutes + 5);
   });
-  // fix 6 — single earn-rate control: same segmented buttons as onboarding,
+  // fix 6 - single earn-rate control: same segmented buttons as onboarding,
   // reused inside Settings. Writes state, refreshes the duration-picker
   // preview, and persists.
   document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(btn => {
@@ -2229,28 +2234,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 
-// ===== FRIENDS TAB — PARTNER (fix 1, 2, 12) =====
-// Session-only (not persisted) by design, same as the gift card itself —
+// ===== FRIENDS TAB - PARTNER (fix 1, 2, 12) =====
+// Session-only (not persisted) by design, same as the gift card itself -
 // Sarah's state is a "beat" that can replay next session.
 const SARAH_STREAK_DAYS = 9;
 let sarahMinutesLeft = 14;
 let partnerNudgeState = 'idle'; // idle -> nudged -> moving -> gifted
 let sarahUnlockedToday = false;
 
-// fix 1(b), 12 — composes Sarah's one status line from whatever's true right
+// fix 1(b), 12 - composes Sarah's one status line from whatever's true right
 // now: idle/moving, plus an "unlocked you today" suffix if she approved an
 // intercept ask this session.
 function renderSarahStatus() {
   const el = document.getElementById('partner-status');
   if (!el) return;
   let text = (partnerNudgeState === 'moving' || partnerNudgeState === 'gifted')
-    ? '🚶 Moving now — your nudge worked'
+    ? '🚶 Moving now - your nudge worked'
     : `🟢 ${sarahMinutesLeft} min left · 🔥 ${SARAH_STREAK_DAYS} days`;
   if (sarahUnlockedToday) text += ' · 🔓 unlocked you today';
   el.textContent = text;
 }
 
-// fix 2 — streak duel is computed from real numbers: your actual streak vs
+// fix 2 - streak duel is computed from real numbers: your actual streak vs
 // Sarah's fixed 9-day streak (matches her status line). Bar widths are
 // proportional, so a Day-1 user honestly sees 1 vs 9.
 function updateStreakDuel() {
@@ -2267,7 +2272,7 @@ function updateStreakDuel() {
   if (sarahCount) sarahCount.textContent = SARAH_STREAK_DAYS;
 }
 
-// fix 1(b) — nudge → toast → (3s) Sarah starts moving → (3s) she gifts you
+// fix 1(b) - nudge → toast → (3s) Sarah starts moving → (3s) she gifts you
 // +5 back. Once per session; a repeat nudge just acknowledges she's moving.
 function handleNudge() {
   if (partnerNudgeState !== 'idle') {
@@ -2298,7 +2303,7 @@ function showPartnerGift() {
   card.classList.add('gift-entrance');
 }
 
-// fix 1(c) — reciprocal: sending Sarah time costs YOUR real remaining time.
+// fix 1(c) - reciprocal: sending Sarah time costs YOUR real remaining time.
 function handleSendTime() {
   if (state.remainingSeconds < 5 * 60) {
     showToast('Not enough time left to gift');
@@ -2341,7 +2346,7 @@ function startInterceptExercise(mins, exercise, baseMins) {
     const label = EXERCISE_LABELS[exercise] || 'Workout';
     state.lastWorkout = { name: label, mins, at: Date.now() }; // B6
 
-    // sweep (fix 13) — intercept exercises now count toward Earned Today and
+    // sweep (fix 13) - intercept exercises now count toward Earned Today and
     // steps too, same as Quick-log workouts, so they can't disagree.
     state.worktimeLoggedToday.push({ label, mins: baseMins, earned: mins });
     renderEarnedList();
@@ -2397,7 +2402,7 @@ function logWorkout(workoutName, duration) {
   state.lastWorkout = { name: workoutName, mins: earnedMins, at: Date.now() }; // B6
   launchConfetti();
 
-  // Log to earned list — rebuilt from state, not appended DOM-only (fix 3)
+  // Log to earned list - rebuilt from state, not appended DOM-only (fix 3)
   state.worktimeLoggedToday.push({ label: workoutName, mins: duration, earned: earnedMins });
   renderEarnedList();
 
@@ -2407,7 +2412,7 @@ function logWorkout(workoutName, duration) {
 
   showToast(`Logged! +${earnedMins} min earned 🎉`);
 
-  // B2 — a 30-min-plus workout banks a Streak Shield (max 2).
+  // B2 - a 30-min-plus workout banks a Streak Shield (max 2).
   if (duration >= 30 && state.streakShields < 2) {
     state.streakShields++;
     updateShieldChip();
@@ -2438,7 +2443,7 @@ function hideLockScreen() {
 
 // ===== SHARE SCREEN (B5) =====
 
-// (a) Share card numbers come straight from state — no invented figures (fix 4).
+// (a) Share card numbers come straight from state - no invented figures (fix 4).
 function getShareStats() {
   const { earned } = getWeekSeries();
   const totalEarnedMins = earned.reduce((a, b) => a + b, 0);
@@ -2533,7 +2538,7 @@ function renderShareCanvas() {
 
   ctx.textAlign = 'center';
 
-  // Headline (fix 4 — same real-or-fallback logic as the on-screen card)
+  // Headline (fix 4 - same real-or-fallback logic as the on-screen card)
   ctx.fillStyle = '#fff';
   ctx.font = '700 30px -apple-system, BlinkMacSystemFont, sans-serif';
   const headlineText = workouts === 0
@@ -2554,7 +2559,7 @@ function renderShareCanvas() {
   return canvas;
 }
 
-// (b)+(d) Save image — real PNG export, with native share when available.
+// (b)+(d) Save image - real PNG export, with native share when available.
 // Wrapped defensively so it can never throw on a desktop browser.
 function saveShareImage() {
   try {
@@ -2570,8 +2575,8 @@ function saveShareImage() {
             navigator.share({
               files: [file],
               title: 'Balance',
-              text: `🔥 ${streak}-day streak — traded scroll time for workouts.`,
-            }).then(() => showToast('Shared!')).catch(() => { /* user cancelled — no-op */ });
+              text: `🔥 ${streak}-day streak - traded scroll time for workouts.`,
+            }).then(() => showToast('Shared!')).catch(() => { /* user cancelled - no-op */ });
             return;
           }
         } catch (e) { /* fall through to download */ }
@@ -2586,7 +2591,7 @@ function saveShareImage() {
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
-      } catch (e) { /* ignore — toast still confirms for the demo */ }
+      } catch (e) { /* ignore - toast still confirms for the demo */ }
       showToast('Saved!');
     }, 'image/png');
   } catch (e) {

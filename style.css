@@ -377,7 +377,7 @@ input {
   cursor: grab;
 }
 
-/* Step C — Shock */
+/* Step C - Shock */
 .computing-state {
   display: flex;
   flex-direction: column;
@@ -447,7 +447,7 @@ input {
   opacity: 1;
 }
 
-/* Step D — Plan */
+/* Step D - Plan */
 .plan-card {
   margin-bottom: 32px;
 }
@@ -656,6 +656,8 @@ input {
   text-transform: uppercase;
   letter-spacing: 1px;
   transition: border-color 0.2s;
+  /* keyboard-fix - see .plan-name-input's matching comment */
+  scroll-margin-top: calc(var(--safe-top) + 16px);
 }
 
 .promo-input:focus {
@@ -985,7 +987,7 @@ input {
   margin-bottom: 14px;
 }
 
-/* fix 7 — title row with the "sample history" chip */
+/* fix 7 - title row with the "sample history" chip */
 .chart-title-row {
   display: flex;
   align-items: center;
@@ -995,7 +997,7 @@ input {
 }
 .chart-title-row .card-title { margin-bottom: 0; }
 
-/* fix 7 — week chart rebuilt: two slim side-by-side bars per day
+/* fix 7 - week chart rebuilt: two slim side-by-side bars per day
    (mint = social used, amber = earned), a dashed allowance reference line,
    and a separate label row below so the goal line only spans the bars. */
 .week-chart {
@@ -1461,7 +1463,7 @@ input {
 .earned-label { flex: 1; font-size: 14px; }
 .earned-mins { font-size: 14px; font-weight: 700; color: var(--mint); }
 
-/* fix 3 — honest empty state instead of a phantom seeded entry */
+/* fix 3 - honest empty state instead of a phantom seeded entry */
 .earned-empty {
   font-size: 13px;
   color: var(--text-muted);
@@ -1508,7 +1510,7 @@ input {
 .partner-name { font-size: 16px; font-weight: 700; }
 .partner-status { font-size: 13px; color: var(--text-muted); }
 
-/* fix 1(c) — Nudge + Send-5-min sit side by side below the partner row */
+/* fix 1(c) - Nudge + Send-5-min sit side by side below the partner row */
 .partner-actions {
   display: flex;
   gap: 10px;
@@ -1932,7 +1934,7 @@ input {
   border-radius: 28px 28px 0 0;
   padding: 12px 20px max(var(--safe-bottom), 24px);
   z-index: 201;
-  /* sweep (fix 13) — belt-and-suspenders: visibility:hidden (same pattern
+  /* sweep (fix 13) - belt-and-suspenders: visibility:hidden (same pattern
      already used by .screen) guarantees this never paints while closed,
      independent of the translateY(100%) positioning trick. */
   visibility: hidden;
@@ -2520,9 +2522,13 @@ a { color: inherit; text-decoration: none; }
   border-radius: 12px;
   padding: 12px 16px;
   color: var(--text);
-  font-size: 16px; /* A10 — keep >=16px to avoid iOS zoom */
+  font-size: 16px; /* A10 - keep >=16px to avoid iOS zoom */
   outline: none;
   transition: border-color 0.2s;
+  /* keyboard-fix - keeps the field clear of the status bar / Dynamic Island
+     when the keyboard's auto-scroll (native or our own reveal()) brings this
+     input toward the top of the screen. */
+  scroll-margin-top: calc(var(--safe-top) + 16px);
 }
 .plan-name-input:focus { border-color: var(--accent-indigo); }
 
@@ -2694,7 +2700,7 @@ a { color: inherit; text-decoration: none; }
 }
 .partner-gift-card.accepted { opacity: 0.55; }
 
-/* fix 1(b) — subtle entrance when the gift appears as a response to a nudge */
+/* fix 1(b) - subtle entrance when the gift appears as a response to a nudge */
 @keyframes giftSlideIn {
   from { opacity: 0; transform: translateY(-12px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -2703,7 +2709,7 @@ a { color: inherit; text-decoration: none; }
   animation: giftSlideIn 0.45s cubic-bezier(0.4,0,0.2,1);
 }
 
-/* fix 9 — steps bonus card flips to an achieved style once the goal is hit */
+/* fix 9 - steps bonus card flips to an achieved style once the goal is hit */
 .bonus-card.achieved {
   background: rgba(52,211,153,0.08);
   border-color: rgba(52,211,153,0.35);
@@ -2713,7 +2719,7 @@ a { color: inherit; text-decoration: none; }
   font-weight: 700;
 }
 
-/* fix 8 — y-axis subtitle + all-time tag on the earn-tab headline stat cards */
+/* fix 8 - y-axis subtitle + all-time tag on the earn-tab headline stat cards */
 .acc-subtitle {
   font-size: 11px;
   color: var(--text-muted);
@@ -2741,12 +2747,12 @@ a { color: inherit; text-decoration: none; }
   padding: 2px 8px;
 }
 
-/* fix 10 — Live Activity dims once the workout is actually done */
+/* fix 10 - Live Activity dims once the workout is actually done */
 .la-badge.la-badge-done {
   opacity: 0.4;
 }
 
-/* fix 11 — honest microcopy under the intercept's tracking state */
+/* fix 11 - honest microcopy under the intercept's tracking state */
 .tracking-microcopy {
   text-align: center;
   font-size: 11px;
