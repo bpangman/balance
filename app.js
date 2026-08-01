@@ -142,10 +142,6 @@ function updateEarnMiniRing(pct) {
   arc.setAttribute('stroke-dashoffset', offset.toFixed(2));
 }
 
-function getMinutesStr(seconds) {
-  return Math.ceil(seconds / 60);
-}
-
 // ===== LOCK SCREEN WIDGETS =====
 function updateLockScreenWidgets() {
   const mins = Math.ceil(state.remainingSeconds / 60);
@@ -309,6 +305,88 @@ function showObStep(id) {
     });
   }
   currentObStep = id;
+  saveOnboardingProgress(); // fix 2 - every step transition checkpoints progress
+}
+
+// ===== ONBOARDING PROGRESS PERSISTENCE (fix 2) =====
+// A reload mid-onboarding used to be binary on 'balance_onboarded' and wipe
+// selectedApps, sending an in-progress user all the way back to Welcome.
+// This checkpoints the current step + every choice made so far into its own
+// key, separate from balance_state (which only exists post-onboarding).
+const ONBOARDING_PROGRESS_KEY = 'balance_onboarding_progress';
+
+function saveOnboardingProgress() {
+  if (localStorage.getItem('balance_onboarded')) return; // done - nothing to checkpoint
+  localStorage.setItem(ONBOARDING_PROGRESS_KEY, JSON.stringify({
+    step: currentObStep,
+    selectedApps: state.selectedApps,
+    dailyHours: state.dailyHours,
+    actualDailyHours: state.actualDailyHours,
+    dailyAllowanceMinutes: state.dailyAllowanceMinutes,
+    earnRateMultiplier: state.earnRateMultiplier,
+    expiresAtMidnight: state.expiresAtMidnight,
+    userName: state.userName,
+    paywallYears: state.paywallYears,
+  }));
+}
+
+function loadOnboardingProgress() {
+  const raw = localStorage.getItem(ONBOARDING_PROGRESS_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
+// Re-syncs every onboarding control from state after a mid-flow reload -
+// normally these only get set by direct user interaction, never by state.
+function resumeOnboardingUI(step) {
+  document.querySelectorAll('.app-tile').forEach(tile => {
+    tile.classList.toggle('selected', state.selectedApps.includes(tile.dataset.app));
+  });
+
+  const slider = document.getElementById('time-slider');
+  if (slider) {
+    const mins = Math.round(state.dailyHours * 60);
+    slider.value = mins;
+    const sliderVal = document.getElementById('slider-value');
+    if (sliderVal) {
+      const h = Math.floor(mins / 60), m = mins % 60;
+      sliderVal.textContent = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+    }
+  }
+
+  if (state.actualDailyHours !== null) {
+    const guessMins = Math.round(state.dailyHours * 60);
+    const actualMins = Math.round(state.actualDailyHours * 60);
+    const gh = Math.floor(guessMins / 60), gm = guessMins % 60;
+    const ah = Math.floor(actualMins / 60), am = actualMins % 60;
+    setTextContent('reveal-guess-text', gh > 0 ? (gm > 0 ? `${gh}h ${gm}m` : `${gh}h`) : `${gm}m`);
+    setTextContent('reveal-actual-value', ah > 0 ? (am > 0 ? `${ah}h ${am}m` : `${ah}h`) : `${am}m`);
+    const pill = document.getElementById('reveal-delta-pill');
+    if (pill) {
+      if (actualMins > guessMins) {
+        pill.textContent = '↑ 27% more than you thought';
+        pill.className = 'reveal-delta-pill red';
+      } else {
+        pill.textContent = '↓ Less than you thought';
+        pill.className = 'reveal-delta-pill green';
+      }
+    }
+  }
+
+  if (step === 'ob-step-c') initOnboardingStepC();
+
+  const nameInput = document.getElementById('plan-name-input');
+  if (nameInput) nameInput.value = state.userName || '';
+  const planSlider = document.getElementById('plan-allowance-slider');
+  if (planSlider) {
+    planSlider.value = state.dailyAllowanceMinutes;
+    setTextContent('plan-allowance-display', `${state.dailyAllowanceMinutes} min`);
+  }
+  document.querySelectorAll('#earn-rate-ctrl .earn-rate-btn').forEach(b => {
+    b.classList.toggle('selected', parseFloat(b.dataset.rate) === state.earnRateMultiplier);
+  });
+  const expiresToggle = document.getElementById('expires-toggle');
+  if (expiresToggle) expiresToggle.checked = state.expiresAtMidnight;
 }
 
 function initOnboardingStepC() {
@@ -383,6 +461,7 @@ function proceedToApp() {
   state.earnedMinutes = 0;
   state.worktimeLoggedToday = [];
   localStorage.setItem('balance_onboarded', '1');
+  localStorage.removeItem(ONBOARDING_PROGRESS_KEY); // fix 2 - no lingering partial-onboarding state
   showScreen('app-shell');
   state.remainingSeconds = state.dailyAllowanceMinutes * 60;
   state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
@@ -654,6 +733,13 @@ function updateBonusCard() {
     if (!card.classList.contains('achieved')) {
       card.classList.add('achieved');
       card.innerHTML = bonusCardAchievedHTML();
+    }
+    // fix 1 - actually set the flag the rollover consumer reads, exactly
+    // once per day the goal is crossed (guarded so re-renders after the
+    // flag is already set don't re-fire or re-save).
+    if (!state.stepBonusTomorrow) {
+      state.stepBonusTomorrow = true;
+      saveState();
     }
     return;
   }
@@ -1509,18 +1595,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   loadState();
 
-  // Reset selectedApps to empty so onboarding starts fresh
-  if (!localStorage.getItem('balance_onboarded')) {
-    state.selectedApps = [];
+  // Check if already onboarded
+  const onboarded = localStorage.getItem('balance_onboarded');
+  // fix 2 - a mid-onboarding reload used to be binary on 'balance_onboarded'
+  // and always wipe selectedApps. Restore a checkpoint if one exists;
+  // otherwise (a genuinely fresh profile) start empty exactly as before.
+  const onboardingProgress = onboarded ? null : loadOnboardingProgress();
+  if (!onboarded) {
+    if (onboardingProgress) {
+      state.selectedApps = onboardingProgress.selectedApps || [];
+      state.dailyHours = onboardingProgress.dailyHours ?? state.dailyHours;
+      state.actualDailyHours = onboardingProgress.actualDailyHours ?? null;
+      state.dailyAllowanceMinutes = onboardingProgress.dailyAllowanceMinutes ?? state.dailyAllowanceMinutes;
+      state.earnRateMultiplier = onboardingProgress.earnRateMultiplier ?? state.earnRateMultiplier;
+      state.expiresAtMidnight = onboardingProgress.expiresAtMidnight ?? state.expiresAtMidnight;
+      state.userName = onboardingProgress.userName || '';
+      state.paywallYears = onboardingProgress.paywallYears ?? null;
+    } else {
+      state.selectedApps = [];
+    }
   }
 
   document.getElementById('welcome-cta').addEventListener('click', () => {
     showScreen('onboarding-screen');
     showObStep('ob-step-a');
   });
-
-  // Check if already onboarded
-  const onboarded = localStorage.getItem('balance_onboarded');
 
   // ── SPLASH ──
   const splashScreen = document.getElementById('splash-screen');
@@ -1558,6 +1657,11 @@ document.addEventListener('DOMContentLoaded', () => {
         pendingToastMessages.forEach(msg => showToast(msg));
         pendingToastMessages = [];
       }
+    } else if (onboardingProgress && onboardingProgress.step) {
+      // fix 2 - resume mid-onboarding exactly where the user left off.
+      showScreen('onboarding-screen');
+      resumeOnboardingUI(onboardingProgress.step);
+      showObStep(onboardingProgress.step);
     } else {
       showScreen('welcome-screen');
     }
@@ -1579,6 +1683,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         state.selectedApps = state.selectedApps.filter(a => a !== app);
       }
+      saveOnboardingProgress(); // fix 2 - checkpoint the pick itself, not just "Continue"
     });
   });
 
@@ -1602,7 +1707,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.dailyHours = mins / 60;
   }
 
-  slider.addEventListener('input', () => updateSliderDisplay(slider.value));
+  slider.addEventListener('input', () => { updateSliderDisplay(slider.value); saveOnboardingProgress(); });
   updateSliderDisplay(slider.value);
 
   document.getElementById('ob-b-next').addEventListener('click', () => {
@@ -1682,6 +1787,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (planNameInput) {
     planNameInput.addEventListener('input', () => {
       state.userName = planNameInput.value.trim().slice(0, 20);
+      saveOnboardingProgress(); // fix 2
     });
   }
 
@@ -1690,6 +1796,7 @@ document.addEventListener('DOMContentLoaded', () => {
     planSlider.addEventListener('input', () => {
       state.dailyAllowanceMinutes = parseInt(planSlider.value);
       setTextContent('plan-allowance-display', `${state.dailyAllowanceMinutes} min`);
+      saveOnboardingProgress(); // fix 2
     });
   }
 
@@ -1700,6 +1807,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('#earn-rate-ctrl .earn-rate-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       state.earnRateMultiplier = parseFloat(btn.dataset.rate);
+      saveOnboardingProgress(); // fix 2
     });
   });
 
@@ -1707,6 +1815,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (expiresToggle) {
     expiresToggle.addEventListener('change', () => {
       state.expiresAtMidnight = expiresToggle.checked;
+      saveOnboardingProgress(); // fix 2
     });
   }
 
@@ -1968,8 +2077,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── LOCK SCREEN ──
   document.getElementById('lockscreen-screen').addEventListener('click', hideLockScreen);
 
-  // ── SHARE SCREEN (B5) ──
+  // ── SHARE SCREEN (B5, item 3) ──
   document.getElementById('share-save-btn').addEventListener('click', saveShareImage);
+
+  // item 3 - real clipboard copy of the generated PNG. Feature-detected: if
+  // the platform can't actually write an image to the clipboard, the button
+  // stays hidden rather than showing something that would just fail.
+  const shareCopyBtn = document.getElementById('share-copy-btn');
+  if (shareCopyBtn) {
+    const clipboardImageSupported = !!(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write);
+    if (clipboardImageSupported) {
+      shareCopyBtn.style.display = 'block';
+      shareCopyBtn.addEventListener('click', copyShareImage);
+    }
+  }
 
   document.getElementById('share-close-btn').addEventListener('click', hideShareScreen);
 
@@ -2337,5 +2458,22 @@ function saveShareImage() {
     }, 'image/png');
   } catch (e) {
     showToast('Saved!');
+  }
+}
+
+// item 3 - real clipboard copy of the same generated PNG. Only wired up
+// when window.ClipboardItem / navigator.clipboard.write actually exist
+// (see the feature-detect at the button's init above).
+function copyShareImage() {
+  try {
+    const canvas = renderShareCanvas();
+    canvas.toBlob((blob) => {
+      if (!blob) { showToast('Copy failed - try Save image instead'); return; }
+      navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        .then(() => showToast('Copied - paste it anywhere'))
+        .catch(() => showToast('Copy failed - try Save image instead'));
+    }, 'image/png');
+  } catch (e) {
+    showToast('Copy failed - try Save image instead');
   }
 }
