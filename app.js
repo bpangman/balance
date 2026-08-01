@@ -1116,7 +1116,12 @@ function setupKeyboardAwareCTA(inputEl, containerEl, ctaEl) {
       let target = containerEl.scrollTop;
       if (target > maxScrollTop) target = maxScrollTop;
       if (target < minScrollTop) target = minScrollTop;
-      containerEl.scrollTo({ top: target, behavior: 'smooth' });
+      // keyboard-fix - instant, not 'smooth': iOS's own keyboard-show
+      // auto-scroll animation is still finishing at this point and will
+      // re-assert its own (too-far) scroll position again shortly after a
+      // single correction, undoing a smooth in-flight one. Re-running this
+      // correction a few times below (see reassertTimers) wins that race.
+      containerEl.scrollTo({ top: target, behavior: 'auto' });
     });
   }
 
@@ -1124,8 +1129,21 @@ function setupKeyboardAwareCTA(inputEl, containerEl, ctaEl) {
     containerEl.style.paddingBottom = '';
   }
 
-  inputEl.addEventListener('focus', () => setTimeout(reveal, 250));
-  inputEl.addEventListener('blur', clear);
+  let reassertTimers = [];
+  function scheduleReveal() {
+    reassertTimers.forEach(clearTimeout);
+    // keyboard-fix - iOS keeps nudging its own native scroll position as the
+    // keyboard-show animation settles, so one correction isn't enough; keep
+    // re-clamping for the first ~700ms after focus until it's finished.
+    reassertTimers = [80, 180, 320, 480, 650].map((ms) => setTimeout(reveal, ms));
+  }
+
+  inputEl.addEventListener('focus', scheduleReveal);
+  inputEl.addEventListener('blur', () => {
+    reassertTimers.forEach(clearTimeout);
+    reassertTimers = [];
+    clear();
+  });
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', reveal);
   }
