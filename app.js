@@ -1075,73 +1075,108 @@ function updateShieldChip() {
 function setupKeyboardAwareCTA(inputEl, containerEl, ctaEl) {
   if (!inputEl || !containerEl || !ctaEl) return;
 
+  // keyboard-fix - iOS's own "scroll the focused input into view" native
+  // behavior ignores CSS scroll-margin and will happily scroll this input's
+  // top edge to y=0 of the container, landing it under the status bar /
+  // Dynamic Island since the container fills the full screen edge-to-edge.
+  // Root-caused with the simulator's Web Inspector attached live: on the
+  // name-entry screen there simply isn't enough vertical room, with the
+  // keyboard open, to show BOTH the input clear of the status bar AND the
+  // CTA clear of the keyboard at the same scroll position - the daily
+  // allowance/earn-rate/expires rows between them are taller than what's
+  // left of the screen. No amount of scroll-position math resolves that;
+  // the two concerns need to be decoupled instead:
+  //   1. Clamp scroll so the input never goes above its safe-area padding.
+  //   2. Only if the CTA genuinely doesn't fit in what's left of the visible
+  //      area at that scroll position, lift it out of normal flow into a
+  //      fixed position just above the keyboard, so it no longer depends on
+  //      scroll at all. (On the paywall the CTA sits ABOVE the promo input
+  //      in the layout, so floating it there risks overlapping the content
+  //      below it - this only engages where it's actually needed.)
+  function clampInputSafe() {
+    if (document.activeElement !== inputEl) return;
+    const containerRect = containerEl.getBoundingClientRect();
+    const inputRect = inputEl.getBoundingClientRect();
+    const topPad = parseFloat(getComputedStyle(containerEl).paddingTop) || 54;
+    const inputTopInContent = (inputRect.top - containerRect.top) + containerEl.scrollTop;
+    const maxScrollTop = Math.max(0, inputTopInContent - topPad - 12);
+    if (containerEl.scrollTop > maxScrollTop) {
+      containerEl.scrollTop = maxScrollTop;
+    }
+  }
+
+  let floated = false;
+  function floatCTA() {
+    if (floated || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const rect = ctaEl.getBoundingClientRect();
+    ctaEl.style.position = 'fixed';
+    ctaEl.style.left = `${rect.left}px`;
+    ctaEl.style.width = `${rect.width}px`;
+    ctaEl.style.bottom = `${Math.max(0, window.innerHeight - vv.height - vv.offsetTop + 12)}px`;
+    ctaEl.style.zIndex = '50';
+    floated = true;
+  }
+
+  function unfloatCTA() {
+    if (!floated) return;
+    ctaEl.style.position = '';
+    ctaEl.style.left = '';
+    ctaEl.style.width = '';
+    ctaEl.style.bottom = '';
+    ctaEl.style.zIndex = '';
+    floated = false;
+  }
+
+  // After the input-safe scroll clamp, check whether the CTA (still in
+  // normal flow at this point) actually fits in what's left of the visible
+  // (non-keyboard) area. Only float it if it doesn't.
+  function reconcileCTA() {
+    if (document.activeElement !== inputEl) return;
+    const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    if (floated) {
+      // Re-check whether floating is still needed (e.g. keyboard height
+      // changed) by measuring as if it were back in flow - simplest robust
+      // signal is just to keep floating once engaged for this focus
+      // session; unfloat() on blur resets it for next time.
+      return;
+    }
+    const ctaRect = ctaEl.getBoundingClientRect();
+    if (ctaRect.bottom > viewportHeight - 4) {
+      floatCTA();
+    }
+  }
+
   function reveal() {
     if (document.activeElement !== inputEl) return;
     let extraPad = 160;
-    let viewportHeight = window.innerHeight;
     if (window.visualViewport) {
       const vv = window.visualViewport;
       const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       extraPad = Math.max(160, Math.round(keyboardHeight) + 24);
-      viewportHeight = vv.height;
     }
     containerEl.style.paddingBottom = `${extraPad}px`;
-
-    // keyboard-fix - iOS's own "scroll the focused input into view" native
-    // behavior (separate from anything below) ignores CSS scroll-margin and
-    // will happily scroll this input's top edge to y=0 of the container,
-    // landing it under the status bar / Dynamic Island since the container
-    // fills the full screen edge-to-edge. scrollIntoView({block:'end'}) on
-    // the CTA made this worse by forcing the container to its max scrollTop.
-    // Instead, on the next frame (after the native auto-scroll has already
-    // happened), directly compute a scrollTop that satisfies both: the
-    // input stays below its safe-area top padding, and the CTA stays fully
-    // above the keyboard.
     requestAnimationFrame(() => {
-      const containerRect = containerEl.getBoundingClientRect();
-      const inputRect = inputEl.getBoundingClientRect();
-      const ctaRect = ctaEl.getBoundingClientRect();
-      const topPad = parseFloat(getComputedStyle(containerEl).paddingTop) || 54;
-
-      // Position of the input/CTA within the container's scrollable content,
-      // independent of the container's current scrollTop.
-      const inputTopInContent = (inputRect.top - containerRect.top) + containerEl.scrollTop;
-      const ctaBottomInContent = (ctaRect.bottom - containerRect.top) + containerEl.scrollTop;
-
-      // Don't scroll the input above its safe-area padding.
-      const maxScrollTop = Math.max(0, inputTopInContent - topPad - 12);
-      // Do scroll enough that the CTA clears the keyboard.
-      const minScrollTop = Math.max(0, ctaBottomInContent - viewportHeight + 16);
-
-      let target = containerEl.scrollTop;
-      if (target > maxScrollTop) target = maxScrollTop;
-      if (target < minScrollTop) target = minScrollTop;
-      // keyboard-fix - instant, not 'smooth': iOS's own keyboard-show
-      // auto-scroll animation is still finishing at this point and will
-      // re-assert its own (too-far) scroll position again shortly after a
-      // single correction, undoing a smooth in-flight one. Re-running this
-      // correction a few times below (see reassertTimers) wins that race.
-      containerEl.scrollTo({ top: target, behavior: 'auto' });
+      clampInputSafe();
+      reconcileCTA();
     });
   }
 
   function clear() {
     containerEl.style.paddingBottom = '';
+    unfloatCTA();
   }
 
-  let reassertTimers = [];
-  function scheduleReveal() {
-    reassertTimers.forEach(clearTimeout);
-    // keyboard-fix - iOS keeps nudging its own native scroll position as the
-    // keyboard-show animation settles, so one correction isn't enough; keep
-    // re-clamping for the first ~700ms after focus until it's finished.
-    reassertTimers = [80, 180, 320, 480, 650].map((ms) => setTimeout(reveal, ms));
+  function onContainerScroll() {
+    clampInputSafe();
   }
 
-  inputEl.addEventListener('focus', scheduleReveal);
+  inputEl.addEventListener('focus', () => {
+    reveal();
+    containerEl.addEventListener('scroll', onContainerScroll);
+  });
   inputEl.addEventListener('blur', () => {
-    reassertTimers.forEach(clearTimeout);
-    reassertTimers = [];
+    containerEl.removeEventListener('scroll', onContainerScroll);
     clear();
   });
   if (window.visualViewport) {
