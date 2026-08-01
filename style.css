@@ -518,6 +518,12 @@ input {
 
 .btn-earn-pulse {
   animation: pulse 2.5s ease infinite;
+  /* item 3a - .btn-primary's margin-top:auto only resolves to a real value
+     inside a flex container; .tab-scroll is a plain block scroll container,
+     so it computed to 0 here and the chart card right after butted up
+     against it. Match the rhythm used elsewhere on this tab (e.g.
+     .tiles-shared-caption / .app-tiles-row both use 16px). */
+  margin-bottom: 18px;
 }
 
 /* ===== PAYWALL ===== */
