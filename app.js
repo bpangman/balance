@@ -12,7 +12,6 @@ const state = {
   streakShields: 0,
   dailyAllowanceMinutes: 45,
   selectedApps: ['TikTok', 'Instagram', 'YouTube'],
-  isPlaying: false,
   currentTab: 'today',
   dailyHours: 3.5,
   actualDailyHours: null,
@@ -27,6 +26,8 @@ const state = {
   worktimeLoggedToday: [],
   stepsToday: 0,                     // real steps, driven by logged workouts (fix 9)
   stepBonusTomorrow: false,          // set true when stepsToday crosses 8,000 (fix 9)
+  pendingSession: null,               // item 2c - { appName, startedAt, plannedMinutes }
+  activeWorkout: null,                // item 3b - { name, startedAt, pausedTotalMs, pausedAt }
 };
 
 const APP_ICONS = {
@@ -45,71 +46,47 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 // once the app shell is ready.
 let pendingToastMessages = [];
 
-// Earn-tab quick-log selection (module scope so the settings-sheet earn-rate
-// control can also refresh the preview - A1, A6, fix 6).
-let selectedWorkout = null;
-let selectedDuration = 20;
-
-function updateDpEarnPreview() {
-  setTextContent('dp-earn-preview', Math.round(selectedDuration * state.earnRateMultiplier));
-}
-
-// ===== COUNTDOWN TIMER =====
-let countdownInterval = null;
+// Earn-tab live workout timer (item 3b - replaces the old retroactive
+// duration-picker quick log). One workout runs at a time; module-scope
+// interval only drives the visible 1s tick, the source of truth is always
+// state.activeWorkout's real timestamps (see computeActiveWorkoutElapsedMs).
 let widgetInterval = null;
 let laElapsedInterval = null;
-let interceptWasPlaying = false; // A3 - remember play state so hideIntercept doesn't force-resume
+let liveTimerTickInterval = null;
 
-function startCountdown() {
-  if (countdownInterval) return;
-  countdownInterval = setInterval(() => {
-    if (!state.isPlaying) return;
-    if (state.remainingSeconds > 0) {
-      state.remainingSeconds--;
-      updateRingDisplay();
-    } else {
-      // Time's up - show intercept
-      pauseCountdown();
-      renderAppTiles(); // fix 5 - lock badges appear the instant time actually hits 0
-      showIntercept(state.selectedApps[0] || 'TikTok');
-    }
-  }, 1000);
-}
-
-function pauseCountdown() {
-  state.isPlaying = false;
-  updatePlayPause();
-}
-
-function resumeCountdown() {
-  state.isPlaying = true;
-  updatePlayPause();
-}
-
-function updatePlayPause() {
-  const btn = document.getElementById('play-pause-btn');
-  if (btn) btn.textContent = state.isPlaying ? '⏸ Stop simulation' : '▶ Demo: simulate scrolling';
+// ===== RING DEPLETION COLOR (item 2d) =====
+// One shared gradient (defined once in the hero ring's <defs>, referenced by
+// all three rings that show remaining time) whose two stop-color values get
+// updated here on every repaint. Funneled through this single function so
+// the hero ring, earn mini ring, and lock-screen ring can never disagree on
+// which band they're in.
+function applyRingDepletionColor(pct) {
+  const stop1 = document.getElementById('ring-depletion-stop-1');
+  const stop2 = document.getElementById('ring-depletion-stop-2');
+  if (!stop1 || !stop2) return;
+  let c1, c2;
+  if (pct > 0.5) {
+    c1 = '#34D399'; c2 = '#2DD4BF'; // mint/teal - unchanged from before
+  } else if (pct > 0.25) {
+    c1 = '#F59E0B'; c2 = '#FBBF24'; // amber - threshold moved from 0.2 to 0.25
+  } else {
+    c1 = '#FCA5A5'; c2 = '#F87171'; // coral family (matches .acc-trend.coral), not harsh red
+  }
+  stop1.setAttribute('stop-color', c1);
+  stop2.setAttribute('stop-color', c2);
 }
 
 // ===== RING DISPLAY =====
+// No more real-time countdown interval - the ring simply repaints from
+// current state whenever something changes it or the app regains focus.
 function updateRingDisplay() {
   const remaining = state.remainingSeconds;
   const total = state.totalSeconds;
   const pct = total > 0 ? remaining / total : 0;
 
-  // Countdown text - format based on isPlaying
   const mins = Math.floor(remaining / 60);
-  const secs = remaining % 60;
-  let timeStr, labelStr;
-  if (state.isPlaying) {
-    timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
-    labelStr = 'remaining';
-  } else {
-    timeStr = `${mins} min`;
-    labelStr = 'left today';
-  }
-  setTextContent('ring-countdown', timeStr);
-  setTextContent('ring-label-sm', labelStr);
+  setTextContent('ring-countdown', `${mins} min`);
+  setTextContent('ring-label-sm', 'left today');
 
   // Hero arc
   const arc = document.getElementById('hero-ring-arc');
@@ -117,16 +94,9 @@ function updateRingDisplay() {
     const circumference = 628; // 2*pi*100
     const offset = circumference - (pct * circumference);
     arc.setAttribute('stroke-dashoffset', offset.toFixed(2));
-
-    // Color based on pct
-    if (pct > 0.5) {
-      arc.setAttribute('stroke', 'url(#hero-grad-mint)');
-    } else if (pct > 0.2) {
-      arc.setAttribute('stroke', 'url(#hero-grad-amber)');
-    } else {
-      arc.setAttribute('stroke', 'url(#hero-grad-red)');
-    }
   }
+
+  applyRingDepletionColor(pct);
 
   // Earn mini ring
   updateEarnMiniRing(pct);
@@ -146,8 +116,9 @@ function updateEarnMiniRing(pct) {
 // ===== LOCK SCREEN WIDGETS =====
 function updateLockScreenWidgets() {
   const mins = Math.ceil(state.remainingSeconds / 60);
-  const total = Math.ceil(state.totalSeconds / 60);
-  const pct = total > 0 ? mins / total : 0;
+  // item 2d - use the exact same pct as the hero ring (raw seconds, not
+  // ceil'd minutes) so the two rings can never disagree on their color band.
+  const pct = state.totalSeconds > 0 ? state.remainingSeconds / state.totalSeconds : 0;
 
   // Label
   setTextContent('ls-ring-label', `${mins}m`);
@@ -272,6 +243,7 @@ function switchTab(tabName) {
   if (tabName === 'earn') {
     requestAnimationFrame(() => renderEarnAnalytics(currentEarnRange));
   } else if (tabName === 'today') {
+    updateRingDisplay(); // item 2b - explicit repaint, not just tiles/chart/leaderboard
     refreshTodayNumbers();
   } else if (tabName === 'friends') {
     updateStreakDuel(); // fix 2 - recompute whenever Friends tab is shown
@@ -464,6 +436,8 @@ function proceedToApp() {
   state.streakShields = 0;
   state.earnedMinutes = 0;
   state.worktimeLoggedToday = [];
+  state.pendingSession = null;
+  state.activeWorkout = null;
   localStorage.setItem('balance_onboarded', '1');
   localStorage.removeItem(ONBOARDING_PROGRESS_KEY); // fix 2 - no lingering partial-onboarding state
   showScreen('app-shell');
@@ -475,8 +449,6 @@ function proceedToApp() {
   updateLeaderboard();
   updateBonusCard();
   updateRingDisplay();
-  updatePlayPause();
-  startCountdown();
   updateDateLabel();
   updateGreeting();
   updateAllStreakDisplays();
@@ -821,8 +793,6 @@ function updateInterceptRewards() {
 }
 
 function showIntercept(appName) {
-  interceptWasPlaying = state.isPlaying; // A3 - don't force-resume on close
-  pauseCountdown();
   interceptAskCount = 0; // B3 - fresh ask count each time the intercept opens
 
   const info = APP_ICONS[appName] || { emoji: '📱' };
@@ -857,8 +827,6 @@ function showIntercept(appName) {
 
 function hideIntercept() {
   hideOverlay('intercept-screen');
-  if (interceptWasPlaying) resumeCountdown();
-  else updatePlayPause();
 }
 
 // A2 - ✕ / "I'll wait until tomorrow" both close without earning, and reset
@@ -910,8 +878,10 @@ function askSarah() {
 
 // B1 - breathing pause overlay shown before opening an app with time left.
 let breathingTimer = null;
+let breathingAppName = null; // item 2c - which app "Open X" should start a session for
 
 function showBreathingPause(appName) {
+  breathingAppName = appName;
   const info = APP_ICONS[appName] || { emoji: '📱' };
   setTextContent('breathing-app-icon', info.emoji);
   setTextContent('breathing-app-name', appName);
@@ -928,6 +898,81 @@ function showBreathingPause(appName) {
 function hideBreathingPause() {
   hideOverlay('breathing-screen');
   if (breathingTimer) { clearTimeout(breathingTimer); breathingTimer = null; }
+}
+
+// ===== APP SESSION (item 2c) =====
+// Tapping "Open X" starts a simulated doom-scroll session: a plausible
+// randomized length (8-15 min, tuned so a full ~45-57 min ring runs out in
+// roughly 3-5 taps - see final report), a short honest "leaving Balance"
+// transition, then an automatic return that deducts only what was actually
+// available (remaining can never go negative).
+let pendingSessionTimer = null;
+
+function startAppSession(appName) {
+  hideBreathingPause();
+  const plannedMinutes = Math.floor(Math.random() * 8) + 8; // 8-15 min
+  state.pendingSession = { appName, startedAt: Date.now(), plannedMinutes };
+  saveState();
+  showAppTransition(appName);
+}
+
+function showAppTransition(appName) {
+  const info = APP_ICONS[appName] || { bg: '#333', emoji: '📱' };
+  const screen = document.getElementById('app-transition-screen');
+  if (screen) screen.style.background = info.bg;
+  setTextContent('transition-app-icon', info.emoji);
+  setTextContent('transition-app-name', appName);
+  const nameEl = document.getElementById('transition-app-name');
+  const capEl = document.querySelector('.app-transition-caption');
+  const textColor = info.textColor || '#fff';
+  if (nameEl) nameEl.style.color = textColor;
+  if (capEl) capEl.style.color = textColor === '#000' ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.75)';
+  showOverlay('app-transition-screen');
+  clearTimeout(pendingSessionTimer);
+  pendingSessionTimer = setTimeout(() => {
+    hideOverlay('app-transition-screen');
+    resolvePendingSession();
+  }, 1800);
+}
+
+// Idempotent - a no-op if there's no pending session (already resolved, or
+// none started). Deducts min(plannedMinutes, remaining) so remaining can
+// never go negative, then returns to Today - straight to the intercept if
+// that used up the last of it, matching the old countdown's zero-path.
+function resolvePendingSession() {
+  const session = state.pendingSession;
+  if (!session) return;
+  state.pendingSession = null;
+
+  const plannedSeconds = session.plannedMinutes * 60;
+  const actualSeconds = Math.min(plannedSeconds, state.remainingSeconds);
+  const actualMinutes = Math.round(actualSeconds / 60);
+  state.remainingSeconds = Math.max(0, state.remainingSeconds - actualSeconds);
+
+  updateRingDisplay();
+  refreshTodayNumbers();
+  saveState();
+  switchTab('today');
+
+  if (state.remainingSeconds <= 0) {
+    renderAppTiles(); // fix 5 - lock badges appear the instant time actually hits 0
+    showIntercept(session.appName);
+  } else {
+    const minsLeft = Math.floor(state.remainingSeconds / 60);
+    showToast(`Welcome back. ${session.appName} used ${actualMinutes} min today - ${minsLeft} min left.`);
+  }
+}
+
+// item 2b/2c - eagerly resolve a pending session once its planned time has
+// genuinely elapsed (a real background/foreground cycle or a page reload).
+// Guarded on real elapsed time so a quick focus blip can't double-credit or
+// resolve early.
+function maybeAutoResolvePendingSession() {
+  const session = state.pendingSession;
+  if (!session) return;
+  if (Date.now() - session.startedAt >= session.plannedMinutes * 60000) {
+    resolvePendingSession();
+  }
 }
 
 // ===== EARN MINUTES (shared logic) =====
@@ -1292,6 +1337,8 @@ function saveState() {
     worktimeLoggedToday: state.worktimeLoggedToday,
     stepsToday: state.stepsToday,
     stepBonusTomorrow: state.stepBonusTomorrow,
+    pendingSession: state.pendingSession,
+    activeWorkout: state.activeWorkout,
     savedDate: todayStr(),
   }));
 }
@@ -1306,6 +1353,11 @@ function applyDailyReset(prevDateStr, curDateStr) {
   state.totalSeconds = state.remainingSeconds;
   state.lastWorkout = null;
   state.worktimeLoggedToday = [];
+  // item 2c/3b - a session/workout in progress shouldn't survive into a new
+  // calendar day in a confusing way; drop it rather than crediting stale
+  // minutes against a brand-new day's allowance.
+  state.pendingSession = null;
+  state.activeWorkout = null;
 
   if (daysElapsed === 1) {
     state.streakDays += 1;
@@ -1356,6 +1408,15 @@ function loadState() {
   // save or a garbled value, so downstream code can always assume the shape.
   if (!state.account || typeof state.account !== 'object') {
     state.account = { provider: null, accountId: null };
+  }
+
+  // item 2c/3b - guard against a missing/malformed pendingSession or
+  // activeWorkout from an older save or a garbled value.
+  if (!state.pendingSession || typeof state.pendingSession !== 'object') {
+    state.pendingSession = null;
+  }
+  if (!state.activeWorkout || typeof state.activeWorkout !== 'object') {
+    state.activeWorkout = null;
   }
 
   // fix 9 - corrupt-storage guard: coerce every numeric field through
@@ -1429,7 +1490,6 @@ function hideConfirm() {
 // off rather than replaying the whole app-picker/plan flow.
 function signOutAccount() {
   closeSettings();
-  pauseCountdown();
   state.account = { provider: null, accountId: null };
   state.userName = '';
   localStorage.removeItem('balance_onboarded');
@@ -1908,8 +1968,6 @@ document.addEventListener('DOMContentLoaded', () => {
       updateBonusCard();
       renderEarnAnalytics('month');
       updateRingDisplay();
-      updatePlayPause();
-      startCountdown();
       updateDateLabel();
       updateGreeting();
       updateAllStreakDisplays();
@@ -1918,6 +1976,8 @@ document.addEventListener('DOMContentLoaded', () => {
       updateRingCaption();
       setTextContent('earned-display', state.earnedMinutes);
       setTextContent('earn-today-display', state.earnedMinutes);
+      restoreActiveWorkoutIfAny(); // item 3b - an in-progress workout stays evident across a reload
+      maybeAutoResolvePendingSession(); // item 2c - resolve a session whose time genuinely elapsed while away
       if (pendingToastMessages.length) {
         pendingToastMessages.forEach(msg => showToast(msg));
         pendingToastMessages = [];
@@ -2314,26 +2374,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Gear / settings
   document.getElementById('gear-btn').addEventListener('click', openSettings);
 
-  // Play/pause ring
-  document.getElementById('play-pause-btn').addEventListener('click', () => {
-    state.isPlaying = !state.isPlaying;
-    updatePlayPause();
-    updateRingDisplay();
-  });
-  updatePlayPause();
-
   // Earn more time button → go to Earn tab
   document.getElementById('earn-more-btn').addEventListener('click', () => switchTab('earn'));
 
   // Widget link in Today tab
   document.getElementById('widget-link-today').addEventListener('click', showLockScreen);
 
-  // ── BREATHING PAUSE (B1) ──
+  // ── BREATHING PAUSE (B1) / APP SESSION (item 2c) ──
   document.getElementById('breathing-open-btn').addEventListener('click', () => {
-    hideBreathingPause();
-    state.isPlaying = true;
-    updatePlayPause();
-    updateRingDisplay();
+    startAppSession(breathingAppName || state.selectedApps[0] || 'TikTok');
   });
   document.getElementById('breathing-cancel-btn').addEventListener('click', () => {
     hideBreathingPause();
@@ -2531,6 +2580,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('share-close-btn').addEventListener('click', hideShareScreen);
 
+});
+
+// item 2b/2c - since nothing decays on a real-time interval anymore, repaint
+// the ring (and resolve any pending app-session whose time has genuinely
+// elapsed) whenever the page regains focus, e.g. a real background/
+// foreground cycle on a phone.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  maybeAutoResolvePendingSession();
+  updateRingDisplay();
+  if (state.currentTab === 'today') refreshTodayNumbers();
 });
 
 // ===== FRIENDS TAB - PARTNER (fix 1, 2, 12) =====

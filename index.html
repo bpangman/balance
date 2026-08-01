@@ -332,22 +332,24 @@
             <div class="hero-ring-wrap">
               <svg id="hero-ring-svg" viewBox="0 0 240 240" width="220" height="220">
                 <defs>
+                  <!-- Single shared gradient (item 2d) - JS updates only the two
+                       stop-color values on every repaint, which IS animatable
+                       (unlike swapping between separate gradient elements), so a
+                       real band change cross-fades instead of snapping. Every
+                       ring that shows remaining time (hero, earn mini, lock
+                       screen) references this same id. -->
+                  <linearGradient id="ring-depletion-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop id="ring-depletion-stop-1" class="depletion-stop" offset="0%" stop-color="#34D399"/>
+                    <stop id="ring-depletion-stop-2" class="depletion-stop" offset="100%" stop-color="#2DD4BF"/>
+                  </linearGradient>
                   <linearGradient id="hero-grad-mint" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stop-color="#34D399"/>
                     <stop offset="100%" stop-color="#2DD4BF"/>
                   </linearGradient>
-                  <linearGradient id="hero-grad-amber" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#F59E0B"/>
-                    <stop offset="100%" stop-color="#FBBF24"/>
-                  </linearGradient>
-                  <linearGradient id="hero-grad-red" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#F87171"/>
-                    <stop offset="100%" stop-color="#EF4444"/>
-                  </linearGradient>
                 </defs>
                 <circle class="ring-track" cx="120" cy="120" r="100" stroke-width="14"/>
                 <circle id="hero-ring-arc" class="ring-arc hero-arc" cx="120" cy="120" r="100"
-                  stroke="url(#hero-grad-mint)"
+                  stroke="url(#ring-depletion-gradient)"
                   stroke-width="14"
                   stroke-dasharray="628"
                   stroke-dashoffset="0"
@@ -356,7 +358,6 @@
               <div class="ring-center">
                 <div class="ring-countdown" id="ring-countdown">31 min</div>
                 <div class="ring-label-sm" id="ring-label-sm">left today</div>
-                <button class="play-pause-btn" id="play-pause-btn" title="Simulate scrolling">▶ Demo: simulate scrolling</button>
               </div>
             </div>
 
@@ -412,7 +413,7 @@
                 <svg id="earn-mini-svg" viewBox="0 0 60 60" width="60" height="60">
                   <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5"/>
                   <circle id="earn-mini-arc" class="ring-arc" cx="30" cy="30" r="24"
-                    stroke="url(#hero-grad-mint)"
+                    stroke="url(#ring-depletion-gradient)"
                     stroke-width="5"
                     stroke-dasharray="150"
                     stroke-dashoffset="37"
@@ -752,6 +753,20 @@
       </div>
     </div>
 
+    <!-- ===== APP TRANSITION OVERLAY (item 2c) =====
+         Honest "you're leaving Balance" beat shown right after tapping
+         "Open X" in the breathing pause - full-screen in the tapped app's
+         own brand color for a short fixed delay, then auto-resolves the
+         session and returns to Today. Follows the exact .screen/.overlay-screen
+         layering pattern used by breathing-screen/lockscreen-screen. -->
+    <div id="app-transition-screen" class="screen overlay-screen">
+      <div class="app-transition-content">
+        <div class="app-transition-icon" id="transition-app-icon">🎵</div>
+        <div class="app-transition-name" id="transition-app-name">TikTok</div>
+        <div class="app-transition-caption">Leaving Balance…</div>
+      </div>
+    </div>
+
     <!-- ===== LOCK SCREEN DEMO ===== -->
     <div id="lockscreen-screen" class="screen overlay-screen">
       <div class="lockscreen-bg">
@@ -767,7 +782,7 @@
             <svg viewBox="0 0 60 60" width="54" height="54">
               <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5"/>
               <circle id="ls-ring-arc" class="ring-arc" cx="30" cy="30" r="24"
-                stroke="url(#hero-grad-mint)"
+                stroke="url(#ring-depletion-gradient)"
                 stroke-width="5"
                 stroke-dasharray="150"
                 stroke-dashoffset="37"
