@@ -1864,6 +1864,28 @@ input {
   width: 100%;
 }
 
+/* item 3 - secondary sibling to Save image: same footprint/tap-target,
+   outline treatment so the hierarchy still reads Save > Copy > Close. */
+.share-copy-btn {
+  display: block;
+  width: 100%;
+  padding: 17px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.16);
+  color: var(--text);
+  border-radius: var(--radius-btn);
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.2px;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.share-copy-btn:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
 .share-close-btn {
   font-size: 15px;
   color: var(--text-muted);
@@ -1974,6 +1996,17 @@ input {
 }
 
 .danger-action { color: var(--coral); }
+
+/* item 8 - Settings Health row: spacer pushes the state text + arrow to the
+   right edge, matching the other sheet-action-row entries. */
+.sheet-row-spacer { flex: 1; }
+
+.settings-health-state {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.settings-health-state.connected { color: var(--mint); }
 
 /* ===== TOAST ===== */
 #toast-container {

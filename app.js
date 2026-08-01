@@ -49,6 +49,11 @@ let pendingToastMessages = [];
 let selectedWorkout = null;
 let selectedDuration = 20;
 
+// item 8 - which flow currently owns the (shared) Health permission popup:
+// 'onboarding' (default) advances to the paywall on Allow/Deny; 'settings'
+// just updates state and closes.
+let healthPopupSource = 'onboarding';
+
 function updateDpEarnPreview() {
   setTextContent('dp-earn-preview', Math.round(selectedDuration * state.earnRateMultiplier));
 }
@@ -574,7 +579,16 @@ function buildWeekChart() {
   const { social, earned } = getWeekSeries();
   const todayIdx = WEEK_TODAY_IDX;
   const allowance = state.dailyAllowanceMinutes;
-  const scaleMax = Math.max(Math.max(...social), allowance) * 1.15;
+  // fix 7 - headroom is derived from the DATA, not from whichever value
+  // (data or allowance) currently happens to be the max. The old formula
+  // multiplied the max by 1.15, so whenever the allowance itself was the
+  // max, scaleMax = allowance * 1.15 and the goal line landed at a fixed
+  // 1/1.15 (86.9565%) no matter how high the allowance went - it only
+  // ever moved when the DATA stayed the dominant term. Fixed additive
+  // headroom based on the data means the line actually moves both ways.
+  const dataMax = Math.max(...social);
+  const headroom = Math.max(dataMax, 1) * 0.15;
+  const scaleMax = Math.max(dataMax, allowance) + headroom;
   const goalPct = Math.min(100, (allowance / scaleMax) * 100);
 
   const barsRow = document.createElement('div');
@@ -1067,6 +1081,7 @@ function openSettings() {
   document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(b => {
     b.classList.toggle('selected', parseFloat(b.dataset.rate) === state.earnRateMultiplier);
   });
+  updateSettingsHealthRow(); // item 8 - re-sync every time the sheet opens
 }
 
 // A1 — Daily-allowance stepper: writes state, recomputes total, clamps
@@ -1183,12 +1198,44 @@ function loadState() {
   }
 
   Object.assign(state, saved);
+
+  // fix 9 - corrupt-storage guard: coerce every numeric field through
+  // Number(...) and fall back to a sane default on any non-finite result
+  // (NaN/Infinity), so a garbled localStorage value (e.g. earnedMinutes
+  // stored as the string "not-a-number") can't leak into captions/labels
+  // anywhere it's displayed, not just the ring (which already clamped).
+  const numericDefaults = {
+    earnedMinutes: 0,
+    streakDays: 1,
+    streakShields: 0,
+    dailyAllowanceMinutes: 45,
+    earnRateMultiplier: 1,
+    remainingSeconds: 45 * 60,
+    stepsToday: 0,
+  };
+  Object.keys(numericDefaults).forEach(key => {
+    const n = Number(state[key]);
+    state[key] = Number.isFinite(n) ? n : numericDefaults[key];
+  });
+
   const today = todayStr();
 
   if (!saved.savedDate || saved.savedDate === today) {
     state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
   } else {
-    applyDailyReset(saved.savedDate, today);
+    const daysElapsed = daysBetween(saved.savedDate, today);
+    if (daysElapsed < 0) {
+      // fix 14 - clock-skew guard: the saved date is LATER than today (the
+      // system clock moved backward). Don't run the daily reset at all -
+      // that would zero earnedMinutes/worktimeLoggedToday and leave the
+      // streak logic in a half-updated state (it falls through both the
+      // ===1 and >1 branches for a negative delta). Just recompute totals
+      // and re-stamp today's date; nothing else changes.
+      state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
+      saveState();
+    } else {
+      applyDailyReset(saved.savedDate, today);
+    }
   }
 }
 
@@ -1539,6 +1586,7 @@ function applyTrendBadge(elId, trend) {
   if (!el) return;
   if (!trend) {
     el.style.display = 'none';
+    el.textContent = ''; // fix 15 - don't leave stale text on a hidden node
     return;
   }
   el.style.display = '';
@@ -1567,27 +1615,43 @@ function positionSegIndicator(range) {
 // ===== HEALTH BADGE =====
 function updateHealthBadge() {
   const badge = document.querySelector('.health-badge');
-  if (!badge) return;
-  if (state.healthConnected === true) {
-    badge.innerHTML = `
-      <span class="health-icon">❤️</span>
-      <div class="health-text">
-        <div class="health-title">Synced with Apple Health</div>
-        <div class="health-sub">Workouts auto-detected</div>
-      </div>
-      <span class="health-check">✓</span>
-    `;
-  } else {
-    // sweep (fix 13) — the old copy said "Connect in Settings" but Settings
-    // had no such control; the badge itself is now the control (tap to connect).
-    badge.innerHTML = `
-      <span class="health-icon">🔗</span>
-      <div class="health-text">
-        <div class="health-title">Health not connected</div>
-        <div class="health-sub">Tap to connect</div>
-      </div>
-    `;
+  if (badge) {
+    if (state.healthConnected === true) {
+      badge.innerHTML = `
+        <span class="health-icon">❤️</span>
+        <div class="health-text">
+          <div class="health-title">Synced with Apple Health</div>
+          <div class="health-sub">Workouts auto-detected</div>
+        </div>
+        <span class="health-check">✓</span>
+      `;
+    } else {
+      // sweep (fix 13) - this badge is itself a "tap to connect" control on
+      // the Earn tab. Settings ALSO has its own Health row now (item 8) that
+      // does the same thing - both read/write the same state.healthConnected,
+      // so they can never disagree.
+      badge.innerHTML = `
+        <span class="health-icon">🔗</span>
+        <div class="health-text">
+          <div class="health-title">Health not connected</div>
+          <div class="health-sub">Tap to connect</div>
+        </div>
+      `;
+    }
   }
+  // item 8/16 - keep the Settings Health row in lockstep with this badge;
+  // one call site so the two can never drift apart.
+  updateSettingsHealthRow();
+}
+
+// item 8 - Settings sheet Health row: shows the same state.healthConnected
+// truth as the Earn-tab badge (no separate "fake connected" anywhere).
+function updateSettingsHealthRow() {
+  const el = document.getElementById('settings-health-state');
+  if (!el) return;
+  const connected = state.healthConnected === true;
+  el.textContent = connected ? 'Connected' : 'Not connected';
+  el.classList.toggle('connected', connected);
 }
 
 // ===== INIT =====
@@ -1830,23 +1894,45 @@ document.addEventListener('DOMContentLoaded', () => {
     el.textContent = `Your ${timeLabel}/day adds up to ${state.paywallYears.toFixed(1)} years of your remaining life.`;
   }
 
-  // Health popup
+  // Health popup - item 8: also reused from Settings, not just onboarding.
+  // healthPopupSource tracks which flow opened it so Allow/Deny know whether
+  // to continue onboarding (advance to paywall) or just close (Settings).
   document.getElementById('health-allow-btn').addEventListener('click', () => {
     const healthPopup = document.getElementById('health-popup');
     if (healthPopup) healthPopup.style.display = 'none';
     state.healthConnected = true;
+    updateHealthBadge(); // also syncs the Settings Health row (item 8/16)
     showToast('✓ Synced with Apple Health');
-    updatePaywallPersonalLine();
-    setTimeout(() => showScreen('paywall-screen'), 1500);
+    if (healthPopupSource === 'settings') {
+      saveState();
+    } else {
+      updatePaywallPersonalLine();
+      setTimeout(() => showScreen('paywall-screen'), 1500);
+    }
+    healthPopupSource = 'onboarding';
   });
 
   document.getElementById('health-deny-btn').addEventListener('click', () => {
     const healthPopup = document.getElementById('health-popup');
     if (healthPopup) healthPopup.style.display = 'none';
+    if (healthPopupSource === 'settings') {
+      // Re-asked from Settings and backed out - leave state exactly as-is.
+      healthPopupSource = 'onboarding';
+      return;
+    }
     state.healthConnected = false;
     showToast('You can connect Health later in Settings');
     updatePaywallPersonalLine();
     showScreen('paywall-screen');
+  });
+
+  // item 8 - Settings Health row: tap re-runs the same mock permission
+  // popup used during onboarding when not yet connected.
+  document.getElementById('settings-health-row').addEventListener('click', () => {
+    if (state.healthConnected === true) return;
+    healthPopupSource = 'settings';
+    const healthPopup = document.getElementById('health-popup');
+    if (healthPopup) healthPopup.style.display = 'flex';
   });
 
   // ── PAYWALL ──
