@@ -1078,18 +1078,46 @@ function setupKeyboardAwareCTA(inputEl, containerEl, ctaEl) {
   function reveal() {
     if (document.activeElement !== inputEl) return;
     let extraPad = 160;
+    let viewportHeight = window.innerHeight;
     if (window.visualViewport) {
       const vv = window.visualViewport;
       const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       extraPad = Math.max(160, Math.round(keyboardHeight) + 24);
+      viewportHeight = vv.height;
     }
     containerEl.style.paddingBottom = `${extraPad}px`;
-    // keyboard-fix - 'end' used to force the container to its max scrollTop,
-    // which on short screens dragged the input (well above the CTA in the
-    // layout) up past the top safe-area padding and under the status bar /
-    // Dynamic Island. 'nearest' only scrolls as far as needed to clear the
-    // keyboard, so the input stays put once it's already visible.
-    ctaEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+    // keyboard-fix - iOS's own "scroll the focused input into view" native
+    // behavior (separate from anything below) ignores CSS scroll-margin and
+    // will happily scroll this input's top edge to y=0 of the container,
+    // landing it under the status bar / Dynamic Island since the container
+    // fills the full screen edge-to-edge. scrollIntoView({block:'end'}) on
+    // the CTA made this worse by forcing the container to its max scrollTop.
+    // Instead, on the next frame (after the native auto-scroll has already
+    // happened), directly compute a scrollTop that satisfies both: the
+    // input stays below its safe-area top padding, and the CTA stays fully
+    // above the keyboard.
+    requestAnimationFrame(() => {
+      const containerRect = containerEl.getBoundingClientRect();
+      const inputRect = inputEl.getBoundingClientRect();
+      const ctaRect = ctaEl.getBoundingClientRect();
+      const topPad = parseFloat(getComputedStyle(containerEl).paddingTop) || 54;
+
+      // Position of the input/CTA within the container's scrollable content,
+      // independent of the container's current scrollTop.
+      const inputTopInContent = (inputRect.top - containerRect.top) + containerEl.scrollTop;
+      const ctaBottomInContent = (ctaRect.bottom - containerRect.top) + containerEl.scrollTop;
+
+      // Don't scroll the input above its safe-area padding.
+      const maxScrollTop = Math.max(0, inputTopInContent - topPad - 12);
+      // Do scroll enough that the CTA clears the keyboard.
+      const minScrollTop = Math.max(0, ctaBottomInContent - viewportHeight + 16);
+
+      let target = containerEl.scrollTop;
+      if (target > maxScrollTop) target = maxScrollTop;
+      if (target < minScrollTop) target = minScrollTop;
+      containerEl.scrollTo({ top: target, behavior: 'smooth' });
+    });
   }
 
   function clear() {
