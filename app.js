@@ -20,7 +20,8 @@ const state = {
   expiresAtMidnight: true,
   healthConnected: null,
   promoUsed: false,
-  userName: '',
+  userName: '',            // doubles as the account nickname (item 5) - required once account creation exists
+  account: { provider: null, accountId: null }, // item 5 - simulated SSO account
   lastWorkout: null,                 // { name, mins, at } - for honest Live Activity (B6)
   paywallYears: null,                // computed during onboarding step C, shown on paywall (B4)
   worktimeLoggedToday: [],
@@ -48,11 +49,6 @@ let pendingToastMessages = [];
 // control can also refresh the preview - A1, A6, fix 6).
 let selectedWorkout = null;
 let selectedDuration = 20;
-
-// item 8 - which flow currently owns the (shared) Health permission popup:
-// 'onboarding' (default) advances to the paywall on Allow/Deny; 'settings'
-// just updates state and closes.
-let healthPopupSource = 'onboarding';
 
 function updateDpEarnPreview() {
   setTextContent('dp-earn-preview', Math.round(selectedDuration * state.earnRateMultiplier));
@@ -284,7 +280,8 @@ function switchTab(tabName) {
 }
 
 // ===== ONBOARDING =====
-let currentObStep = 'ob-step-a';
+// item 5 - account creation + nickname are now the first two steps.
+let currentObStep = 'ob-step-account';
 
 function showObStep(id) {
   const prev = document.getElementById(currentObStep);
@@ -332,6 +329,7 @@ function saveOnboardingProgress() {
     expiresAtMidnight: state.expiresAtMidnight,
     userName: state.userName,
     paywallYears: state.paywallYears,
+    account: state.account, // item 5
   }));
 }
 
@@ -380,8 +378,9 @@ function resumeOnboardingUI(step) {
 
   if (step === 'ob-step-c') initOnboardingStepC();
 
-  const nameInput = document.getElementById('plan-name-input');
-  if (nameInput) nameInput.value = state.userName || '';
+  // item 5 - the nickname now lives on its own step, not the plan step.
+  const nicknameInputResume = document.getElementById('nickname-input');
+  if (nicknameInputResume) nicknameInputResume.value = state.userName || '';
   const planSlider = document.getElementById('plan-allowance-slider');
   if (planSlider) {
     planSlider.value = state.dailyAllowanceMinutes;
@@ -477,7 +476,6 @@ function proceedToApp() {
   updateBonusCard();
   updateRingDisplay();
   updatePlayPause();
-  updateHealthBadge();
   startCountdown();
   updateDateLabel();
   updateGreeting();
@@ -1032,7 +1030,17 @@ function updateRingCaption() {
   caption.innerHTML = `${state.dailyAllowanceMinutes} min allowance + <span id="earned-display">${state.earnedMinutes}</span> min earned · ${expiryText}`;
 }
 
-// A9 - time-aware greeting, name only shown if the user gave one.
+// item 5 - shared nickname validation: onboarding's nickname step and the
+// Settings > Account nickname field both use this, so the rule can never
+// drift between the two entry points.
+function validateNickname(raw) {
+  const trimmed = (raw || '').trim().replace(/\s+/g, ' ');
+  if (trimmed.length < 2 || trimmed.length > 20) return null;
+  return trimmed;
+}
+
+// A9 - time-aware greeting. The nickname is required now (item 5 - it
+// identifies the account), so this always has a name to show once onboarded.
 function getGreeting() {
   const h = new Date().getHours();
   const period = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
@@ -1171,13 +1179,25 @@ function setupKeyboardAwareCTA(inputEl, containerEl, ctaEl) {
     clampInputSafe();
   }
 
+  // item 5 - a real tap on the CTA blurs inputEl first (mousedown/touchstart
+  // fires before the click), and clear() used to run synchronously on that
+  // blur - yanking the bottom padding away and re-flowing the layout right
+  // between the finger going down and lifting up. On a screen where the CTA
+  // sits close to the input (exactly the nickname step, now a mandatory tap
+  // right after typing), that shift can move the button out from under the
+  // tap, silently swallowing it. Debouncing clear() past the click/tap
+  // window fixes the swallowed tap without reintroducing the keyboard
+  // overlap this function exists to prevent.
+  let blurClearTimer = null;
   inputEl.addEventListener('focus', () => {
+    clearTimeout(blurClearTimer);
     reveal();
     containerEl.addEventListener('scroll', onContainerScroll);
   });
   inputEl.addEventListener('blur', () => {
     containerEl.removeEventListener('scroll', onContainerScroll);
-    clear();
+    clearTimeout(blurClearTimer);
+    blurClearTimer = setTimeout(clear, 300);
   });
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', reveal);
@@ -1199,7 +1219,21 @@ function openSettings() {
   document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(b => {
     b.classList.toggle('selected', parseFloat(b.dataset.rate) === state.earnRateMultiplier);
   });
-  updateSettingsHealthRow(); // item 8 - re-sync every time the sheet opens
+  updateSettingsAccountSection(); // item 5 - re-sync every time the sheet opens
+}
+
+// item 5 - Settings > Account: nickname + which provider they signed in
+// with. Skips re-writing the nickname field while the user is actively
+// typing in it (openSettings() re-runs this any time the sheet re-opens).
+function updateSettingsAccountSection() {
+  const nickInput = document.getElementById('settings-nickname-input');
+  if (nickInput && document.activeElement !== nickInput) {
+    nickInput.value = state.userName || '';
+  }
+  const providerLabel = document.getElementById('settings-provider-label');
+  if (providerLabel) {
+    providerLabel.textContent = (state.account && state.account.provider) || '-';
+  }
 }
 
 // A1 - Daily-allowance stepper: writes state, recomputes total, clamps
@@ -1253,6 +1287,7 @@ function saveState() {
     expiresAtMidnight: state.expiresAtMidnight,
     remainingSeconds: state.remainingSeconds,
     userName: state.userName,
+    account: state.account, // item 5
     lastWorkout: state.lastWorkout,
     worktimeLoggedToday: state.worktimeLoggedToday,
     stepsToday: state.stepsToday,
@@ -1317,6 +1352,12 @@ function loadState() {
 
   Object.assign(state, saved);
 
+  // item 5 - guard against a missing/malformed account object from an older
+  // save or a garbled value, so downstream code can always assume the shape.
+  if (!state.account || typeof state.account !== 'object') {
+    state.account = { provider: null, accountId: null };
+  }
+
   // fix 9 - corrupt-storage guard: coerce every numeric field through
   // Number(...) and fall back to a sane default on any non-finite result
   // (NaN/Infinity), so a garbled localStorage value (e.g. earnedMinutes
@@ -1360,6 +1401,66 @@ function loadState() {
 function replayDemo() {
   localStorage.clear();
   location.reload();
+}
+
+// ===== ACCOUNT (item 5) =====
+
+// Generic destructive-action confirm dialog, shared by Sign out and Delete
+// account so both get the same "no dead end, always cancelable" treatment.
+let confirmCallback = null;
+
+function showConfirm(title, body, onConfirm) {
+  setTextContent('confirm-title', title);
+  setTextContent('confirm-body', body);
+  confirmCallback = onConfirm;
+  const popup = document.getElementById('confirm-popup');
+  if (popup) popup.style.display = 'flex';
+}
+
+function hideConfirm() {
+  const popup = document.getElementById('confirm-popup');
+  if (popup) popup.style.display = 'none';
+  confirmCallback = null;
+}
+
+// Sign out clears the account + nickname and sends the user back to account
+// creation, but leaves the rest of their plan (apps, allowance, earn rate,
+// streaks) untouched in storage so signing back in picks up where they left
+// off rather than replaying the whole app-picker/plan flow.
+function signOutAccount() {
+  closeSettings();
+  pauseCountdown();
+  state.account = { provider: null, accountId: null };
+  state.userName = '';
+  localStorage.removeItem('balance_onboarded');
+  localStorage.removeItem(ONBOARDING_PROGRESS_KEY);
+  saveState();
+
+  // Sign out (unlike Delete account / Replay demo) never reloads the page,
+  // so any purely-visual, session-only onboarding UI has to be reset here
+  // by hand - otherwise a second trip through onboarding in the same page
+  // session would carry it over (e.g. the paywall's promo-code disclosure
+  // staying open from last time, or the old nickname still sitting in the
+  // input).
+  const nicknameInputEl = document.getElementById('nickname-input');
+  if (nicknameInputEl) nicknameInputEl.value = '';
+  const promoWrap = document.getElementById('promo-input-wrap');
+  if (promoWrap) promoWrap.style.display = 'none';
+  const promoInputEl = document.getElementById('promo-input');
+  if (promoInputEl) promoInputEl.value = '';
+  const promoErrorEl = document.getElementById('promo-error');
+  if (promoErrorEl) promoErrorEl.style.display = 'none';
+
+  showScreen('onboarding-screen');
+  showObStep('ob-step-account');
+}
+
+// Delete account wipes everything and returns to the very start - same as
+// Replay demo, which already does a full localStorage.clear() (so account
+// state is guaranteed gone too, not just reset).
+function deleteAccount() {
+  closeSettings();
+  replayDemo();
 }
 
 // ===== EARN ANALYTICS DATA =====
@@ -1730,50 +1831,26 @@ function positionSegIndicator(range) {
   indicator.style.width = btnRect.width + 'px';
 }
 
-// ===== HEALTH BADGE =====
-function updateHealthBadge() {
-  const badge = document.querySelector('.health-badge');
-  if (badge) {
-    if (state.healthConnected === true) {
-      badge.innerHTML = `
-        <span class="health-icon">❤️</span>
-        <div class="health-text">
-          <div class="health-title">Synced with Apple Health</div>
-          <div class="health-sub">Workouts auto-detected</div>
-        </div>
-        <span class="health-check">✓</span>
-      `;
-    } else {
-      // sweep (fix 13) - this badge is itself a "tap to connect" control on
-      // the Earn tab. Settings ALSO has its own Health row now (item 8) that
-      // does the same thing - both read/write the same state.healthConnected,
-      // so they can never disagree.
-      badge.innerHTML = `
-        <span class="health-icon">🔗</span>
-        <div class="health-text">
-          <div class="health-title">Health not connected</div>
-          <div class="health-sub">Tap to connect</div>
-        </div>
-      `;
-    }
-  }
-  // item 8/16 - keep the Settings Health row in lockstep with this badge;
-  // one call site so the two can never drift apart.
-  updateSettingsHealthRow();
-}
-
-// item 8 - Settings sheet Health row: shows the same state.healthConnected
-// truth as the Earn-tab badge (no separate "fake connected" anywhere).
-function updateSettingsHealthRow() {
-  const el = document.getElementById('settings-health-state');
-  if (!el) return;
-  const connected = state.healthConnected === true;
-  el.textContent = connected ? 'Connected' : 'Not connected';
-  el.classList.toggle('connected', connected);
-}
-
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
+
+  // item 5 - #phone-frame must never scroll: every full-screen popup
+  // (Screen Time / Health / SSO mock / confirm dialog) is positioned via
+  // position:absolute; inset:0 relative to it, on the assumption it sits at
+  // scrollTop 0. #phone-frame uses overflow:hidden, which blocks user-driven
+  // scrolling but NOT a browser-native "scroll the focused element into
+  // view" - focusing a button/input nested a few levels deep (e.g. Confirm
+  // inside the sign-out dialog, or a field inside the now-taller Settings
+  // sheet) can walk up the ancestor chain and leave #phone-frame itself with
+  // a stray scrollTop, which then silently shifts every inset:0 overlay off
+  // screen. Snap it back immediately if that ever happens.
+  const phoneFrameEl = document.getElementById('phone-frame');
+  if (phoneFrameEl) {
+    phoneFrameEl.addEventListener('scroll', () => {
+      phoneFrameEl.scrollTop = 0;
+      phoneFrameEl.scrollLeft = 0;
+    });
+  }
 
   loadState();
 
@@ -1793,14 +1870,21 @@ document.addEventListener('DOMContentLoaded', () => {
       state.expiresAtMidnight = onboardingProgress.expiresAtMidnight ?? state.expiresAtMidnight;
       state.userName = onboardingProgress.userName || '';
       state.paywallYears = onboardingProgress.paywallYears ?? null;
+      state.account = onboardingProgress.account || state.account; // item 5
     } else {
       state.selectedApps = [];
     }
   }
 
+  // item 5 - true once a (simulated) account exists, so a fresh onboarding
+  // start can skip straight past account creation + nickname.
+  function hasAccount() {
+    return !!(state.account && state.account.provider && state.userName);
+  }
+
   document.getElementById('welcome-cta').addEventListener('click', () => {
     showScreen('onboarding-screen');
-    showObStep('ob-step-a');
+    showObStep(hasAccount() ? 'ob-step-a' : 'ob-step-account');
   });
 
   // ── SPLASH ──
@@ -1825,7 +1909,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderEarnAnalytics('month');
       updateRingDisplay();
       updatePlayPause();
-      updateHealthBadge();
       startCountdown();
       updateDateLabel();
       updateGreeting();
@@ -1850,6 +1933,120 @@ document.addEventListener('DOMContentLoaded', () => {
   }, 1800);
 
   // ── ONBOARDING ──
+
+  // ── STEP ACCOUNT: simulated SSO sign-in (item 5) ──
+  let ssoSheetTimer = null;
+
+  function generateMockAccountId() {
+    return 'demo_' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function showMockSSOSheet(provider) {
+    const popup = document.getElementById('sso-mock-popup');
+    setTextContent('sso-mock-text', `Signing in with ${provider}…`);
+    if (popup) popup.style.display = 'flex';
+    clearTimeout(ssoSheetTimer);
+    ssoSheetTimer = setTimeout(() => {
+      if (popup) popup.style.display = 'none';
+      completeAccountSignIn(provider);
+    }, 1300);
+  }
+
+  function completeAccountSignIn(provider) {
+    state.account = {
+      provider,
+      accountId: (state.account && state.account.accountId) || generateMockAccountId(),
+    };
+    saveOnboardingProgress();
+    saveState();
+    showObStep('ob-step-nickname');
+  }
+
+  document.querySelectorAll('.sso-btn').forEach(btn => {
+    btn.addEventListener('click', () => showMockSSOSheet(btn.dataset.provider));
+  });
+
+  // ── LEGAL SHEET: Terms / Privacy (item 5) ──
+  const LEGAL_CONTENT = {
+    terms: {
+      title: 'Terms of Service',
+      html: `
+        <p>Using Balance requires an account. Your Balance membership, including your daily allowance, earned time, and any paid subscription, is tied to the account you create here - it does not carry over if you create a different account.</p>
+        <p>You can sign out of your account at any time from Settings. Signing out does not delete your data - your progress is waiting for you next time you sign back in.</p>
+        <p>You can also permanently delete your account from Settings. Deleting your account removes your saved plan, streaks, and history from this device and cannot be undone.</p>
+        <p>Be respectful of the Friends feature - nudges, streaks, and shared totals are meant to be encouraging, not a way to monitor or pressure another person.</p>
+        <p>This is a demo build of Balance. Account sign-in in this demo is simulated and does not create a real account with Apple, Google, or Facebook.</p>
+      `,
+    },
+    privacy: {
+      title: 'Privacy Policy',
+      html: `
+        <p>When you create a Balance account, we store basic account details (like your sign-in provider and the nickname you choose) and your in-app activity, such as workouts you log and the plan settings you choose.</p>
+        <p>We may use your account and in-app activity data to operate Balance, personalize your experience, and improve the product over time. This data may also be used for advertising.</p>
+        <p>Your Screen Time data works differently. Screen Time usage is read and processed entirely on your device. It is never uploaded to our servers, never sold, and never used for advertising - it stays on your iPhone and is only used to power the features you see inside the app, like your daily allowance and usage charts.</p>
+        <p>You can sign out or permanently delete your account at any time in Settings.</p>
+        <p>This is a demo build. No real Screen Time or Health data is collected in this demo - the numbers you see are simulated.</p>
+      `,
+    },
+  };
+
+  function openLegalSheet(kind) {
+    const doc = LEGAL_CONTENT[kind];
+    if (!doc) return;
+    setTextContent('legal-sheet-title', doc.title);
+    const body = document.getElementById('legal-scroll-body');
+    if (body) body.innerHTML = doc.html;
+    const overlay = document.getElementById('legal-overlay');
+    if (overlay) overlay.style.display = 'block';
+    const sheet = document.getElementById('legal-sheet');
+    if (sheet) {
+      sheet.classList.add('open');
+      sheet.style.transform = 'translateY(0)';
+    }
+  }
+
+  function closeLegalSheet() {
+    const overlay = document.getElementById('legal-overlay');
+    if (overlay) overlay.style.display = 'none';
+    const sheet = document.getElementById('legal-sheet');
+    if (sheet) {
+      sheet.style.transform = 'translateY(100%)';
+      sheet.classList.remove('open');
+    }
+  }
+
+  document.getElementById('terms-link').addEventListener('click', () => openLegalSheet('terms'));
+  document.getElementById('privacy-link').addEventListener('click', () => openLegalSheet('privacy'));
+  document.getElementById('legal-overlay').addEventListener('click', closeLegalSheet);
+  document.getElementById('legal-close-btn').addEventListener('click', closeLegalSheet);
+
+  // ── STEP NICKNAME (item 5) ──
+  const nicknameInput = document.getElementById('nickname-input');
+  const nicknameError = document.getElementById('nickname-error');
+
+  if (nicknameInput) {
+    nicknameInput.addEventListener('input', () => {
+      nicknameInput.classList.remove('error');
+      if (nicknameError) nicknameError.style.display = 'none';
+    });
+  }
+
+  document.getElementById('ob-nickname-next').addEventListener('click', () => {
+    const nickname = validateNickname(nicknameInput ? nicknameInput.value : '');
+    if (!nickname) {
+      if (nicknameInput) {
+        nicknameInput.classList.remove('error');
+        void nicknameInput.offsetWidth; // reflow so the shake replays
+        nicknameInput.classList.add('error');
+      }
+      if (nicknameError) nicknameError.style.display = 'block';
+      return;
+    }
+    state.userName = nickname;
+    saveOnboardingProgress();
+    saveState();
+    showObStep('ob-step-a');
+  });
 
   // Step A: app selection
   document.querySelectorAll('.app-tile').forEach(tile => {
@@ -1939,12 +2136,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1500);
   });
 
+  // item 4 - Screen Time is now mandatory: declining never advances past this
+  // popup. Instead it explains why, in place, and leaves Allow as the only
+  // way forward - no dead end, just an honest ask.
+  const ST_DESC_DEFAULT = 'Balance reads your Screen Time to show your real usage. Your data stays on your iPhone.';
+  const ST_DESC_REQUIRED = "Balance can't work without this - it's how we count your time. Tap Allow to continue.";
+  let stDescRevertTimer = null;
+
   document.getElementById('st-deny-btn').addEventListener('click', () => {
-    const stPopup = document.getElementById('screen-time-popup');
-    if (stPopup) stPopup.style.display = 'none';
-    showToast('No problem - we\'ll use your estimate');
-    showObStep('ob-step-c');
-    initOnboardingStepC();
+    const desc = document.getElementById('st-popup-desc');
+    if (desc) {
+      desc.textContent = ST_DESC_REQUIRED;
+      desc.style.color = '#F59E0B';
+      clearTimeout(stDescRevertTimer);
+      stDescRevertTimer = setTimeout(() => {
+        desc.textContent = ST_DESC_DEFAULT;
+        desc.style.color = '';
+      }, 4000);
+    }
   });
 
   // ob-step-b2 continue
@@ -1965,14 +2174,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Plan step D handlers
-  const planNameInput = document.getElementById('plan-name-input');
-  if (planNameInput) {
-    planNameInput.addEventListener('input', () => {
-      state.userName = planNameInput.value.trim().slice(0, 20);
-      saveOnboardingProgress(); // fix 2
-    });
-  }
-
   const planSlider = document.getElementById('plan-allowance-slider');
   if (planSlider) {
     planSlider.addEventListener('input', () => {
@@ -2012,45 +2213,35 @@ document.addEventListener('DOMContentLoaded', () => {
     el.textContent = `Your ${timeLabel}/day adds up to ${state.paywallYears.toFixed(1)} years of your remaining life.`;
   }
 
-  // Health popup - item 8: also reused from Settings, not just onboarding.
-  // healthPopupSource tracks which flow opened it so Allow/Deny know whether
-  // to continue onboarding (advance to paywall) or just close (Settings).
+  // item 4 - Health is now mandatory too, and (since it's guaranteed) there's
+  // no separate Settings entry point anymore - this popup only ever opens
+  // from onboarding, so Allow always advances to the paywall.
   document.getElementById('health-allow-btn').addEventListener('click', () => {
     const healthPopup = document.getElementById('health-popup');
     if (healthPopup) healthPopup.style.display = 'none';
     state.healthConnected = true;
-    updateHealthBadge(); // also syncs the Settings Health row (item 8/16)
     showToast('✓ Synced with Apple Health');
-    if (healthPopupSource === 'settings') {
-      saveState();
-    } else {
-      updatePaywallPersonalLine();
-      setTimeout(() => showScreen('paywall-screen'), 1500);
-    }
-    healthPopupSource = 'onboarding';
+    updatePaywallPersonalLine();
+    setTimeout(() => showScreen('paywall-screen'), 1500);
   });
+
+  // item 4 - declining explains why, in place, and never advances - Allow is
+  // the only way forward, matching the Screen Time popup's behavior.
+  const HEALTH_DESC_DEFAULT = 'Balance reads your workouts so every active minute becomes scroll time.';
+  const HEALTH_DESC_REQUIRED = "Balance can't work without this - it's how we count your workouts. Tap Allow to continue.";
+  let healthDescRevertTimer = null;
 
   document.getElementById('health-deny-btn').addEventListener('click', () => {
-    const healthPopup = document.getElementById('health-popup');
-    if (healthPopup) healthPopup.style.display = 'none';
-    if (healthPopupSource === 'settings') {
-      // Re-asked from Settings and backed out - leave state exactly as-is.
-      healthPopupSource = 'onboarding';
-      return;
+    const desc = document.getElementById('health-popup-desc');
+    if (desc) {
+      desc.textContent = HEALTH_DESC_REQUIRED;
+      desc.style.color = '#F59E0B';
+      clearTimeout(healthDescRevertTimer);
+      healthDescRevertTimer = setTimeout(() => {
+        desc.textContent = HEALTH_DESC_DEFAULT;
+        desc.style.color = '';
+      }, 4000);
     }
-    state.healthConnected = false;
-    showToast('You can connect Health later in Settings');
-    updatePaywallPersonalLine();
-    showScreen('paywall-screen');
-  });
-
-  // item 8 - Settings Health row: tap re-runs the same mock permission
-  // popup used during onboarding when not yet connected.
-  document.getElementById('settings-health-row').addEventListener('click', () => {
-    if (state.healthConnected === true) return;
-    healthPopupSource = 'settings';
-    const healthPopup = document.getElementById('health-popup');
-    if (healthPopup) healthPopup.style.display = 'flex';
   });
 
   // ── PAYWALL ──
@@ -2099,13 +2290,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // item 4 - keyboard-aware CTA, scoped to exactly the two screens with a
-  // text input ahead of the primary button: the name-capture step (plan
-  // step D) and the promo-code input on the paywall. Every other screen's
-  // CTA placement is untouched.
+  // text input ahead of the primary button: the nickname step (item 5 moved
+  // this off the plan step) and the promo-code input on the paywall. Every
+  // other screen's CTA placement is untouched.
   setupKeyboardAwareCTA(
-    document.getElementById('plan-name-input'),
-    document.getElementById('ob-step-d'),
-    document.getElementById('ob-d-next')
+    document.getElementById('nickname-input'),
+    document.getElementById('ob-step-nickname'),
+    document.getElementById('ob-nickname-next')
   );
   setupKeyboardAwareCTA(
     document.getElementById('promo-input'),
@@ -2209,19 +2400,6 @@ document.addEventListener('DOMContentLoaded', () => {
     logWorkout(selectedWorkout, selectedDuration);
   });
 
-  // sweep (fix 13) - health badge is now itself the "connect" control, since
-  // Settings never had one despite the old copy pointing there.
-  const healthBadgeEl = document.querySelector('.health-badge');
-  if (healthBadgeEl) {
-    healthBadgeEl.addEventListener('click', () => {
-      if (state.healthConnected) return;
-      state.healthConnected = true;
-      updateHealthBadge();
-      showToast('✓ Synced with Apple Health');
-      saveState();
-    });
-  }
-
   // ── FRIENDS TAB (fix 1, 2, 12) ──
   document.getElementById('nudge-btn').addEventListener('click', handleNudge);
   document.getElementById('send-time-btn').addEventListener('click', handleSendTime);
@@ -2260,6 +2438,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── SETTINGS SHEET ──
   document.getElementById('settings-overlay').addEventListener('click', closeSettings);
+
+  // item 5 - Account section: nickname edit, sign out, delete account.
+  const settingsNicknameInput = document.getElementById('settings-nickname-input');
+  if (settingsNicknameInput) {
+    settingsNicknameInput.addEventListener('change', () => {
+      const nickname = validateNickname(settingsNicknameInput.value);
+      if (!nickname) {
+        settingsNicknameInput.value = state.userName || '';
+        showToast('Nickname must be 2-20 characters');
+        return;
+      }
+      state.userName = nickname;
+      updateGreeting();
+      saveState();
+      showToast('Nickname updated');
+    });
+  }
+
+  document.getElementById('settings-signout-btn').addEventListener('click', () => {
+    showConfirm(
+      'Sign out?',
+      "You'll need to sign in again next time. Your progress stays saved.",
+      signOutAccount
+    );
+  });
+
+  document.getElementById('settings-delete-account-btn').addEventListener('click', () => {
+    showConfirm(
+      'Delete account?',
+      "This permanently deletes your saved plan, streaks, and history from this device. This can't be undone.",
+      deleteAccount
+    );
+  });
+
+  document.getElementById('confirm-cancel-btn').addEventListener('click', hideConfirm);
+  document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+    const cb = confirmCallback;
+    hideConfirm();
+    if (cb) cb();
+  });
 
   // A1 - steppers write straight to state; openSettings() re-syncs the display.
   document.getElementById('allow-dec').addEventListener('click', () => {
