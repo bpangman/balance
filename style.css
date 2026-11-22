@@ -1,18 +1,51 @@
-/* ===== CSS CUSTOM PROPERTIES ===== */
+/* ===== CSS CUSTOM PROPERTIES =====
+   W4 - design tokens from DESIGN_DIRECTION sections 1.1 to 1.5. The old names
+   (--surface, --surface-border, --text-muted, --accent-*) stay as aliases so
+   nothing breaks; new rules use the canonical names. */
 :root {
   --bg: #0B0F1A;
-  --surface: rgba(255,255,255,0.05);
-  --surface-border: rgba(255,255,255,0.10);
-  --text: #F0F4FF;
-  --text-muted: rgba(240,244,255,0.5);
-  --accent-indigo: #6366F1;
-  --accent-violet: #A855F7;
-  --accent-teal: #2DD4BF;
+  --bg-elevated: #141824;
+  --text-1: #F0F4FF;
+  --text: var(--text-1);
+  --text-2: rgba(240,244,255,0.70);
+  --text-3: rgba(240,244,255,0.55);
+  --text-hint: rgba(240,244,255,0.45);
+  --text-muted: var(--text-3);
+  --stroke: rgba(255,255,255,0.10);
+  --stroke-soft: rgba(255,255,255,0.06);
+  --fill: rgba(255,255,255,0.05);
+  --fill-raised: rgba(255,255,255,0.08);
+  --surface: var(--fill);
+  --surface-border: var(--stroke);
+  --indigo: #6366F1;
+  --indigo-light: #8285F4;
+  --violet: #A855F7;
+  --teal: #2DD4BF;
   --mint: #34D399;
   --amber: #F59E0B;
+  --amber-light: #FBBF24;
   --coral: #F87171;
+  --coral-light: #FCA5A5;
+  --accent-indigo: var(--indigo);
+  --accent-violet: var(--violet);
+  --accent-teal: var(--teal);
+  --grad-cta: linear-gradient(135deg, var(--indigo), var(--violet));
+  --grad-brand: linear-gradient(135deg, var(--indigo), var(--violet), var(--teal));
+  --glow-indigo: rgba(99,102,241,0.22);
+  --glow-violet: rgba(168,85,247,0.14);
+  --glow-teal: rgba(45,212,191,0.10);
   --radius-card: 24px;
+  --radius-tile: 16px;
   --radius-btn: 16px;
+  --radius-control: 12px;
+  --radius-sheet: 28px;
+  --radius-bar: 3px;
+  --r-card: var(--radius-card);
+  --r-tile: var(--radius-tile);
+  --r-btn: var(--radius-btn);
+  --r-control: var(--radius-control);
+  --r-sheet: var(--radius-sheet);
+  --r-bar: var(--radius-bar);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
   --safe-top: env(safe-area-inset-top, 44px);
   --safe-bottom: env(safe-area-inset-bottom, 34px);
@@ -99,7 +132,7 @@ input {
 
   #desktop-label {
     margin-top: 20px;
-    color: rgba(255,255,255,0.35);
+    color: var(--text-3);
     font-size: 13px;
     letter-spacing: 0.5px;
   }
@@ -123,7 +156,100 @@ input {
   transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0.35s;
   transform: translateX(20px);
   overflow: hidden;
+  isolation: isolate;
 }
+
+/* W4 - ambient glow (WV-01, NS-06): three soft color pools painted behind every
+   screen so the canvas reads lit from behind, never flat. z-index -1 inside the
+   screen's own stacking context keeps it under the content and above --bg. The
+   pools stay indigo / violet / teal so the ring's depletion colors (mint, amber,
+   coral) keep their meaning. Not on .share-card, which has its own gradient. */
+.screen::before,
+#app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 10%, var(--glow-indigo), transparent 60%),
+    radial-gradient(circle at 85% 40%, var(--glow-violet), transparent 55%),
+    radial-gradient(circle at 30% 95%, var(--glow-teal), transparent 55%);
+}
+/* "Time is up" variant (DESIGN 1.3): coral above, indigo below. */
+#intercept-screen::before {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(248,113,113,0.16), transparent 70%),
+    radial-gradient(circle at 50% 92%, rgba(99,102,241,0.12), transparent 60%);
+}
+/* The "leaving Balance" beat paints the tapped app's own brand color edge to
+   edge, so it gets no Balance glow. */
+#app-transition-screen::before { display: none; }
+
+/* W4 - focus (WV-20): one branded teal ring everywhere, text inputs included.
+   A focused field's border turns teal as well, so the field reads as one hue. */
+:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
+}
+.time-range:focus-visible,
+.plan-allowance-range:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 6px;
+  border-radius: var(--radius-bar);
+}
+
+/* W4 - glyph system (DESIGN 2). One sprite in index.html, referenced as
+   <svg class="icon"><use href="#i-..."/></svg>; app.js builds the same markup. */
+.icon {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+.icon-12 { width: 12px; height: 12px; stroke-width: 2.25; }
+.icon-14 { width: 14px; height: 14px; stroke-width: 2; }
+.icon-16 { width: 16px; height: 16px; stroke-width: 2; }
+.icon-20 { width: 20px; height: 20px; }
+.icon-28 { width: 28px; height: 28px; }
+
+/* SymbolTile: rounded square, accent at 16%, glyph in the accent. 44 in tiles,
+   36 in rows. The tint class sets currentColor for both the fill and the glyph. */
+.symbol-tile {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.symbol-tile-sm { width: 36px; height: 36px; }
+.tint-teal { color: var(--teal); }
+.tint-indigo { color: var(--indigo); }
+.tint-indigo-light { color: var(--indigo-light); }
+.tint-amber { color: var(--amber); }
+.tint-coral { color: var(--coral); }
+.tint-text-2 { color: var(--text-2); }
+
+/* App mark: generic glyph or letter on the brand color (never a real logo).
+   The glyph is 45% of the tile; the letter is sized per tile below. */
+.app-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  overflow: hidden;
+}
+.app-mark .mark-glyph { width: 45%; height: 45%; stroke-width: 2; }
+.app-mark .mark-letter { font-weight: 800; line-height: 1; letter-spacing: -0.02em; color: inherit; }
 
 .screen.active {
   opacity: 1;
@@ -133,9 +259,27 @@ input {
   transform: translateX(0);
 }
 
+/* W6 (WV-11) - no ghosting on screen changes. showScreen() stacks the incoming
+   screen above the outgoing one (.screen-in) on its own solid --bg, and the
+   outgoing screen keeps full opacity for the length of the incoming fade
+   (opacity waits .35s, then drops at once, already covered), so the canvas
+   never dips. The outgoing screen's content clears in a quick .12s, so the
+   old step's text does not show through the new one while it fades in.
+   Before this both screens faded at the same time and the old step bled
+   through the new one for the whole .35s. */
+.screen.screen-in {
+  z-index: 2;
+  background-color: var(--bg);
+}
 .screen.slide-out {
   opacity: 0;
   transform: translateX(-20px);
+  z-index: 1;
+  transition: opacity 0s linear 0.35s, transform 0.35s ease, visibility 0s linear 0.35s;
+}
+.screen.slide-out > * {
+  opacity: 0 !important;
+  transition: opacity 0.12s ease !important;
 }
 
 .overlay-screen {
@@ -169,7 +313,7 @@ input {
 
 .ring-track {
   fill: none;
-  stroke: rgba(255,255,255,0.08);
+  stroke: var(--fill-raised);
   stroke-width: 6;
 }
 
@@ -187,7 +331,7 @@ input {
   font-size: 40px;
   font-weight: 700;
   letter-spacing: -1.5px;
-  background: linear-gradient(135deg, #6366F1, #A855F7, #2DD4BF);
+  background: var(--grad-brand);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -195,7 +339,7 @@ input {
 
 .brand-tagline {
   font-size: 18px;
-  color: var(--text-muted);
+  color: var(--text-3);
   letter-spacing: 0.5px;
 }
 
@@ -244,7 +388,7 @@ input {
 .ob-progress {
   width: 100%;
   height: 4px;
-  background: rgba(255,255,255,0.1);
+  background: var(--fill-raised);
   border-radius: 2px;
   margin-bottom: 28px;
   overflow: hidden;
@@ -252,12 +396,58 @@ input {
 
 .ob-progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-indigo), var(--accent-violet));
+  background: linear-gradient(90deg, var(--indigo), var(--violet));
   border-radius: 2px;
   transition: width 0.4s ease;
 }
 
 .ob-header { margin-bottom: 24px; }
+
+.ob-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.ob-nav-row .ob-progress {
+  flex: 1;
+  margin-bottom: 0;
+}
+.ob-back-btn,
+.ob-back-spacer {
+  width: 44px;
+  height: 44px;
+  margin-left: -4px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+}
+.ob-back-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease;
+}
+.ob-back-btn:active .ob-back-circle { transform: scale(0.94); }
+/* Step C has no header; its chevron pins to the same corner. */
+.ob-back-abs {
+  position: absolute;
+  top: max(var(--safe-top), 54px);
+  left: 20px;
+  z-index: 2;
+}
+
+/* WC-28 - Continue waits for a pick; the disabled look lives on .btn-primary:disabled. */
+.ob-next:disabled {
+  pointer-events: none;
+}
 
 .ob-title {
   font-size: 26px;
@@ -268,7 +458,7 @@ input {
 
 .ob-subtitle {
   font-size: 15px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 /* App grid */
@@ -285,9 +475,9 @@ input {
   align-items: center;
   gap: 8px;
   padding: 14px 8px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 20px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-tile);
   transition: transform 0.15s ease, border-color 0.2s;
   min-height: 44px;
 }
@@ -297,29 +487,28 @@ input {
 }
 
 .app-tile.selected {
-  border-color: var(--accent-indigo);
+  border-color: var(--indigo);
   background: rgba(99,102,241,0.15);
   transform: scale(1.04);
 }
 
-.app-tile span {
+/* The tile name is the direct child span. The app mark's letter (X, S, R)
+   keeps its own color (black on Snapchat's yellow) in both states. */
+.app-tile > span {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
-.app-tile.selected span {
+.app-tile.selected > span {
   color: var(--text);
 }
 
 .app-icon {
   width: 50px;
   height: 50px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
+  border-radius: 14px; /* mark at 50 (DESIGN 1.5) */
 }
+.app-icon .mark-letter { font-size: 24px; }
 
 /* Slider */
 .slider-hero {
@@ -331,7 +520,7 @@ input {
   font-size: 62px;
   font-weight: 800;
   letter-spacing: -3px;
-  background: linear-gradient(135deg, #6366F1, #A855F7, #2DD4BF);
+  background: var(--grad-brand);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -340,7 +529,7 @@ input {
 
 .slider-label {
   font-size: 16px;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin-top: 6px;
 }
 
@@ -353,7 +542,7 @@ input {
 
 .slider-min, .slider-max {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-3);
   white-space: nowrap;
 }
 
@@ -362,9 +551,8 @@ input {
   -webkit-appearance: none;
   appearance: none;
   height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--accent-indigo), var(--accent-violet));
-  outline: none;
+  border-radius: var(--radius-bar);
+  background: linear-gradient(90deg, var(--indigo), var(--violet));
 }
 
 .time-range::-webkit-slider-thumb {
@@ -390,8 +578,8 @@ input {
 .compute-spinner {
   width: 48px;
   height: 48px;
-  border: 4px solid rgba(255,255,255,0.1);
-  border-top-color: var(--accent-violet);
+  border: 4px solid var(--stroke);
+  border-top-color: var(--violet);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -400,7 +588,7 @@ input {
 
 .compute-label {
   font-size: 16px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 .shock-state {
@@ -410,20 +598,24 @@ input {
   justify-content: center;
   height: 100%;
   text-align: center;
-  padding: 0 8px;
+  padding: 0; /* W6 (WV-12) - same 24px inset as every other step's CTA */
   gap: 12px;
 }
+/* W6 (WV-12) - the CTA keeps the shared margin-top:auto bottom pin; this
+   matching auto margin splits the free space so the reveal stays centered in
+   the area above the button. */
+.shock-state .shock-lead { margin-top: auto; }
 
 .shock-lead {
   font-size: 17px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 .shock-years {
   font-size: 72px;
   font-weight: 900;
   letter-spacing: -4px;
-  background: linear-gradient(135deg, #F87171, #A855F7);
+  background: linear-gradient(135deg, var(--coral), var(--violet));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -457,7 +649,7 @@ input {
   align-items: center;
   gap: 16px;
   padding: 14px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid var(--stroke-soft);
 }
 
 .plan-row:last-child { border-bottom: none; }
@@ -470,7 +662,7 @@ input {
 
 .plan-label {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin-bottom: 2px;
 }
 
@@ -481,28 +673,32 @@ input {
 
 /* ===== GLASS CARD ===== */
 .glass-card {
-  background: rgba(255,255,255,0.05);
+  background: var(--fill);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid var(--stroke);
   border-radius: var(--radius-card);
   padding: 20px 20px;
   margin-bottom: 14px;
 }
 
 /* ===== BUTTONS ===== */
+/* W4 (NS-01 web mirror) - Primary: solid indigo-to-violet, radius 16, indigo
+   shadow. Disabled: raised fill + hairline + tertiary label, never a global
+   opacity dim. The breathing CTA keeps its own 4 s disabled look. */
 .btn-primary {
   display: block;
   width: 100%;
   padding: 17px;
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+  background: var(--grad-cta);
   color: white;
   border-radius: var(--radius-btn);
   font-size: 17px;
   font-weight: 700;
   text-align: center;
   letter-spacing: 0.2px;
-  transition: transform 0.12s ease, opacity 0.12s ease;
+  box-shadow: 0 8px 24px rgba(99,102,241,0.35);
+  transition: transform 0.12s ease, opacity 0.12s ease, background 0.2s ease-out, color 0.2s ease-out, box-shadow 0.2s ease-out;
   margin-top: auto;
 }
 
@@ -511,9 +707,17 @@ input {
   opacity: 0.9;
 }
 
+.btn-primary:disabled:not(#breathing-open-btn) {
+  background: var(--fill-raised);
+  border: 1px solid var(--stroke);
+  color: var(--text-3);
+  box-shadow: none;
+}
+
+/* WV-27 - the "+ Earn more" halo is a blurred glow that breathes, not a hard plate. */
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.4); }
-  50% { box-shadow: 0 0 0 12px rgba(99,102,241,0); }
+  0%, 100% { box-shadow: 0 8px 24px rgba(99,102,241,0.35), 0 0 18px 4px rgba(99,102,241,0.45); }
+  50% { box-shadow: 0 8px 24px rgba(99,102,241,0.35), 0 0 28px 10px rgba(99,102,241,0); }
 }
 
 .btn-earn-pulse {
@@ -566,15 +770,15 @@ input {
   display: flex;
   gap: 12px;
   width: 100%;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 .price-card {
   flex: 1;
   padding: 16px 14px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 20px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-card);
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
   position: relative;
@@ -582,7 +786,7 @@ input {
 }
 
 .price-card.selected {
-  border-color: var(--accent-indigo);
+  border-color: var(--indigo);
   border-width: 2px;
   background: rgba(99,102,241,0.1);
 }
@@ -592,18 +796,18 @@ input {
   top: -12px;
   left: 50%;
   transform: translateX(-50%);
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+  background: var(--grad-cta);
   color: white;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   padding: 4px 10px;
-  border-radius: 20px;
+  border-radius: 999px;
   white-space: nowrap;
 }
 
 .price-name {
   font-size: 14px;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin-top: 8px;
   margin-bottom: 4px;
 }
@@ -616,30 +820,37 @@ input {
 .price-amount span {
   font-size: 14px;
   font-weight: 400;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 .price-monthly {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin-top: 2px;
   min-height: 16px;
 }
 
+/* W6 (WV-10) - a fixed 24px under the plan cards instead of .btn-primary's
+   margin-top:auto, which left a 79-137px hole above the button. */
+.paywall-content .btn-cta { margin-top: 24px; }
+
 .btn-cta {
   width: 100%;
   margin-bottom: 16px;
+  background: var(--grad-cta);
+  border-radius: var(--radius-btn);
+  box-shadow: 0 8px 24px rgba(99,102,241,0.35);
 }
 
 .promo-section {
   width: 100%;
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .promo-toggle {
   font-size: 14px;
-  color: var(--accent-teal);
+  color: var(--teal);
   padding: 8px;
   min-height: 44px;
 }
@@ -652,13 +863,12 @@ input {
 
 .promo-input {
   flex: 1;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 12px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-control);
   padding: 12px 16px;
   color: var(--text);
   font-size: 16px;
-  outline: none;
   text-transform: uppercase;
   letter-spacing: 1px;
   transition: border-color 0.2s;
@@ -667,7 +877,7 @@ input {
 }
 
 .promo-input:focus {
-  border-color: var(--accent-indigo);
+  border-color: var(--teal);
 }
 
 .promo-input.error {
@@ -685,8 +895,8 @@ input {
 
 .promo-apply {
   padding: 12px 20px;
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
-  border-radius: 12px;
+  background: var(--grad-cta);
+  border-radius: var(--radius-control);
   font-weight: 700;
   font-size: 15px;
   color: white;
@@ -701,10 +911,10 @@ input {
 
 .restore-link {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-3);
   padding: 8px;
   min-height: 44px;
-  margin-top: auto;
+  margin-top: 12px; /* W6 (WV-10) - follows the promo link, never pushed off screen */
 }
 
 /* ===== APP SHELL ===== */
@@ -735,10 +945,10 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: var(--text-2);
   border-radius: 50%;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
+  background: var(--fill);
+  border: 1px solid var(--stroke);
 }
 
 .tab-contents {
@@ -786,7 +996,7 @@ input {
   background: rgba(11,15,26,0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid var(--fill-raised);
   display: flex;
   align-items: flex-start;
   padding-top: 8px;
@@ -801,14 +1011,14 @@ input {
   align-items: center;
   gap: 3px;
   padding: 4px;
-  color: rgba(255,255,255,0.35);
+  color: var(--text-2);
   min-height: 44px;
   transition: color 0.2s;
 }
 
 .tab-btn span {
-  font-size: 10px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.3px;
 }
 
@@ -822,7 +1032,7 @@ input {
 }
 
 .tab-btn.active span {
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+  background: var(--grad-cta);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -838,17 +1048,28 @@ input {
 
 .greeting-text {
   font-size: 16px;
-  color: var(--text-muted);
+  color: var(--text-3);
+}
+
+.streak-rule-caption {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+  text-align: right;
+  margin: -12px 0 16px;
 }
 
 .streak-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: rgba(245,158,11,0.15);
   border: 1px solid rgba(245,158,11,0.3);
   color: var(--amber);
   font-size: 13px;
   font-weight: 700;
   padding: 5px 12px;
-  border-radius: 20px;
+  border-radius: 999px;
 }
 
 /* Hero ring */
@@ -882,7 +1103,7 @@ input {
 
 .ring-label-sm {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-3);
   text-transform: uppercase;
   letter-spacing: 1.5px;
 }
@@ -897,19 +1118,21 @@ input {
 .ring-caption {
   text-align: center;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin-bottom: 6px;
 }
 
 .widget-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   text-align: center;
   font-size: 13px;
-  color: var(--accent-teal);
+  color: var(--teal);
   margin-bottom: 20px;
   cursor: pointer;
   min-height: 44px;
-  line-height: 44px;
 }
 
 /* App tiles row */
@@ -917,7 +1140,7 @@ input {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  color: var(--text-muted);
+  color: var(--text-3);
   font-weight: 600;
   margin-bottom: 10px;
 }
@@ -939,9 +1162,9 @@ input {
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 16px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-tile);
   padding: 10px 14px;
   cursor: pointer;
   position: relative;
@@ -952,18 +1175,15 @@ input {
 .app-used-tile:active { transform: scale(0.93); }
 
 .app-used-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px; /* mark at 40 (DESIGN 1.5) */
 }
+.app-used-icon .mark-letter { font-size: 19px; }
 
 .app-used-name {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 .app-used-mins {
@@ -976,10 +1196,14 @@ input {
   position: absolute;
   top: 6px;
   right: 6px;
-  font-size: 10px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
   background: var(--coral);
-  border-radius: 6px;
-  padding: 1px 4px;
+  border-radius: 999px;
 }
 
 /* Chart */
@@ -1014,7 +1238,11 @@ input {
   display: flex;
   align-items: flex-end;
   gap: 6px;
-  height: 80px;
+  /* W6 (WV-05) - 80px of bars plus 20px reserved on top for today's value,
+     so it can never reach the title row's SAMPLE caption or goal pill.
+     app.js places the goal line inside the 80px bar area. */
+  height: 100px;
+  padding-top: 20px;
 }
 
 .week-labels-row {
@@ -1033,7 +1261,7 @@ input {
   width: 100%;
   height: 100%;
   border-radius: 6px;
-  background: rgba(255,255,255,0.06);
+  background: var(--stroke-soft);
   display: flex;
   align-items: flex-end;
   gap: 3px;
@@ -1054,7 +1282,7 @@ input {
 
 .chart-bar-fill {
   width: 100%;
-  border-radius: 4px 4px 2px 2px;
+  border-radius: var(--radius-bar) var(--radius-bar) 2px 2px;
   transition: height 0.6s cubic-bezier(0.4,0,0.2,1);
 }
 
@@ -1063,12 +1291,12 @@ input {
   opacity: 0.55;
 }
 .chart-bar-fill.social.today {
-  background: linear-gradient(to top, var(--mint), var(--accent-teal));
+  background: linear-gradient(to top, var(--mint), var(--teal));
   opacity: 1;
 }
 
 .chart-bar-fill.earned {
-  background: linear-gradient(to top, var(--amber), #fbbf24);
+  background: linear-gradient(to top, var(--amber), var(--amber-light));
   opacity: 0.55;
 }
 .chart-bar-fill.earned.today {
@@ -1077,11 +1305,15 @@ input {
 
 .chart-bar-value {
   position: absolute;
-  top: -16px;
-  font-size: 10px;
+  left: 50%;
+  bottom: 4px; /* app.js lifts it to just above today's bar (WV-05) */
+  transform: translateX(-50%);
+  font-size: 11px;
   font-weight: 700;
+  line-height: 1;
   color: var(--text);
   white-space: nowrap;
+  transition: bottom 0.6s cubic-bezier(0.4,0,0.2,1);
 }
 
 .chart-goal-line {
@@ -1092,15 +1324,20 @@ input {
   pointer-events: none;
 }
 
-.chart-goal-label {
-  position: absolute;
-  right: 0;
-  top: -13px;
-  font-size: 8px;
+/* WV-05 - the goal reads as a pill in the title row, after the SAMPLE caption,
+   so it can never sit on today's value; the dashed line alone marks it on the bars. */
+.chart-title-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.chart-goal-pill {
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.04em;
   color: var(--amber);
   white-space: nowrap;
-  opacity: 0.9;
 }
 
 .week-label-col {
@@ -1112,12 +1349,14 @@ input {
 }
 
 .chart-day-label {
-  font-size: 10px;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-3);
 }
 
 .chart-day-check {
-  font-size: 9px;
+  display: inline-flex;
+  height: 12px;
+  font-size: 11px;
   line-height: 1;
   color: var(--mint);
 }
@@ -1127,7 +1366,7 @@ input {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 .legend-dot {
@@ -1139,53 +1378,20 @@ input {
 .legend-dot.mint { background: var(--mint); }
 .legend-dot.amber { background: var(--amber); }
 
-/* Bonus card */
-.bonus-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.bonus-icon { font-size: 24px; }
-
-.bonus-title { font-size: 14px; font-weight: 600; }
-.bonus-sub { font-size: 12px; color: var(--text-muted); }
-
-.bonus-reward {
-  margin-left: auto;
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--mint);
-}
-
-.bonus-progress-wrap {
-  height: 6px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-
-.bonus-progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, var(--mint), var(--accent-teal));
-  border-radius: 3px;
-}
-
-.bonus-prog-label {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
 /* ===== INTERCEPT SCREEN ===== */
 #intercept-screen {
-  background: rgba(5,7,15,0.98);
+  /* W6 repair - fully opaque: at 0.98 the Today screen showed faintly through */
+  background: rgb(5,7,15);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: max(var(--safe-top), 54px) 24px max(var(--safe-bottom), 24px);
+  /* W6 (WV-23) - pinned from the top: centering made the hero and title jump
+     up to 58px whenever the partner reply changed height. On a short phone
+     the screen scrolls instead of clipping the last row. */
+  justify-content: flex-start;
+  padding: calc(var(--safe-top) + 72px) 24px max(var(--safe-bottom), 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .intercept-content {
@@ -1198,9 +1404,12 @@ input {
 }
 
 .intercept-app-icon {
-  font-size: 56px;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px; /* mark at 64, intercept only (DESIGN 1.5) */
   filter: grayscale(0.3);
 }
+.intercept-app-icon .mark-letter { font-size: 30px; }
 
 .intercept-title {
   font-size: 28px;
@@ -1210,14 +1419,14 @@ input {
 
 .intercept-sub {
   font-size: 16px;
-  color: var(--text-muted);
+  color: var(--text-3);
   text-align: center;
 }
 
 /* item 13 - makes explicit there's no self-serve override on this screen. */
 .intercept-nocheat-line {
   font-size: 13px;
-  color: rgba(255,255,255,0.35);
+  color: var(--text-3);
   text-align: center;
 }
 
@@ -1225,14 +1434,14 @@ input {
    category totals only, never which specific apps. */
 .privacy-microcopy {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-3);
   text-align: center;
   margin-top: 6px;
 }
 
 .intercept-options-label {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-3);
   font-weight: 600;
   align-self: flex-start;
   text-transform: uppercase;
@@ -1251,9 +1460,9 @@ input {
   display: flex;
   align-items: center;
   gap: 14px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 18px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-tile);
   padding: 14px 16px;
   transition: transform 0.12s, background 0.2s;
   min-height: 44px;
@@ -1261,10 +1470,8 @@ input {
 
 .intercept-row:active { transform: scale(0.97); }
 
-.ex-icon { font-size: 26px; }
-
 .ex-name { font-size: 15px; font-weight: 600; }
-.ex-sub { font-size: 12px; color: var(--text-muted); }
+.ex-sub { font-size: 12px; color: var(--text-3); }
 
 .ex-reward {
   margin-left: auto;
@@ -1279,8 +1486,8 @@ input {
 
 .tracking-shimmer {
   height: 6px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 3px;
+  background: var(--fill-raised);
+  border-radius: var(--radius-bar);
   overflow: hidden;
   margin-bottom: 8px;
 }
@@ -1300,7 +1507,7 @@ input {
 .tracking-label {
   text-align: center;
   font-size: 14px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 .intercept-success {
@@ -1325,29 +1532,53 @@ input {
 .ask-partner-btn {
   width: 100%;
   padding: 14px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 14px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-btn);
   font-size: 15px;
   font-weight: 600;
   min-height: 44px;
 }
 
+/* WV-30 - single definition (the old second copy's 44px hit target and padding
+   merged in); quiet but still a 4.5:1+ tappable ghost link (NS-05). */
 .wait-tomorrow {
   font-size: 13px;
-  color: rgba(255,255,255,0.25);
+  color: var(--text-3);
+  min-height: 44px;
+  padding: 8px;
 }
 
 .partner-response {
   text-align: center;
   font-size: 14px;
-  color: var(--text-muted);
+  color: var(--text-3);
   line-height: 1.5;
 }
 
-.pr-declined {
-  color: var(--coral);
+/* W6 (WV-23) - one slot for the ask block and the partner reply. Both stay
+   laid out in the same grid cell, so the slot is always as tall as the
+   taller one; the inactive one is only made invisible. */
+.intercept-slot {
+  width: 100%;
+  display: grid;
 }
+.intercept-slot > .intercept-bottom,
+.intercept-slot > .partner-response {
+  grid-area: 1 / 1;
+  align-self: start;
+}
+.slot-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.pr-declined {
+  color: var(--text-2);
+}
+
+/* W3 - demo label under the scripted partner reply */
+.partner-response .pr-demo-note { margin-top: 12px; }
 
 /* ===== EARN TAB ===== */
 .earn-header {
@@ -1366,7 +1597,7 @@ input {
 
 .earn-header-sub {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 .workout-grid {
@@ -1382,32 +1613,35 @@ input {
   align-items: center;
   gap: 6px;
   padding: 16px 8px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 18px;
-  font-size: 28px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-tile);
   transition: transform 0.12s, border-color 0.2s, background 0.2s;
   min-height: 44px;
 }
 
-.workout-tile span {
+.workout-tile .tile-label {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 .workout-tile:active { transform: scale(0.93); }
 
 .workout-tile.selected {
-  border-color: var(--accent-indigo);
+  border-color: var(--indigo);
   background: rgba(99,102,241,0.12);
 }
 
 /* item 3b - disabled (not hidden) while a live timer is already running, so
    it reads as "something is in progress" rather than silently doing nothing. */
 .workout-tile:disabled {
-  opacity: 0.4;
   pointer-events: none;
+  background: transparent;
+  border-color: var(--stroke-soft);
 }
+/* W4 (WV-18): the label stays at --text-3 and is never dimmed further; only
+   the glyph tile fades, which is enough to read as "paused while one runs". */
+.workout-tile:disabled .symbol-tile { opacity: 0.4; }
 
 /* ===== LIVE WORKOUT TIMER (item 3b) ===== */
 .live-timer-card {
@@ -1418,7 +1652,7 @@ input {
 .live-timer-workout-name {
   font-size: 15px;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--text-3);
   text-transform: uppercase;
   letter-spacing: 0.8px;
   margin-bottom: 10px;
@@ -1430,7 +1664,7 @@ input {
   letter-spacing: -1.5px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet), var(--accent-teal));
+  background: var(--grad-brand);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1444,8 +1678,12 @@ input {
 
 .live-timer-btn {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 13px;
-  border-radius: 16px;
+  border-radius: var(--radius-btn);
   font-size: 15px;
   font-weight: 700;
   min-height: 44px;
@@ -1457,13 +1695,13 @@ input {
 }
 
 .live-timer-pause-btn {
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
+  background: var(--fill);
+  border: 1px solid var(--stroke);
   color: var(--text);
 }
 
 .live-timer-end-btn {
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+  background: var(--grad-cta);
   color: white;
 }
 
@@ -1483,10 +1721,9 @@ input {
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 14px;
-  font-size: 22px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-tile);
   min-height: 44px;
   text-align: left;
   transition: transform 0.12s ease, border-color 0.2s;
@@ -1494,7 +1731,7 @@ input {
 
 .other-workout-row:active { transform: scale(0.97); }
 
-.other-workout-row span {
+.other-workout-row .row-label {
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
@@ -1511,21 +1748,20 @@ input {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 14px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-tile);
   padding: 12px 16px;
 }
 
-.earned-icon { font-size: 20px; }
+.earned-icon { display: inline-flex; }
 .earned-label { flex: 1; font-size: 14px; }
 .earned-mins { font-size: 14px; font-weight: 700; color: var(--mint); }
 
 /* fix 3 - honest empty state instead of a phantom seeded entry */
 .earned-empty {
   font-size: 13px;
-  color: var(--text-muted);
-  opacity: 0.6;
+  color: var(--text-3);
   text-align: center;
   padding: 16px 0;
 }
@@ -1545,7 +1781,7 @@ input {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+  background: var(--grad-cta);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1555,142 +1791,89 @@ input {
   flex-shrink: 0;
 }
 
+.partner-info { min-width: 0; }
 .partner-name { font-size: 16px; font-weight: 700; }
-.partner-status { font-size: 13px; color: var(--text-muted); }
+.partner-status { font-size: 13px; color: var(--text-3); }
 
-/* fix 1(c) - Nudge + Send-5-min sit side by side below the partner row */
-.partner-actions {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
+/* W3 - the partner privacy line sits inside the card, left-aligned and readable */
+.partner-card .partner-privacy {
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-3);
+  margin-top: 0;
+}
+.partner-card .partner-row { margin-bottom: 14px; }
+
+/* W3 - first section title on the Friends tab (no top margin, like the other tabs) */
+.section-title-row.section-title-row-first {
+  margin-top: 0;
+  padding-top: 8px;
+  margin-bottom: 10px;
 }
 
-.nudge-btn,
-.send-time-btn {
-  flex: 1;
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  min-height: 44px;
-}
-
-.send-time-btn {
-  color: var(--mint);
-}
-
-.streak-duel { }
-.duel-label { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
-
-.duel-bar-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.duel-side {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.duel-side.sarah { align-items: flex-end; }
-
-.duel-name { font-size: 12px; color: var(--text-muted); }
-.duel-count { font-size: 13px; font-weight: 800; }
-
-.duel-bar-bg {
-  width: 100%;
-  height: 8px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.duel-bar-fill {
-  height: 100%;
-  border-radius: 4px;
-}
-
-.you-fill { background: linear-gradient(90deg, var(--accent-indigo), var(--accent-violet)); }
-.sarah-fill { background: linear-gradient(90deg, var(--mint), var(--accent-teal)); }
-
-.duel-vs {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 700;
-}
-
-.leaderboard-card { }
-
-.lb-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-
-.lb-row:last-child { border-bottom: none; }
-
-.lb-rank {
-  width: 24px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--text-muted);
-}
-
-.lb-rank.gold { color: #FFD700; }
-
-.you-row .lb-rank, .you-rank { color: var(--accent-teal); }
-
-.lb-avatar {
-  width: 36px;
-  height: 36px;
+/* W3 - How it works: three numbered rows */
+.hiw-title { margin-top: 24px; }
+.hiw-card { display: flex; flex-direction: column; gap: 14px; }
+.hiw-step { display: flex; align-items: flex-start; gap: 12px; }
+.hiw-num {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
+  background: color-mix(in srgb, var(--indigo) 16%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  font-weight: 800;
-  color: white;
+  flex-shrink: 0;
 }
+.hiw-text { font-size: 14px; line-height: 1.45; color: var(--text-2); padding-top: 4px; }
 
-.lb-name { flex: 1; font-size: 14px; }
-
-.lb-mins {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-muted);
+/* W3 - locked teasers: title, lock glyph, redacted placeholder rows, no numbers */
+.teaser-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
 }
-
-.you-row .lb-mins { color: var(--mint); }
-
-.lb-behind {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-align: center;
-  padding-top: 10px;
+.teaser-title { font-size: 15px; font-weight: 700; }
+.teaser-lock {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--stroke-soft);
+  border: 1px solid var(--stroke);
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
+.teaser-rows { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.teaser-row { display: flex; align-items: center; gap: 12px; }
+.teaser-rank { width: 18px; font-size: 14px; font-weight: 800; color: var(--text-3); text-align: center; }
+.teaser-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--fill-raised); flex-shrink: 0; }
+.teaser-bar { height: 10px; border-radius: 4px; background: var(--fill-raised); }
+.teaser-bar-end { margin-left: auto; width: 38px; background: var(--stroke-soft); }
+.teaser-sub { font-size: 12px; line-height: 1.45; color: var(--text-3); }
+#streak-duel-card .teaser-head { margin-bottom: 6px; }
 
 .invite-card { }
 .invite-row { display: flex; align-items: center; }
 .invite-title { font-size: 15px; font-weight: 700; }
-.invite-sub { font-size: 12px; color: var(--text-muted); }
+.invite-sub { font-size: 12px; color: var(--text-3); }
 .share-chip {
   margin-left: auto;
   padding: 8px 16px;
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
-  border-radius: 20px;
+  background: var(--grad-cta);
+  border-radius: 999px;
   font-size: 13px;
   font-weight: 800;
   color: white;
-  letter-spacing: 1px;
+  letter-spacing: 0.2px;
   min-height: 44px;
 }
 
@@ -1714,7 +1897,7 @@ input {
 .ls-caption-pill {
   background: rgba(255,255,255,0.12);
   border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 20px;
+  border-radius: 999px;
   padding: 6px 14px;
   font-size: 12px;
   color: rgba(255,255,255,0.6);
@@ -1751,7 +1934,7 @@ input {
 .ls-widget-circle {
   width: 70px;
   height: 70px;
-  background: rgba(255,255,255,0.08);
+  background: var(--fill-raised);
   border-radius: 18px;
   display: flex;
   flex-direction: column;
@@ -1769,7 +1952,7 @@ input {
 
 .ls-widget-rect {
   flex: 1;
-  background: rgba(255,255,255,0.08);
+  background: var(--fill-raised);
   border-radius: 18px;
   padding: 10px 14px;
   display: flex;
@@ -1791,7 +1974,7 @@ input {
 
 .ls-wr-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--mint), var(--accent-teal));
+  background: linear-gradient(90deg, var(--mint), var(--teal));
   border-radius: 2px;
   transition: width 0.5s;
 }
@@ -1799,10 +1982,9 @@ input {
 .ls-live-activity {
   width: 100%;
   background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 20px;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-card);
   padding: 14px 16px;
-  margin-bottom: auto;
 }
 
 .la-row {
@@ -1812,9 +1994,9 @@ input {
   margin-bottom: 10px;
 }
 
-.la-icon { font-size: 20px; }
 .la-title { font-size: 14px; font-weight: 700; }
-.la-sub { font-size: 12px; color: rgba(255,255,255,0.5); }
+.la-title .icon { color: var(--mint); vertical-align: -2px; margin-left: 2px; }
+.la-sub { font-size: 12px; color: var(--text-3); }
 
 .la-badge {
   margin-left: auto;
@@ -1823,53 +2005,60 @@ input {
   font-size: 11px;
   font-weight: 800;
   padding: 3px 8px;
-  border-radius: 20px;
+  border-radius: 999px;
   letter-spacing: 0.5px;
 }
 
 .la-progress {
   height: 4px;
-  background: rgba(255,255,255,0.1);
+  background: var(--stroke);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .la-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--mint), var(--accent-teal));
+  background: linear-gradient(90deg, var(--mint), var(--teal));
   border-radius: 2px;
   transition: width 0.5s;
 }
 
+/* W6 (WV-13) - margin-top:auto lives here now. It used to sit on the live
+   activity card, which is hidden most of the time, so the whole mock bunched
+   into the top half of the screen. */
 .ls-bottom-icons {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  margin-top: 20px;
+  margin-top: auto;
+  padding-bottom: max(var(--safe-bottom), 28px);
 }
 
 .ls-corner-btn {
-  width: 54px;
-  height: 54px;
-  background: rgba(255,255,255,0.12);
+  width: 48px;
+  height: 48px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  color: var(--text);
 }
 
 .ls-home-bar {
   width: 120px;
   height: 5px;
   background: rgba(255,255,255,0.4);
-  border-radius: 3px;
+  border-radius: var(--radius-bar);
 }
 
 .ls-tap-hint {
   font-size: 12px;
-  color: rgba(255,255,255,0.25);
+  color: var(--text-3);
   margin-top: 10px;
   text-align: center;
 }
@@ -1896,13 +2085,13 @@ input {
 .share-card {
   width: 100%;
   background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-  border-radius: 28px;
+  border-radius: var(--radius-sheet);
   padding: 36px 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--stroke);
 }
 
 .share-headline {
@@ -1913,13 +2102,16 @@ input {
 }
 
 .share-highlight {
-  background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+  background: var(--grad-cta);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .share-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 20px;
   font-weight: 700;
   color: var(--amber);
@@ -1927,7 +2119,7 @@ input {
 
 .share-footer {
   font-size: 13px;
-  color: rgba(255,255,255,0.35);
+  color: var(--text-3);
   letter-spacing: 1px;
   text-transform: lowercase;
 }
@@ -1942,7 +2134,7 @@ input {
   display: block;
   width: 100%;
   padding: 17px;
-  background: rgba(255,255,255,0.08);
+  background: var(--fill-raised);
   border: 1px solid rgba(255,255,255,0.16);
   color: var(--text);
   border-radius: var(--radius-btn);
@@ -1960,7 +2152,7 @@ input {
 
 .share-close-btn {
   font-size: 15px;
-  color: var(--text-muted);
+  color: var(--text-3);
   padding: 10px;
   min-height: 44px;
 }
@@ -1978,8 +2170,8 @@ input {
   bottom: 0;
   left: 0;
   right: 0;
-  background: #141824;
-  border-radius: 28px 28px 0 0;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
   padding: 12px 20px max(var(--safe-bottom), 24px);
   z-index: 201;
   /* item 5 - the Settings sheet grew an Account section; cap the height and
@@ -2003,8 +2195,18 @@ input {
   width: 40px;
   height: 5px;
   background: rgba(255,255,255,0.2);
-  border-radius: 3px;
+  border-radius: var(--radius-bar);
   margin: 0 auto 16px;
+  /* W6 (WV-22) - the grabber is a real drag handle now (app.js). The pseudo
+     element widens the grab area without moving the visible bar. */
+  position: relative;
+  touch-action: none;
+  cursor: grab;
+}
+.sheet-handle::before {
+  content: "";
+  position: absolute;
+  inset: -14px -60px -10px;
 }
 
 .sheet-title {
@@ -2013,12 +2215,47 @@ input {
   margin-bottom: 20px;
 }
 
+/* W6 (WV-22, WF-11) - shared sheet header: title left, 44px glass close
+   button right. Dragging the header works like the handle. It stays pinned
+   to the top edge while a long sheet (Settings) scrolls, so Close is always
+   in reach; the -12px offset matches the sheet's top padding. */
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -12px 0 12px;
+  padding-top: 12px;
+  position: sticky;
+  top: -12px;
+  z-index: 2;
+  background: var(--bg-elevated);
+  touch-action: none;
+}
+.sheet-header .sheet-title { margin-bottom: 0; }
+.sheet-close-btn {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease;
+}
+.sheet-close-btn:active { transform: scale(0.94); }
+.bottom-sheet:focus { outline: none; } /* focus lands on the sheet for a11y; the ring belongs on its controls */
+.bottom-sheet.dragging { transition: none; }
+
 .setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid var(--stroke-soft);
 }
 
 .setting-label {
@@ -2035,14 +2272,14 @@ input {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
+  background: var(--fill);
+  border: 1px solid var(--stroke);
   font-size: 18px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent-indigo);
+  color: var(--indigo);
   min-height: 44px;
   min-width: 44px;
 }
@@ -2059,7 +2296,7 @@ input {
   align-items: center;
   gap: 12px;
   padding: 14px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid var(--stroke-soft);
   font-size: 15px;
   width: 100%;
   text-align: left;
@@ -2068,9 +2305,16 @@ input {
 
 .sheet-arrow {
   margin-left: auto;
-  color: var(--text-muted);
+  color: var(--text-3);
   font-size: 18px;
 }
+
+/* W4 - leading glyph on a sheet row: secondary text, or the row's own coral. */
+.sheet-action-row .row-icon {
+  display: inline-flex;
+  color: var(--text-2);
+}
+.sheet-action-row.danger-action .row-icon { color: inherit; }
 
 .danger-action { color: var(--coral); }
 
@@ -2088,10 +2332,22 @@ input {
   pointer-events: none;
 }
 
+/* W6 (WV-25) - with no tab bar (onboarding, paywall) and while a bottom sheet
+   is open, toasts drop from the top instead of landing on a CTA or a sheet
+   row. app.js toggles body.toast-top. The safe-area value can come back as
+   0 in a browser, so the top gets the same kind of floor as every other
+   top-anchored rule here: 44px, then 16 below it. That keeps a toast clear
+   of the Dynamic Island in the desktop phone frame (island bottom at 50px). */
+body.toast-top #toast-container {
+  top: calc(max(var(--safe-top), 44px) + 16px);
+  bottom: auto;
+}
+
 .toast {
-  background: rgba(30,35,50,0.95);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 14px;
+  background: rgba(20,24,36,0.96);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-tile);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
   padding: 12px 18px;
   font-size: 14px;
   color: var(--text);
@@ -2144,52 +2400,57 @@ a { color: inherit; text-decoration: none; }
   flex-shrink: 0;
 }
 
-/* ===== WELCOME SCREEN ===== */
-#welcome-screen {
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.welcome-content {
+/* ===== SIGN-IN STEP (item 5, WONB) =====
+   The first screen after the splash. The old Welcome screen's brand moment
+   (ring glyph with a soft glow, gradient headline, one promise line) sits on
+   top of the sign-in buttons. Its auto top margin pairs with the terms
+   line's auto margin, so the brand and the buttons sit as one centered group
+   between the progress bar and the terms line on every phone height. The
+   gradient headline is this screen's one gradient object (the sign-in
+   buttons are black and white). */
+.signin-header { margin-bottom: 0; }
+.signin-brand {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: max(var(--safe-top), 54px) 32px max(var(--safe-bottom), 40px);
-  gap: 24px;
   text-align: center;
-  height: 100%;
-  justify-content: center;
+  margin-top: auto;
+  margin-bottom: 28px;
 }
-/* item 6 - .btn-primary's global margin-top:auto pins it to the very
-   bottom of the screen; combined with .welcome-content's own
-   justify-content:center on the ring/headline/body above it, that left a
-   huge dead band in the middle on tall phones. Cancelling the auto margin
-   here lets the button join the same centered group via the parent's
-   `gap`, so the whole screen reads as one composed unit. Scoped to this
-   screen only - every other .btn-primary keeps its normal bottom pin. */
-.welcome-content .btn-primary {
-  margin-top: 0;
+.signin-ring-wrap {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  margin-bottom: 18px;
+  isolation: isolate;
 }
-.welcome-ring-wrap { margin-bottom: 4px; }
-.welcome-headline {
-  font-size: 34px;
+.signin-ring-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -22px;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99,102,241,0.28) 0%, transparent 65%);
+  pointer-events: none;
+}
+.signin-ring-wrap svg { display: block; }
+.signin-headline {
+  font-size: 32px;
   font-weight: 800;
   letter-spacing: -1px;
-  background: linear-gradient(135deg, #6366F1, #A855F7, #2DD4BF);
+  line-height: 1.1;
+  background: var(--grad-brand);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  line-height: 1.1;
 }
-.welcome-body {
+.signin-promise {
   font-size: 15px;
-  color: var(--text-muted);
-  line-height: 1.6;
-  max-width: 320px;
+  line-height: 1.45;
+  color: var(--text-2);
+  margin-top: 10px;
 }
 
-/* ===== ACCOUNT SCREEN (item 5) ===== */
 .sso-stack {
   display: flex;
   flex-direction: column;
@@ -2203,7 +2464,7 @@ a { color: inherit; text-decoration: none; }
   gap: 10px;
   width: 100%;
   padding: 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-btn);
   font-size: 16px;
   font-weight: 600;
   min-height: 50px;
@@ -2229,31 +2490,33 @@ a { color: inherit; text-decoration: none; }
   color: #1F1F1F;
   border: 1px solid rgba(0,0,0,0.1);
 }
-.sso-facebook {
-  background: #1877F2;
-  color: #fff;
-}
 .sso-demo-note {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-3);
   text-align: center;
   margin-top: 18px;
   line-height: 1.4;
+  text-wrap: balance; /* even lines, no single word left on its own line */
 }
 .account-terms-line {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-3);
   text-align: center;
   line-height: 1.5;
   margin-top: auto;
   padding-top: 24px;
 }
+/* W6 (WV-16) - the inline Terms / Privacy buttons were 15px tall. Padding
+   grows the hit box to 44px and the matching negative margin keeps the line
+   of text exactly where it was (18px line + 2 x 13px = 44px). */
 .account-legal-link {
-  color: var(--accent-teal);
+  color: var(--teal);
   text-decoration: underline;
-  display: inline;
+  display: inline-block;
   font-size: inherit;
-  padding: 0;
+  line-height: inherit;
+  padding: 13px 2px;
+  margin: -13px -2px;
   min-height: auto;
 }
 
@@ -2267,7 +2530,6 @@ a { color: inherit; text-decoration: none; }
   margin: 0 auto;
   animation: spin 0.8s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ===== NICKNAME SCREEN (item 5) ===== */
 .nickname-wrap {
@@ -2296,55 +2558,13 @@ a { color: inherit; text-decoration: none; }
 .legal-scroll p {
   font-size: 13px;
   line-height: 1.6;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin-bottom: 14px;
 }
 .legal-scroll p:last-child { margin-bottom: 0; }
-
-/* ===== REVEAL CARD ===== */
-.reveal-card {
-  margin-bottom: 32px;
-  text-align: center;
-  padding: 28px 20px;
-}
-.reveal-guess {
-  font-size: 15px;
-  color: var(--text-muted);
-  margin-bottom: 16px;
-}
-.reveal-actual-label {
-  font-size: 14px;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-.reveal-actual-value {
-  font-size: 56px;
-  font-weight: 900;
-  letter-spacing: -2px;
-  background: linear-gradient(135deg, #F87171, #A855F7);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  line-height: 1;
-  margin-bottom: 16px;
-}
-.reveal-delta-pill {
-  display: inline-block;
-  padding: 6px 16px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 700;
-}
-.reveal-delta-pill.red {
-  background: rgba(248,113,113,0.15);
-  border: 1px solid rgba(248,113,113,0.3);
-  color: #F87171;
-}
-.reveal-delta-pill.green {
-  background: rgba(52,211,153,0.15);
-  border: 1px solid rgba(52,211,153,0.3);
-  color: var(--mint);
-}
+/* WFIX repair - the text box is a Tab stop (tabindex="0") so the keyboard can
+   scroll it; the shared teal ring follows the sheet's rounded shapes. */
+.legal-scroll:focus-visible { border-radius: var(--radius-control); }
 
 /* ===== PLAN EDIT CARD ===== */
 .plan-edit-card {
@@ -2352,19 +2572,19 @@ a { color: inherit; text-decoration: none; }
 }
 .plan-edit-row {
   padding: 16px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid var(--stroke-soft);
 }
 .plan-edit-row:last-child { border-bottom: none; }
 .plan-edit-label {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin-bottom: 10px;
 }
 .plan-allowance-display {
   font-size: 36px;
   font-weight: 800;
   letter-spacing: -1px;
-  background: linear-gradient(135deg, #6366F1, #A855F7);
+  background: var(--grad-cta);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -2375,9 +2595,8 @@ a { color: inherit; text-decoration: none; }
   -webkit-appearance: none;
   appearance: none;
   height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--accent-indigo), var(--accent-violet));
-  outline: none;
+  border-radius: var(--radius-bar);
+  background: linear-gradient(90deg, var(--indigo), var(--violet));
 }
 .plan-allowance-range::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -2388,12 +2607,106 @@ a { color: inherit; text-decoration: none; }
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   cursor: grab;
 }
+/* WONB - one quiet line above a step's button that says which iPhone prompt
+   comes next. It takes over the button's bottom pin (auto top margin), so the
+   button stays exactly where it sits on every other step. */
+.ob-heads-up {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-3);
+  text-align: center;
+  margin-top: auto;
+  margin-bottom: 12px;
+  padding-top: 12px;
+  text-wrap: balance;
+}
+.ob-heads-up + .btn-primary { margin-top: 0; }
+
+/* WONB - movement goal step: the plan step's card, a big number with minus /
+   plus circles (the back button's circle, at 52), quick chips and the live
+   earn line. The number is plain text: the button is this screen's gradient. */
+.goal-card { margin-bottom: 0; }
+.goal-stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+}
+.goal-step-btn {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+.goal-step-circle {
+  width: 52px;
+  height: 52px;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+}
+.goal-step-btn:active .goal-step-circle { transform: scale(0.94); }
+.goal-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+.goal-value-num {
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.goal-value-unit {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.goal-chips {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.goal-chip {
+  min-height: 44px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.goal-chip:active { opacity: 0.7; }
+.goal-chip.selected {
+  background: rgba(99,102,241,0.3);
+  border-color: var(--indigo);
+  color: var(--text);
+}
+.goal-earn-line {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-2);
+  text-align: center;
+  text-wrap: balance; /* two even lines on narrow phones, never one orphan word */
+}
+
 .earn-rate-ctrl {
   display: flex;
   gap: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--stroke);
 }
 .earn-rate-btn {
   flex: 1;
@@ -2401,10 +2714,11 @@ a { color: inherit; text-decoration: none; }
   background: transparent;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-3);
   transition: background 0.15s, color 0.15s;
   border: none;
-  border-right: 1px solid rgba(255,255,255,0.1);
+  border-right: 1px solid var(--stroke);
+  min-height: 44px; /* W6 (WV-16) */
 }
 .earn-rate-btn:last-child { border-right: none; }
 .earn-rate-btn:active { opacity: 0.7; }
@@ -2450,10 +2764,7 @@ a { color: inherit; text-decoration: none; }
   transform: translateX(20px);
 }
 
-.lb-rank.trophy { font-size: 18px; color: #FFD700; }
-.lb-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; margin-top: -6px; }
-
-.tiles-shared-caption { font-size: 12px; color: var(--text-muted); text-align: center; margin-bottom: 16px; margin-top: -8px; }
+.tiles-shared-caption { font-size: 12px; color: var(--text-3); text-align: center; margin-bottom: 16px; margin-top: -8px; }
 
 /* ===== EARN ANALYTICS ===== */
 .earn-analytics-section {
@@ -2464,9 +2775,9 @@ a { color: inherit; text-decoration: none; }
 .earn-range-seg {
   position: relative;
   display: flex;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 12px;
+  background: var(--stroke-soft);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-control);
   padding: 3px;
   margin-bottom: 16px;
   overflow: hidden;
@@ -2477,12 +2788,12 @@ a { color: inherit; text-decoration: none; }
   padding: 8px 4px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-muted);
-  border-radius: 9px;
+  color: var(--text-3);
+  border-radius: calc(var(--radius-control) - 2px);
   position: relative;
   z-index: 1;
   transition: color 0.2s;
-  min-height: 36px;
+  min-height: 44px; /* W6 (WV-16) - was 36 */
 }
 
 .seg-btn.active {
@@ -2494,7 +2805,7 @@ a { color: inherit; text-decoration: none; }
   top: 3px;
   bottom: 3px;
   background: rgba(255,255,255,0.12);
-  border-radius: 9px;
+  border-radius: calc(var(--radius-control) - 2px);
   transition: left 0.22s cubic-bezier(0.4,0,0.2,1), width 0.22s cubic-bezier(0.4,0,0.2,1);
   z-index: 0;
 }
@@ -2527,7 +2838,7 @@ a { color: inherit; text-decoration: none; }
 
 .asc-label {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-3);
   line-height: 1.4;
 }
 
@@ -2555,7 +2866,7 @@ a { color: inherit; text-decoration: none; }
 
 .amc-label {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 /* Chart cards */
@@ -2576,7 +2887,6 @@ a { color: inherit; text-decoration: none; }
 .acc-trend {
   font-size: 11px;
   font-weight: 600;
-  opacity: 0.8;
 }
 
 .acc-trend.coral { color: var(--coral); }
@@ -2591,8 +2901,8 @@ a { color: inherit; text-decoration: none; }
 .acc-axis-row {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-3);
   padding: 0 2px;
 }
 
@@ -2606,30 +2916,36 @@ a { color: inherit; text-decoration: none; }
 }
 
 .shield-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: rgba(52,211,153,0.15);
   border: 1px solid rgba(52,211,153,0.3);
   color: var(--mint);
   font-size: 12px;
   font-weight: 700;
   padding: 5px 10px;
-  border-radius: 20px;
+  border-radius: 999px;
   white-space: nowrap;
 }
 
-/* Sample-data chips (B7, B8) */
+/* W4 (WV-15) - SAMPLE caption: a quiet uppercase caption with an info glyph,
+   not a pill and not a button. One size, always visible next to the title it
+   labels, never hidden behind a tap. */
 .sample-chip {
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
   font-weight: 600;
-  color: rgba(255,255,255,0.55);
-  border: 1px solid rgba(255,255,255,0.35);
-  border-radius: 20px;
-  padding: 3px 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 0;
   white-space: nowrap;
-}
-
-.sample-chip-sm {
-  font-size: 9px;
-  padding: 2px 8px;
 }
 
 .section-title-row {
@@ -2645,16 +2961,8 @@ a { color: inherit; text-decoration: none; }
 
 .sample-subtitle {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin-bottom: 12px;
-  opacity: 0.85;
-}
-
-.bonus-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
 /* Streak Shield explainer card (B2) */
@@ -2664,28 +2972,26 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   gap: 12px;
 }
-.shield-explainer-icon { font-size: 22px; }
 .shield-explainer-title { font-size: 14px; font-weight: 600; }
-.shield-explainer-sub { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+.shield-explainer-sub { font-size: 12px; color: var(--text-3); line-height: 1.4; }
 
 /* Name input - shared by the nickname step (item 5) and reused wherever a
    plain text field is needed in onboarding. */
 .plan-name-input {
   width: 100%;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 12px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-control);
   padding: 12px 16px;
   color: var(--text);
   font-size: 16px; /* A10 - keep >=16px to avoid iOS zoom */
-  outline: none;
   transition: border-color 0.2s;
   /* keyboard-fix - keeps the field clear of the status bar / Dynamic Island
      when the keyboard's auto-scroll (native or our own reveal()) brings this
      input toward the top of the screen. */
   scroll-margin-top: calc(var(--safe-top) + 16px);
 }
-.plan-name-input:focus { border-color: var(--accent-indigo); }
+.plan-name-input:focus { border-color: var(--teal); }
 .plan-name-input.error {
   border-color: var(--coral);
   animation: shake 0.4s ease;
@@ -2697,40 +3003,38 @@ a { color: inherit; text-decoration: none; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin: 16px 0 4px;
 }
 .settings-section-label:first-of-type { margin-top: 4px; }
 .settings-nickname-input {
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 10px;
+  background: var(--fill);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-control);
   padding: 8px 12px;
   color: var(--text);
   font-size: 14px;
   text-align: right;
   width: 140px;
-  outline: none;
   transition: border-color 0.2s;
 }
-.settings-nickname-input:focus { border-color: var(--accent-indigo); }
-.settings-provider-label { font-size: 13px; color: var(--text-muted); }
+.settings-nickname-input:focus { border-color: var(--teal); }
+.settings-provider-label { font-size: 13px; color: var(--text-3); }
 
 /* Paywall personalization (B4) */
 .paywall-personal-line {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-3);
   text-align: center;
   margin-bottom: 14px;
-  opacity: 0.85;
   line-height: 1.4;
 }
 
 .price-daily-note {
-  font-size: 10px;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-3);
   margin-top: 3px;
-  opacity: 0.8;
+  white-space: nowrap; /* W6 (WV-10) - one line on both cards */
 }
 
 /* Intercept close button + "wait until tomorrow" button (A2) */
@@ -2743,29 +3047,21 @@ a { color: inherit; text-decoration: none; }
   min-width: 44px;
   min-height: 44px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.08);
+  background: var(--fill-raised);
   border: 1px solid rgba(255,255,255,0.12);
-  color: var(--text-muted);
-  font-size: 16px;
+  color: var(--text-2);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 5;
 }
 
-.wait-tomorrow {
-  font-size: 13px;
-  color: rgba(255,255,255,0.4);
-  min-height: 44px;
-  padding: 8px;
-}
-
 .ask-again-btn {
   display: block;
   margin: 12px auto 0;
   padding: 10px 18px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
+  background: var(--fill);
+  border: 1px solid var(--stroke);
   border-radius: 14px;
   font-size: 14px;
   font-weight: 600;
@@ -2797,7 +3093,12 @@ a { color: inherit; text-decoration: none; }
   max-width: 320px;
 }
 
-.breathing-icon { font-size: 52px; }
+.breathing-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px; /* mark at 64 (DESIGN 1.5) */
+}
+.breathing-icon .mark-letter { font-size: 30px; }
 
 .breathing-ring-wrap {
   width: 110px;
@@ -2811,7 +3112,7 @@ a { color: inherit; text-decoration: none; }
   width: 70px;
   height: 70px;
   border-radius: 50%;
-  border: 3px solid var(--accent-teal);
+  border: 3px solid var(--teal);
   animation: breathe 4s ease-in-out infinite;
 }
 
@@ -2827,7 +3128,7 @@ a { color: inherit; text-decoration: none; }
 
 .breathing-text-sub {
   font-size: 16px;
-  color: var(--text-muted);
+  color: var(--text-3);
 }
 
 .breathing-actions {
@@ -2845,7 +3146,7 @@ a { color: inherit; text-decoration: none; }
 
 .breathing-cancel-btn {
   font-size: 15px;
-  color: var(--text-muted);
+  color: var(--text-3);
   padding: 10px;
   min-height: 44px;
 }
@@ -2867,15 +3168,12 @@ a { color: inherit; text-decoration: none; }
 }
 
 .app-transition-icon {
-  font-size: 56px;
   width: 96px;
   height: 96px;
-  border-radius: 26px;
+  border-radius: var(--radius-sheet);
   background: rgba(255,255,255,0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
+.app-transition-icon .mark-letter { font-size: 44px; }
 
 .app-transition-name {
   font-size: 20px;
@@ -2888,65 +3186,66 @@ a { color: inherit; text-decoration: none; }
   color: rgba(255,255,255,0.75);
 }
 
-/* ===== BATCH 2: trial billing, anti-cheat, partner gift ===== */
+/* ===== BATCH 2: trial billing, anti-cheat ===== */
 .trial-billing-line {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-3);
   text-align: center;
   margin-top: 10px;
   line-height: 1.4;
 }
 
 .earn-anticheat-line {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-3);
   margin-top: 3px;
 }
 
-.partner-gift-card { margin-bottom: 16px; padding: 14px 16px; }
-.gift-row { display: flex; align-items: center; gap: 12px; }
-.gift-icon { font-size: 26px; }
-.gift-text { flex: 1; min-width: 0; }
-.gift-title { font-size: 14px; font-weight: 700; }
-.gift-sub { font-size: 12px; color: var(--text-muted); font-style: italic; }
-.gift-accept-btn {
-  margin-left: auto;
-  padding: 8px 16px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
+/* Earn-rate explainer under the quick-log grid (native parity) */
+.earn-rate-note {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.4;
+  margin: -6px 0 16px;
+}
+
+/* Paywall: honest "nothing is charged" caption under the CTA */
+.paywall-demo-caption {
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+  margin: -8px 0 0;
+}
+
+/* Permission popups: quiet way past a permission after two denies, so the
+   paywall is never gated behind one */
+.perm-continue-link {
+  display: block;
+  width: 100%;
   min-height: 44px;
-  color: var(--mint);
-}
-.partner-gift-card.accepted { opacity: 0.55; }
-
-/* fix 1(b) - subtle entrance when the gift appears as a response to a nudge */
-@keyframes giftSlideIn {
-  from { opacity: 0; transform: translateY(-12px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-.partner-gift-card.gift-entrance {
-  animation: giftSlideIn 0.45s cubic-bezier(0.4,0,0.2,1);
+  padding: 10px 16px 14px;
+  font-size: 13px;
+  color: var(--text-3);
+  text-align: center;
+  border-top: 1px solid rgba(255,255,255,0.15);
 }
 
-/* fix 9 - steps bonus card flips to an achieved style once the goal is hit */
-.bonus-card.achieved {
-  background: rgba(52,211,153,0.08);
-  border-color: rgba(52,211,153,0.35);
-}
-.bonus-achieved-row .bonus-title {
-  color: var(--mint);
-  font-weight: 700;
+/* WONB - the Screen Time and Health look-alikes say they are a demo, in one
+   small line under the card. */
+.perm-demo-caption {
+  max-width: 270px;
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-2);
+  text-align: center;
 }
 
 /* fix 8 - y-axis subtitle + all-time tag on the earn-tab headline stat cards */
 .acc-subtitle {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-3);
   margin: -8px 0 12px;
-  opacity: 0.75;
 }
 
 .analytics-stat-row .analytics-stat-card {
@@ -2958,28 +3257,508 @@ a { color: inherit; text-decoration: none; }
   position: absolute;
   top: 10px;
   right: 10px;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  background: rgba(255,255,255,0.08);
+  color: var(--text-3);
+  background: var(--fill-raised);
   border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 20px;
+  border-radius: 999px;
   padding: 2px 8px;
 }
 
 /* fix 10 - Live Activity dims once the workout is actually done */
 .la-badge.la-badge-done {
-  opacity: 0.4;
+  background: var(--fill-raised);
+  color: var(--text-3);
 }
 
 /* fix 11 - honest microcopy under the intercept's tracking state */
 .tracking-microcopy {
   text-align: center;
   font-size: 11px;
-  color: var(--text-muted);
-  opacity: 0.6;
+  color: var(--text-3);
   margin-top: 6px;
 }
-.partner-gift-card.accepted .gift-accept-btn { color: var(--text-muted); }
+
+/* ===== W5 - status layer, shared total, roadmap captions ===== */
+
+/* Shield status pill (DESIGN 3 chip, status variant). Demo wording only.
+   Sits under the hero ring and its caption, above the streak dots. */
+.status-pill-row {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 0;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  max-width: 100%;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--stroke);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.status-pill .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--indigo-light);
+  flex-shrink: 0;
+}
+.status-pill .status-pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Off state (no app picked): amber dot, tappable, opens the app picker. */
+.status-pill.is-off {
+  cursor: pointer;
+  transition: transform 0.12s ease;
+  position: relative;
+}
+/* WFIX item 4 - a 44px tall hit area around the 28px pill. It paints nothing,
+   so the pill looks exactly the same. */
+.status-pill.is-off::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 44px;
+  margin-top: -22px;
+}
+.status-pill.is-off .status-dot { background: var(--amber); }
+.status-pill.is-off:active { transform: scale(0.97); }
+.status-pill.is-off:focus-visible {
+  outline: 2px solid var(--indigo-light);
+  outline-offset: 2px;
+}
+
+/* Streak dots: 7 circles 28, gap 10, day letter under each. Shape + color. */
+.streak-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 14px 0 12px;
+}
+.streak-dot-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.streak-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.streak-dot.dot-under { background: rgba(52,211,153,0.9); color: var(--bg); }
+.streak-dot.dot-over { background: rgba(248,113,113,0.9); color: var(--bg); }
+.streak-dot.dot-none { border: 1.5px solid rgba(255,255,255,0.15); }
+.streak-dot.dot-today { border: 2px solid var(--indigo-light); }
+.streak-dot .icon { stroke-width: 3; }
+.streak-dot-day {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-3);
+}
+.streak-dot-col.is-today .streak-dot-day { color: var(--text); font-weight: 700; }
+
+/* Stat strip: three stat tiles across */
+.stat-strip-title { margin-top: 20px; }
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0 16px;
+}
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px;
+  min-width: 0;
+  background: var(--fill);
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--radius-tile);
+}
+.stat-glyph {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+.stat-glyph-indigo { color: var(--indigo-light); }
+.stat-glyph-teal { color: var(--teal); }
+.stat-glyph-amber { color: var(--amber); }
+.stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  line-height: 1.2;
+  color: var(--text-3);
+  overflow-wrap: normal; /* "Earned today" wraps at the space inside a narrow tile instead of spilling out */
+}
+@media (max-width: 380px) {
+  .stat-tile { padding: 14px 12px; }
+  .stat-label { letter-spacing: 0.3px; }
+}
+@media (max-width: 360px) {
+  .stat-value { font-size: 19px; }
+}
+
+/* Hourly chart: 24 bars, teal for past hours, faint tracks for the rest */
+.hourly-card { margin-top: 2px; }
+.hour-chart {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 72px;
+  border-bottom: 1px solid var(--stroke-soft);
+}
+.hour-col {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.hour-col.unmeasured { background: rgba(255,255,255,0.06); }
+.hour-col.measured .hour-fill { min-height: 2px; } /* a measured hour with nothing still reads as measured */
+.hour-fill {
+  width: 100%;
+  background: var(--teal);
+  border-radius: 2px;
+}
+.hour-now-line {
+  position: absolute;
+  top: -4px;
+  bottom: -1px;
+  width: 1px;
+  background: var(--indigo-light);
+  pointer-events: none;
+}
+.hour-axis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-3);
+}
+.hour-caption {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 8px;
+}
+
+/* Baseline card: guess vs so far today */
+.baseline-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.baseline-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.baseline-label { font-size: 12px; color: var(--text-2); }
+.baseline-bar {
+  height: 8px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.baseline-fill { height: 100%; border-radius: 4px; }
+.baseline-fill-guess { background: var(--indigo-light); }
+.baseline-fill-today { background: var(--teal); }
+.baseline-value {
+  min-width: 56px;
+  text-align: right;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.baseline-est { font-size: 11px; font-weight: 600; color: var(--text-3); }
+.baseline-caption {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 12px;
+  line-height: 1.4;
+}
+
+/* Shared total row: app marks + "Add apps" on one line, one total below */
+.app-tiles-row {
+  flex-direction: column;
+  overflow: visible;
+  gap: 10px;
+}
+.app-marks-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)); /* every picked app and "Add apps" stay on screen */
+  gap: 10px;
+}
+.app-marks-row .app-used-tile { padding: 10px 6px; min-width: 0; }
+.app-marks-row .app-used-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.add-apps-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px;
+  background: transparent;
+  border: 1.5px dashed var(--stroke);
+  border-radius: var(--radius-tile);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.add-apps-tile:active { transform: scale(0.93); }
+.add-apps-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fill-raised);
+  color: var(--text-2);
+}
+.used-total-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--fill);
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--radius-tile);
+}
+.used-total-glyph {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(45,212,191,0.16);
+  color: var(--teal);
+}
+.used-total-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.used-total-label { font-size: 14px; font-weight: 700; }
+.used-total-sub {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-3);
+  /* Wraps at a space instead of cutting the copy off ("6 apps · one total,
+     not per app" no longer ends in an ellipsis on narrow phones), and
+     balances the two lines so no single word is left on its own. */
+  white-space: normal;
+  text-wrap: balance;
+}
+.used-total-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.used-total-value b {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.used-total-tile.not-tracking .used-total-value b { color: var(--text-3); }
+
+/* Apps sheet (opened from the "Add apps" tile) */
+.apps-sheet-sub {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: -6px 0 16px;
+}
+.apps-pick-grid { margin-bottom: 16px; }
+.apps-sheet-done { margin-top: 0; }
+#apps-sheet:focus { outline: none; } /* focus lands on the sheet for a11y; the ring belongs on its controls */
+
+/* Roadmap caption (XP-22): the SAMPLE caption component, text
+   "Coming to the real app", next to each web-only feature. */
+.widget-link {
+  flex-direction: column;
+  gap: 4px;
+}
+.widget-link-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ls-roadmap { margin: -10px 0 18px; }
+.la-roadmap { margin-top: 10px; }
+.share-roadmap-row {
+  display: flex;
+  justify-content: center;
+}
+.sheet-action-row .row-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* ===== W6 (WV-19) - Reduce Motion =====
+   Every CSS animation and transition finishes at once, so values appear final:
+   no pulse, spin, shimmer, breathing, slide or count-up motion. app.js skips
+   the confetti canvas, the pulse class and count-ups on the same setting. The
+   4-second breathing pause still gates its button, with the countdown label.
+   Toasts drop their enter / exit keyframes and simply appear and go. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  #toast-container .toast { animation: none !important; }
+  .screen.slide-out > * { transition-duration: 0.01ms !important; }
+}
+
+/* WFIX item 5 - focus now moves into the confirm dialog. Its card clips its
+   corners, so the buttons draw the teal ring inside their own edge, where it
+   stays fully visible. */
+#confirm-popup button:focus-visible { outline-offset: -4px; }
+
+/* ===== W6 (WV-04) - iPhone SE fit, 375 x 667 =====
+   On a short phone the Today hero and the rows under it are tightened so the
+   "+ Earn more" button sits fully above the tab bar (bottom at or above
+   y609). Nothing moves in the markup; only sizes and gaps shrink here. Two
+   lines that repeat elsewhere are dropped on this height only: the Lock
+   Screen widget link (also in Settings, "See Lock Screen widget") and the
+   caption under the app marks (the total tile below them already says the
+   number is one combined total). The used-total glyph is dropped too, the
+   number and its label stay. Scoped to the phone layout (max-width 500px),
+   so a short desktop window keeps the full-size framed phone.
+   The header floor drops to 20px because these phones (iPhone SE, 8) have a
+   20pt status bar and no notch; the header is one element shared by every
+   tab, so all three tabs get the same room.
+   Repair round 1: the fit holds in the common states, not only the seed.
+   With 4 to 6 picked apps every mark and "Add apps" stay on ONE row (the
+   row used to wrap to a second row and push the button under the tab bar);
+   with 5 or 6 apps the names under the marks are hidden from view on this
+   height only, since they would be cut to two or three letters, and each
+   tile still carries its name for VoiceOver. A partner unlock or "carries
+   over" makes the caption two lines; the gaps below are tight enough that
+   the button still clears the tab bar.
+   A later cluster replaces this hero and redoes this fit. */
+@media (max-height: 700px) and (max-width: 500px) {
+  .app-topbar { padding-top: max(var(--safe-top), 20px); padding-bottom: 4px; }
+  #tab-today .tab-scroll { padding-top: 2px; }
+  .greeting-row { margin-bottom: 12px; }
+  .streak-rule-caption { margin: -8px 0 0; }
+  #hero-ring-svg { width: 176px; height: 176px; }
+  .ring-countdown { font-size: 44px; }
+  .hero-ring-wrap { margin: 0 0 2px; }
+  .ring-caption { margin-bottom: 0; font-size: 12px; line-height: 1.15; }
+  .status-pill-row { margin-top: 4px; }
+  .streak-dots { margin: 6px 0 2px; }
+  #widget-link-today { display: none; }
+  #tab-today .section-title { margin-bottom: 6px; }
+  .app-tiles-row { gap: 6px; margin-bottom: 8px; padding-bottom: 0; }
+  .app-marks-row {
+    gap: 8px;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+  .app-marks-row:has(> :nth-child(6)) { gap: 6px; }
+  .app-marks-row .app-used-tile, .add-apps-tile { padding: 5px; gap: 4px; }
+  .app-marks-row:has(> :nth-child(5)) .app-used-tile,
+  .app-marks-row:has(> :nth-child(5)) .add-apps-tile { padding: 5px 2px; }
+  .app-marks-row:has(> :nth-child(6)) .app-used-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app-used-icon, .add-apps-icon { width: 32px; height: 32px; border-radius: 10px; }
+  .used-total-tile { padding: 7px 12px; gap: 10px; }
+  .used-total-glyph { display: none; }
+  .tiles-shared-caption { display: none; }
+  #earn-more-btn { padding: 15px; }
+
+  /* WFIX item 6a - paywall: "Restore purchases" sits fully on screen without
+     scrolling, also with the promo field open (and its error line showing).
+     Only spacing and the decorative ring tighten: these phones have a 20pt
+     status bar and no Dynamic Island, so the 78px top floor drops to 40px.
+     Text sizes, the price lines, the "nothing is charged" line and 44px
+     targets stay. */
+  .paywall-content { padding-top: max(var(--safe-top), 40px); padding-bottom: max(var(--safe-bottom), 16px); }
+  .paywall-ring { margin-bottom: 6px; }
+  .paywall-ring svg { display: block; width: 64px; height: 64px; }
+  .paywall-title { margin-bottom: 10px; line-height: 1.15; }
+  .paywall-content .btn-cta { margin-top: 16px; }
+  .trial-billing-line { margin-top: 6px; }
+  .restore-link { margin-top: 2px; }
+  .promo-input-wrap { margin-top: 6px; }
+  .promo-error { margin-top: 2px; }
+
+  /* WFIX item 6b - intercept: "I'll wait until tomorrow" and the privacy line
+     sit fully on screen without scrolling in every state. The content is
+     still pinned from the top, so the title keeps one position across
+     states. Only gaps and row padding tighten; rows stay above 44px. */
+  #intercept-screen { padding-top: calc(var(--safe-top) + 52px); padding-bottom: max(var(--safe-bottom), 16px); }
+  .intercept-content { gap: 12px; }
+  .intercept-options { gap: 8px; }
+  .intercept-row { padding: 10px 16px; }
+  .intercept-bottom { gap: 6px; }
+  .intercept-bottom .privacy-microcopy { margin-top: 2px; }
+}

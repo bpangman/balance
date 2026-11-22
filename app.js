@@ -14,7 +14,6 @@ const state = {
   selectedApps: ['TikTok', 'Instagram', 'YouTube'],
   currentTab: 'today',
   dailyHours: 3.5,
-  actualDailyHours: null,
   earnRateMultiplier: 1,
   expiresAtMidnight: true,
   healthConnected: null,
@@ -24,26 +23,132 @@ const state = {
   lastWorkout: null,                 // { name, mins, at } - for honest Live Activity (B6)
   paywallYears: null,                // computed during onboarding step C, shown on paywall (B4)
   worktimeLoggedToday: [],
-  stepsToday: 0,                     // real steps, driven by logged workouts (fix 9)
-  stepBonusTomorrow: false,          // set true when stepsToday crosses 8,000 (fix 9)
   pendingSession: null,               // item 2c - { appName, startedAt, plannedMinutes }
   activeWorkout: null,                // item 3b - { name, startedAt, pausedTotalMs, pausedAt }
+  currentDay: null,                   // WF-03 - the calendar day these numbers belong to (YYYY-MM-DD)
+  unlockMinutesToday: 0,              // W3 - minutes a partner approved today; not earned time, reset at midnight
+  workoutGoalMin: 30,                 // WONB - daily movement goal, set in setup, editable in Settings
+  // WFIX - when monitoring began (ms): the moment setup finished, or the first
+  // app pick if none was picked then (null until that pick). A save from
+  // before this field existed has no key at all and counts as "before today".
+  monitoringStartedAt: undefined,
 };
 
+// W4 - app marks (DESIGN 2 app-mark table): a generic glyph or a single letter
+// on the brand color. No real logo is drawn or bundled; the glyphs come from
+// the sprite at the top of index.html.
 const APP_ICONS = {
-  Instagram: { bg: 'linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)', emoji: '📸' },
-  TikTok:    { bg: '#010101', emoji: '🎵' },
-  X:         { bg: '#000', emoji: '✖' },
-  YouTube:   { bg: '#FF0000', emoji: '▶' },
-  Snapchat:  { bg: '#FFFC00', emoji: '👻', textColor: '#000' },
-  Reddit:    { bg: '#FF4500', emoji: '👾' },
+  Instagram: { bg: 'linear-gradient(135deg,#F09433,#E6683C,#DC2743,#CC2366,#BC1888)', glyph: 'i-camera' },
+  TikTok:    { bg: '#010101', glyph: 'i-note' },
+  X:         { bg: '#000', letter: 'X' },
+  YouTube:   { bg: '#FF0000', glyph: 'i-play' },
+  Snapchat:  { bg: '#FFFC00', letter: 'S', textColor: '#000' },
+  Reddit:    { bg: '#FF4500', letter: 'R' },
 };
+const FALLBACK_APP_MARK = { bg: '#333', glyph: 'i-move' };
+
+function appMarkInfo(appName) {
+  return APP_ICONS[appName] || FALLBACK_APP_MARK;
+}
+
+// W4 - every icon rendered from JS goes through this helper so the markup is
+// identical to the static <svg class="icon"><use href="#i-..."/></svg> tags in
+// index.html and the sprite stays the single source of glyphs.
+function iconHTML(id, cls) {
+  return `<svg class="icon${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#${id}"/></svg>`;
+}
+
+function appMarkInnerHTML(appName) {
+  const info = appMarkInfo(appName);
+  return info.letter
+    ? `<span class="mark-letter">${info.letter}</span>`
+    : iconHTML(info.glyph, 'mark-glyph');
+}
+
+// Paints one .app-mark element: glyph or letter, brand background, glyph color.
+function setAppMark(id, appName, opts = {}) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const info = appMarkInfo(appName);
+  el.innerHTML = appMarkInnerHTML(appName);
+  if (!opts.keepBackground) el.style.background = info.bg;
+  el.style.color = info.textColor || '#fff';
+}
+
+// W4 / WF-22 - one glyph per workout type, shared by the quick-log grid, the
+// Other library, the earned list and the Live Activity mock, so the same
+// workout always shows the same figure. Anything unknown falls back to the
+// generic "move" figure (DESIGN 2: figure.mixed.cardio).
+const WORKOUT_GLYPHS = {
+  Walk: 'i-walk', Run: 'i-run', Lift: 'i-lift', Strength: 'i-lift', Workout: 'i-lift',
+  Yoga: 'i-yoga', Stretch: 'i-yoga', Cycle: 'i-cycle', Swim: 'i-swim', Hike: 'i-hike',
+  Row: 'i-row', Dance: 'i-dance', Sports: 'i-ball', Climb: 'i-climb',
+};
+const WORKOUT_TINTS = { Lift: 'indigo', Strength: 'indigo', Workout: 'indigo', Yoga: 'indigo-light', Stretch: 'indigo-light' };
+function workoutGlyphId(name) { return WORKOUT_GLYPHS[name] || 'i-move'; }
+function workoutTint(name) { return WORKOUT_TINTS[name] || 'teal'; }
+
+// Live Activity mock icon follows the workout type (WF-22).
+function setLiveActivityIcon(workoutName) {
+  const el = document.getElementById('la-icon');
+  if (!el) return;
+  el.className = `la-icon symbol-tile symbol-tile-sm tint-${workoutTint(workoutName)}`;
+  el.innerHTML = iconHTML(workoutGlyphId(workoutName), 'icon-20');
+}
 
 const EXERCISE_LABELS = { walk: 'Walk', workout: 'Workout', stretch: 'Stretch' };
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
-// Toasts queued from a daily-reset (streak-shield save, steps bonus), shown
-// once the app shell is ready.
+// XP-11 - one allowance range for onboarding and Settings, 5-minute steps,
+// shared with the native app's BalanceDefaults.allowanceRange.
+const ALLOWANCE_MIN = 15;
+const ALLOWANCE_MAX = 240;
+const ALLOWANCE_STEP = 5;
+
+function clampAllowance(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 45;
+  const stepped = Math.round(n / ALLOWANCE_STEP) * ALLOWANCE_STEP;
+  return Math.min(ALLOWANCE_MAX, Math.max(ALLOWANCE_MIN, stepped));
+}
+
+// WONB - daily movement goal, same range and step as the native app's
+// BalanceDefaults.workoutGoalRange / workoutGoalStep / workoutGoalDefault.
+const WORKOUT_GOAL_MIN = 10;
+const WORKOUT_GOAL_MAX = 120;
+const WORKOUT_GOAL_STEP = 5;
+const WORKOUT_GOAL_DEFAULT = 30;
+
+function clampWorkoutGoal(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return WORKOUT_GOAL_DEFAULT;
+  const stepped = Math.round(n / WORKOUT_GOAL_STEP) * WORKOUT_GOAL_STEP;
+  return Math.min(WORKOUT_GOAL_MAX, Math.max(WORKOUT_GOAL_MIN, stepped));
+}
+
+// WF-02 - "signed out" is separate from "onboarded": the plan and history stay
+// in balance_state while this flag is set, and signing back in clears it.
+const SIGNED_OUT_KEY = 'balance_signed_out';
+
+// WF-07 - intercept generation token. Every open and close bumps it; any
+// timer the intercept started checks it before touching state, so closing
+// the screen can never grant time later.
+let interceptGen = 0;
+
+// WF-28 / WONB - ordered setup steps, the same order as the iPhone app:
+// sign in, nickname, pick apps, (Screen Time prompt), hours guess, your
+// numbers, plan, movement goal, (Health prompt), then the paywall. The two
+// prompts are look-alike popups, not steps. Sign in is never a back target
+// once the user has signed in.
+const OB_STEP_ORDER = ['ob-step-account', 'ob-step-nickname', 'ob-step-a', 'ob-step-b', 'ob-step-c', 'ob-step-d', 'ob-step-e'];
+
+// Screen Time was already answered: going back to the app picker and forward
+// again, or a reload, must not pop the permission a second time. Saved with
+// the setup checkpoint.
+let screenTimeAnswered = false;
+
+// Toasts queued from a daily-reset (streak-shield save), shown once the app
+// shell is ready.
 let pendingToastMessages = [];
 
 // Earn-tab live workout timer (item 3b - replaces the old retroactive
@@ -84,9 +189,12 @@ function updateRingDisplay() {
   const total = state.totalSeconds;
   const pct = total > 0 ? remaining / total : 0;
 
-  const mins = Math.floor(remaining / 60);
+  // WF-19 - whole minutes, rounded UP, the same way the Lock Screen widget
+  // rounds: "0 min left" must never show while apps are still unlocked.
+  const mins = Math.ceil(remaining / 60);
   setTextContent('ring-countdown', `${mins} min`);
   setTextContent('ring-label-sm', 'left today');
+  fitRingCountdown();
 
   // Hero arc
   const arc = document.getElementById('hero-ring-arc');
@@ -103,6 +211,38 @@ function updateRingDisplay() {
 
   // Lock screen ring
   updateLockScreenWidgets();
+}
+
+// W6 repair (WV-04) - the hero number never runs over the ring. The CSS size
+// (52px, 44px on a short phone) is the most it can be; when the number's box
+// would cross the inner edge of the ring's stroke (a three-digit value such as
+// "120 min", or "47 min" in the 176px ring), it steps down 1px at a time until
+// it sits inside, never below 24px. Like a minimum scale factor on iPhone.
+// Runs whenever the number changes and when the window is resized, since the
+// short-phone ring is a different size.
+const RING_INNER_RATIO = 93 / 240; // inner edge of the 14-wide stroke at r=100, viewBox 240
+function fitRingCountdown() {
+  const el = document.getElementById('ring-countdown');
+  const svg = document.getElementById('hero-ring-svg');
+  if (!el || !svg) return;
+  el.style.fontSize = '';
+  const ring = svg.getBoundingClientRect();
+  if (!ring.width) return;
+  const inner = ring.width * RING_INNER_RATIO;
+  const cy = ring.top + ring.height / 2;
+  const fits = () => {
+    const b = el.getBoundingClientRect();
+    const fs = parseFloat(getComputedStyle(el).fontSize) || 0;
+    const halfInk = fs * 0.36; // cap height is about 0.71 em, centered in the line
+    const dy = Math.abs(b.top + b.height / 2 - cy) + halfInk;
+    const dx = b.width / 2;
+    return dx * dx + dy * dy <= inner * inner;
+  };
+  let size = parseFloat(getComputedStyle(el).fontSize) || 0;
+  while (size > 24 && !fits()) {
+    size -= 1;
+    el.style.fontSize = `${size}px`;
+  }
 }
 
 function updateEarnMiniRing(pct) {
@@ -122,7 +262,8 @@ function updateLockScreenWidgets() {
 
   // Label
   setTextContent('ls-ring-label', `${mins}m`);
-  setTextContent('ls-wr-mid', `${mins} min left · 🔥${state.streakDays}`);
+  const wrMid = document.getElementById('ls-wr-mid');
+  if (wrMid) wrMid.innerHTML = `${mins} min left · ${iconHTML('i-flame', 'icon-12')}${state.streakDays}`;
 
   // Bar
   const barFill = document.getElementById('ls-wr-bar-fill');
@@ -189,6 +330,8 @@ function formatTimerMMSS(ms) {
 function updateLiveActivityCard() {
   const card = document.getElementById('ls-live-activity');
   if (!card) return;
+  const fill = document.getElementById('la-progress-fill');
+  const badge = document.querySelector('.la-badge');
 
   if (state.activeWorkout) {
     card.style.display = 'block';
@@ -197,9 +340,9 @@ function updateLiveActivityCard() {
     const projected = Math.round(elapsedMinutes * state.earnRateMultiplier);
     const paused = !!state.activeWorkout.pausedAt;
     setTextContent('la-title', `${state.activeWorkout.name} ${paused ? 'paused' : 'in progress'}`);
-    setTextContent('la-mins-earned', projected);
-    setTextContent('la-elapsed', formatTimerMMSS(elapsedMs));
-    const fill = document.getElementById('la-progress-fill');
+    setLiveActivityIcon(state.activeWorkout.name);
+    setTextContent('la-mins-earned', `+${projected} min earned`);
+    setTextContent('la-elapsed', `${formatTimerMMSS(elapsedMs)} elapsed`);
     if (fill) {
       // No fixed target while it's still running - a gentle ramp against a
       // 30-min reference reads honestly without pretending to know when
@@ -207,31 +350,28 @@ function updateLiveActivityCard() {
       const pct = Math.min((elapsedMinutes / 30) * 100, 100);
       fill.style.width = `${pct.toFixed(1)}%`;
     }
-    const badge = document.querySelector('.la-badge');
     if (badge) badge.classList.remove('la-badge-done');
     return;
   }
 
-  if (!state.lastWorkout || (Date.now() - state.lastWorkout.at) >= ONE_HOUR_MS) {
+  // WC-18 - a logged workout is finished the moment it is logged (every
+  // completion path stamps done: true), so it reads "done" right away with
+  // the bar full, and stays visible for an hour.
+  const last = state.lastWorkout;
+  if (!last || (Date.now() - last.at) >= ONE_HOUR_MS) {
     card.style.display = 'none';
     return;
   }
   card.style.display = 'block';
-  const elapsedSec = Math.max(0, Math.floor((Date.now() - state.lastWorkout.at) / 1000));
-  const m = Math.floor(elapsedSec / 60);
-  const s = elapsedSec % 60;
-  const durationSec = Math.max(1, state.lastWorkout.mins * 60);
-  const done = elapsedSec >= durationSec;
-  setTextContent('la-title', done ? `${state.lastWorkout.name} done ✓` : `${state.lastWorkout.name} in progress`);
-  setTextContent('la-mins-earned', state.lastWorkout.mins);
-  setTextContent('la-elapsed', `${m}:${s.toString().padStart(2, '0')}`);
-  const fill = document.getElementById('la-progress-fill');
-  if (fill) {
-    const pct = Math.min((elapsedSec / durationSec) * 100, 100);
-    fill.style.width = `${pct.toFixed(1)}%`;
-  }
-  const badge = document.querySelector('.la-badge');
-  if (badge) badge.classList.toggle('la-badge-done', done);
+  const agoSec = Math.max(0, Math.floor((Date.now() - last.at) / 1000));
+  setTextContent('la-title', `${last.name} done`);
+  const laTitle = document.getElementById('la-title');
+  if (laTitle) laTitle.insertAdjacentHTML('beforeend', iconHTML('i-check', 'icon-14'));
+  setLiveActivityIcon(last.name);
+  setTextContent('la-mins-earned', `+${last.mins} min earned`);
+  setTextContent('la-elapsed', agoSec < 60 ? 'just now' : `${Math.floor(agoSec / 60)} min ago`);
+  if (fill) fill.style.width = '100%';
+  if (badge) badge.classList.add('la-badge-done');
 }
 
 function startLaElapsed() {
@@ -246,19 +386,54 @@ function stopLaElapsed() {
 // ===== SCREEN NAVIGATION =====
 let currentScreen = 'splash-screen';
 
+// W6 (WV-11) - the incoming screen is stacked above the outgoing one
+// (.screen-in, solid --bg) and fades in; the outgoing one stays fully opaque
+// underneath until it is covered (.slide-out delays its opacity change by the
+// fade length), so the old screen never ghosts through the new one.
+const SCREEN_FADE_MS = 350;
 function showScreen(id) {
   const prev = document.getElementById(currentScreen);
   const next = document.getElementById(id);
   if (!next) return;
 
   if (prev && prev !== next) {
-    prev.classList.remove('active');
+    document.querySelectorAll('.screen.screen-in').forEach(el => { if (el !== next) el.classList.remove('screen-in'); });
+    prev.classList.remove('active', 'screen-in');
     prev.classList.add('slide-out');
-    setTimeout(() => prev.classList.remove('slide-out'), 400);
+    next.classList.remove('slide-out');
+    next.classList.add('screen-in');
+    setTimeout(() => prev.classList.remove('slide-out'), SCREEN_FADE_MS + 50);
+    setTimeout(() => { if (next.classList.contains('active')) next.classList.remove('screen-in'); }, SCREEN_FADE_MS + 50);
   }
 
   next.classList.add('active');
   currentScreen = id;
+  syncToastPlacement();
+}
+
+// W6 (WV-25) - toasts sit at the top where there is no tab bar (splash,
+// setup, paywall) and while any bottom sheet is open, so they
+// never land on a CTA or a sheet row; at the bottom, above the tab bar, otherwise.
+// A toast already on screen stays where it appeared (no jump when a sheet
+// closes under it); the spot is re-read when the next toast shows or once
+// the last one has gone. force = a new toast is about to show.
+const TOAST_TOP_SCREENS = ['splash-screen', 'onboarding-screen', 'paywall-screen'];
+function syncToastPlacement(force) {
+  const container = document.getElementById('toast-container');
+  if (!force && container && container.childElementCount > 0) return;
+  const sheetOpen = !!document.querySelector('.bottom-sheet.open');
+  document.body.classList.toggle('toast-top', sheetOpen || TOAST_TOP_SCREENS.includes(currentScreen));
+}
+
+// W6 (WV-19) - one check for every motion effect JS drives itself (confetti,
+// the Earn more pulse, count-ups). CSS handles the rest in its own
+// prefers-reduced-motion block.
+function prefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+function syncEarnPulse() {
+  const btn = document.getElementById('earn-more-btn');
+  if (btn) btn.classList.toggle('btn-earn-pulse', !prefersReducedMotion());
 }
 
 function showOverlay(id) {
@@ -286,10 +461,9 @@ function switchTab(tabName) {
   if (tabName === 'earn') {
     requestAnimationFrame(() => renderEarnAnalytics(currentEarnRange));
   } else if (tabName === 'today') {
-    updateRingDisplay(); // item 2b - explicit repaint, not just tiles/chart/leaderboard
+    updateRingDisplay(); // item 2b - explicit repaint, not just tiles/chart
     refreshTodayNumbers();
   } else if (tabName === 'friends') {
-    updateStreakDuel(); // fix 2 - recompute whenever Friends tab is shown
     renderSarahStatus();
   }
 }
@@ -298,12 +472,16 @@ function switchTab(tabName) {
 // item 5 - account creation + nickname are now the first two steps.
 let currentObStep = 'ob-step-account';
 
-function showObStep(id) {
+// dir = 1 moves forward (new step slides in from the right); dir = -1 is the
+// back chevron (new step slides in from the left).
+function showObStep(id, dir = 1) {
   const prev = document.getElementById(currentObStep);
   const next = document.getElementById(id);
+  const outX = dir < 0 ? 30 : -30;
+  const inX = dir < 0 ? -30 : 30;
   if (prev) {
     prev.classList.remove('active');
-    prev.style.transform = 'translateX(-30px)';
+    prev.style.transform = `translateX(${outX}px)`;
     prev.style.opacity = '0';
     setTimeout(() => {
       prev.style.transform = '';
@@ -311,7 +489,7 @@ function showObStep(id) {
     }, 350);
   }
   if (next) {
-    next.style.transform = 'translateX(30px)';
+    next.style.transform = `translateX(${inX}px)`;
     next.style.opacity = '0';
     next.classList.add('active');
     requestAnimationFrame(() => {
@@ -325,33 +503,87 @@ function showObStep(id) {
   saveOnboardingProgress(); // fix 2 - every step transition checkpoints progress
 }
 
+// WF-28 / NO-28 - back chevron. Steps only, never a permission popup (those
+// are answered once; see screenTimeAnswered), and never back to Sign in once
+// signed in. Returning to the shock step shows the finished
+// reveal instead of re-running the "crunching" beat.
+function goBackObStep() {
+  const idx = OB_STEP_ORDER.indexOf(currentObStep);
+  if (idx <= 1) return;
+  const target = OB_STEP_ORDER[idx - 1];
+  showObStep(target, -1);
+  if (target === 'ob-step-c') initOnboardingStepC({ instant: true });
+}
+
+// WC-28 - Continue on the app picker is live only once an app is picked.
+function updateAppPickerNext() {
+  const btn = document.getElementById('ob-a-next');
+  if (btn) btn.disabled = state.selectedApps.length === 0;
+}
+
 // ===== ONBOARDING PROGRESS PERSISTENCE (fix 2) =====
 // A reload mid-onboarding used to be binary on 'balance_onboarded' and wipe
 // selectedApps, sending an in-progress user all the way back to Welcome.
 // This checkpoints the current step + every choice made so far into its own
 // key, separate from balance_state (which only exists post-onboarding).
 const ONBOARDING_PROGRESS_KEY = 'balance_onboarding_progress';
+// WONB - 2 = the iPhone-app order (Screen Time prompt right after the app
+// picker, movement goal before the Health prompt). A checkpoint without it
+// was saved in the old order and is moved onto the new one on load.
+const ONBOARDING_FLOW_VERSION = 2;
 
 function saveOnboardingProgress() {
   if (localStorage.getItem('balance_onboarded')) return; // done - nothing to checkpoint
   localStorage.setItem(ONBOARDING_PROGRESS_KEY, JSON.stringify({
+    v: ONBOARDING_FLOW_VERSION,
     step: currentObStep,
+    screenTimeAnswered, // WONB - a reload after the Screen Time prompt never shows it again
+    workoutGoalMin: state.workoutGoalMin, // WONB
     selectedApps: state.selectedApps,
     dailyHours: state.dailyHours,
-    actualDailyHours: state.actualDailyHours,
     dailyAllowanceMinutes: state.dailyAllowanceMinutes,
     earnRateMultiplier: state.earnRateMultiplier,
     expiresAtMidnight: state.expiresAtMidnight,
     userName: state.userName,
     paywallYears: state.paywallYears,
     account: state.account, // item 5
+    healthConnected: state.healthConnected, // WF-12 - answered once, not re-asked after a reload on the paywall
   }));
 }
 
 function loadOnboardingProgress() {
   const raw = localStorage.getItem(ONBOARDING_PROGRESS_KEY);
   if (!raw) return null;
-  try { return JSON.parse(raw); } catch (e) { return null; }
+  let parsed = null;
+  try { parsed = JSON.parse(raw); } catch (e) { return null; }
+  if (!parsed || typeof parsed !== 'object') return null;
+  // The old "reveal" step and its made-up usage number are gone. Scrub both
+  // from a saved checkpoint so a resumed session can never bring them back.
+  let scrubbed = false;
+  if ('actualDailyHours' in parsed) { delete parsed.actualDailyHours; scrubbed = true; }
+  if (parsed.step === 'ob-step-b2') { parsed.step = 'ob-step-c'; scrubbed = true; }
+  // WONB - a checkpoint from the old order. There the Screen Time prompt came
+  // after the hours guess, so on the hours guess it had not been shown yet.
+  // In the new order it comes right after the app picker, so that checkpoint
+  // resumes on the app picker (apps and guess kept): the next Continue shows
+  // the prompt once, then the hours guess. Later old steps (your numbers,
+  // plan, paywall) had already answered it.
+  if (parsed.v !== ONBOARDING_FLOW_VERSION) {
+    if (parsed.step === 'ob-step-b') parsed.step = 'ob-step-a';
+    else if (parsed.step === 'ob-step-c' || parsed.step === 'ob-step-d' || parsed.step === 'paywall') parsed.screenTimeAnswered = true;
+    parsed.v = ONBOARDING_FLOW_VERSION;
+    scrubbed = true;
+  }
+  // A step this build does not know (garbled or from a removed screen) would
+  // leave the setup blank: drop it and start from the top instead.
+  if (parsed.step && parsed.step !== 'paywall' && !OB_STEP_ORDER.includes(parsed.step)) {
+    delete parsed.step;
+    scrubbed = true;
+  }
+  const goal = clampWorkoutGoal(parsed.workoutGoalMin);
+  if (parsed.workoutGoalMin !== goal) { parsed.workoutGoalMin = goal; scrubbed = true; }
+  if (scrubbed) localStorage.setItem(ONBOARDING_PROGRESS_KEY, JSON.stringify(parsed));
+  return parsed;
 }
 
 // Re-syncs every onboarding control from state after a mid-flow reload -
@@ -372,25 +604,6 @@ function resumeOnboardingUI(step) {
     }
   }
 
-  if (state.actualDailyHours !== null) {
-    const guessMins = Math.round(state.dailyHours * 60);
-    const actualMins = Math.round(state.actualDailyHours * 60);
-    const gh = Math.floor(guessMins / 60), gm = guessMins % 60;
-    const ah = Math.floor(actualMins / 60), am = actualMins % 60;
-    setTextContent('reveal-guess-text', gh > 0 ? (gm > 0 ? `${gh}h ${gm}m` : `${gh}h`) : `${gm}m`);
-    setTextContent('reveal-actual-value', ah > 0 ? (am > 0 ? `${ah}h ${am}m` : `${ah}h`) : `${am}m`);
-    const pill = document.getElementById('reveal-delta-pill');
-    if (pill) {
-      if (actualMins > guessMins) {
-        pill.textContent = '↑ 27% more than you thought';
-        pill.className = 'reveal-delta-pill red';
-      } else {
-        pill.textContent = '↓ Less than you thought';
-        pill.className = 'reveal-delta-pill green';
-      }
-    }
-  }
-
   if (step === 'ob-step-c') initOnboardingStepC();
 
   // item 5 - the nickname now lives on its own step, not the plan step.
@@ -406,40 +619,95 @@ function resumeOnboardingUI(step) {
   });
   const expiresToggle = document.getElementById('expires-toggle');
   if (expiresToggle) expiresToggle.checked = state.expiresAtMidnight;
+  updateAppPickerNext();
+  renderWorkoutGoal(); // WONB
 }
 
-function initOnboardingStepC() {
+// WONB - every display of the daily movement goal: the setup step's number,
+// its chips and earn line, and the Settings stepper. The earn line follows
+// the plan's earn rate with the same rounding a logged workout uses.
+function renderWorkoutGoal() {
+  const goal = state.workoutGoalMin;
+  setTextContent('goal-value-num', goal);
+  const valueEl = document.getElementById('goal-value');
+  if (valueEl) valueEl.setAttribute('aria-label', `${goal} minutes a day`);
+  document.querySelectorAll('.goal-chip').forEach(chip => {
+    const on = Number(chip.dataset.goal) === goal;
+    chip.classList.toggle('selected', on);
+    chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  const earned = Math.round(goal * state.earnRateMultiplier);
+  setTextContent('goal-earn-line', `${goal} min of movement earns ${earned} min of scroll time`);
+  setTextContent('goal-set-val', `${goal} min`);
+}
+
+// One write path for the goal, from the setup step and from Settings.
+function setWorkoutGoal(value) {
+  state.workoutGoalMin = clampWorkoutGoal(value);
+  renderWorkoutGoal();
+  if (localStorage.getItem('balance_onboarded')) saveState();
+  else saveOnboardingProgress();
+}
+
+// The shock stat is built only from the user's own guess, rounded to the
+// nearest 5 minutes, and says so. The paywall line reuses these exact helpers
+// so the two screens can never show different numbers.
+const SHOCK_YEARS_REMAINING = 50;
+const SHOCK_WAKING_HOURS_PER_DAY = 16;
+
+function roundedGuessMinutes() {
+  return Math.round(state.dailyHours * 60 / 5) * 5;
+}
+
+function guessLabel(min) {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+}
+
+function guessYears() {
+  const hours = roundedGuessMinutes() / 60;
+  return (hours / SHOCK_WAKING_HOURS_PER_DAY) * SHOCK_YEARS_REMAINING;
+}
+
+let stepCGen = 0;
+
+function initOnboardingStepC(opts = {}) {
+  const gen = ++stepCGen; // a back-and-forth must not leave two reveal timers racing
   const computingState = document.getElementById('computing-state');
   const shockState = document.getElementById('shock-state');
   if (computingState) computingState.style.display = 'flex';
   if (shockState) shockState.style.display = 'none';
 
-  // Compute years
-  const hours = state.actualDailyHours !== null ? state.actualDailyHours : state.dailyHours;
-  const yearsRemaining = 50;
-  const wakingHoursPerDay = 16;
-  const years = (hours / wakingHoursPerDay) * yearsRemaining;
+  const label = guessLabel(roundedGuessMinutes());
+  const years = guessYears();
   const yearsStr = years.toFixed(1);
-  state.paywallYears = years; // B4 - reused on the paywall's personalized line
+  state.paywallYears = years; // B4 - the paywall line recomputes from the same helpers
 
   const leadText = document.getElementById('shock-lead-text');
   const yearsEl = document.getElementById('shock-years');
   const mintEl = document.getElementById('shock-mint');
 
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
-  const timeLabel = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
-  if (leadText) leadText.textContent = state.actualDailyHours !== null
-    ? `At ${timeLabel} a day (your real average), you will spend`
-    : `At ${timeLabel} a day, you will spend`;
+  if (leadText) leadText.textContent = `At ${label} a day, if that's about right, you'll spend`;
   if (yearsEl) yearsEl.textContent = `${yearsStr} years`;
+  if (mintEl) mintEl.classList.remove('visible');
+
+  if (opts.instant) {
+    // Back from the plan step: the number was already revealed.
+    if (computingState) computingState.style.display = 'none';
+    if (shockState) shockState.style.display = 'flex';
+    if (mintEl) mintEl.classList.add('visible');
+    return;
+  }
 
   // Show computing for 1.5s
   setTimeout(() => {
+    if (gen !== stepCGen) return;
     if (computingState) computingState.style.display = 'none';
     if (shockState) shockState.style.display = 'flex';
     // After 1s, show mint line
     setTimeout(() => {
+      if (gen !== stepCGen) return;
       if (mintEl) mintEl.classList.add('visible');
     }, 1000);
   }, 1500);
@@ -447,6 +715,18 @@ function initOnboardingStepC() {
 
 // ===== PAYWALL =====
 const PROMO_CODES = ['FRIENDS', 'BETA', 'BLAKE'];
+
+// WF-18 - the red border and the error line clear as soon as the user types
+// again, on a valid code, and on sign out (so the next paywall visit is clean).
+function clearPromoError() {
+  const input = document.getElementById('promo-input');
+  const errorEl = document.getElementById('promo-error');
+  if (input) {
+    input.style.borderColor = '';
+    input.classList.remove('error');
+  }
+  if (errorEl) errorEl.style.display = 'none';
+}
 
 function handlePromoCode() {
   const input = document.getElementById('promo-input');
@@ -456,10 +736,10 @@ function handlePromoCode() {
   const code = input.value.trim().toUpperCase();
   if (PROMO_CODES.includes(code)) {
     // Valid code
+    clearPromoError();
     launchConfetti();
-    showToast('Beta access unlocked - free forever 🎉');
+    showToast('Beta access unlocked');
     setTimeout(() => proceedToApp(), 1500);
-    if (errorEl) errorEl.style.display = 'none';
   } else {
     // Invalid
     input.classList.remove('error');
@@ -478,29 +758,55 @@ function proceedToApp() {
   state.streakDays = 1;
   state.streakShields = 0;
   state.earnedMinutes = 0;
+  state.unlockMinutesToday = 0;
   state.worktimeLoggedToday = [];
   state.pendingSession = null;
   state.activeWorkout = null;
+  state.lastWorkout = null;
+  state.currentDay = todayStr();
+  // WFIX item 1 - monitoring begins now, or at the first app pick if none is picked yet.
+  state.monitoringStartedAt = isTrackingApps() ? Date.now() : null;
   localStorage.setItem('balance_onboarded', '1');
   localStorage.removeItem(ONBOARDING_PROGRESS_KEY); // fix 2 - no lingering partial-onboarding state
+  localStorage.removeItem(SIGNED_OUT_KEY);
+  currentObStep = 'ob-step-account';
   showScreen('app-shell');
   state.remainingSeconds = state.dailyAllowanceMinutes * 60;
-  state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
+  state.totalSeconds = dayTotalMinutes() * 60;
+  paintAppShell(); // WF-01 - the Earn UI always mirrors state (timer card hidden, tiles enabled)
+  saveState();
+}
+
+// Everything the app shell paints from state, shared by the three ways in
+// (splash when already onboarded, the end of onboarding, signing back in) and
+// by the live day rollover (WF-03), so no entry point can leave a stale timer
+// card, a dimmed tile or an unflushed toast behind.
+function paintAppShell() {
   renderEarnedList();
   renderAppTiles();
   buildWeekChart();
-  updateLeaderboard();
-  updateBonusCard();
+  renderEarnAnalytics(currentEarnRange);
   updateRingDisplay();
   updateDateLabel();
   updateGreeting();
   updateAllStreakDisplays();
-  updateStreakDuel();
+  renderSarahStatus();
   updateShieldChip();
+  renderStatusLayer(); // W5 - shield pill, streak dots, stat strip, hourly chart, baseline card
   updateRingCaption();
+  updateEarnRateNote();
+  setTextContent('earned-display', state.earnedMinutes);
   setTextContent('earn-today-display', state.earnedMinutes);
-  renderEarnAnalytics('month');
-  saveState();
+  restoreActiveWorkoutIfAny(); // item 3b - an in-progress workout stays evident across a reload
+  resolvePendingSession();     // WF-09 - a session left mid-transition is charged now, not out of the blue later
+  flushPendingToasts();
+}
+
+function flushPendingToasts() {
+  if (!pendingToastMessages.length) return;
+  const msgs = pendingToastMessages;
+  pendingToastMessages = [];
+  msgs.forEach((msg, i) => setTimeout(() => showToast(msg), i * 500));
 }
 
 // ===== NUMBERS ENGINE (A8) =====
@@ -509,46 +815,51 @@ function getUsedMinutesToday() {
   return Math.max(0, Math.round((state.totalSeconds - state.remainingSeconds) / 60));
 }
 
-// Split "used minutes" across selected apps with fixed weights so the tiles
-// can never silently disagree with the ring: first app 55%, second 30%,
-// remaining apps split the rest evenly; round, then true up the first tile.
-function computeAppMinutes(apps, usedMinutes) {
-  const n = apps.length;
-  if (n === 0) return [];
-  let weights;
-  if (n === 1) weights = [1];
-  else if (n === 2) weights = [0.55, 0.45];
-  else weights = [0.55, 0.30, ...Array(n - 2).fill(0.15 / (n - 2))];
+// W5 - Screen Time reports usage at 5-min checkpoints, so every "used" figure
+// on Today shows the last checkpoint reached, never a 1-min count.
+function getCheckpointMinutesToday() {
+  return Math.floor(getUsedMinutesToday() / 5) * 5;
+}
 
-  const mins = weights.map(w => Math.round(w * usedMinutes));
-  const sum = mins.reduce((a, b) => a + b, 0);
-  mins[0] += (usedMinutes - sum);
-  return mins;
+// W5 - nothing is measured until at least one app is picked (honesty rule 1).
+function isTrackingApps() {
+  return state.selectedApps.length > 0;
+}
+
+// W3 - today's full budget: base allowance + workout minutes + minutes a
+// partner approved. Every place that derives totalSeconds or prints the
+// day's total goes through this, so a partner unlock survives a reload.
+function dayTotalMinutes() {
+  return state.dailyAllowanceMinutes + state.earnedMinutes + state.unlockMinutesToday;
 }
 
 // ===== APP TILES =====
+// W5 (ND-16 parity, XP-23, WF-10) - Screen Time hands the real app ONE shared
+// total at 5-min checkpoints, never per-app minutes, so the demo no longer
+// invents a per-app split. The row shows the picked apps as marks, one
+// "Used today" total and an "Add apps" tile. Apps the user never picked are
+// never substituted in.
 function renderAppTiles() {
   const container = document.getElementById('app-tiles-row');
   if (!container) return;
   container.innerHTML = '';
 
-  const apps = state.selectedApps.length > 0 ? state.selectedApps : ['TikTok', 'Instagram', 'YouTube'];
-  const usedMinutes = getUsedMinutesToday();
-  const appMins = computeAppMinutes(apps, usedMinutes);
+  const apps = state.selectedApps.slice();
+  const isLocked = state.remainingSeconds <= 0; // truthful: only when time is actually up
 
-  apps.forEach((appName, i) => {
-    const info = APP_ICONS[appName] || { bg: '#333', emoji: '📱' };
-    const used = appMins[i] || 0;
-    const isLocked = state.remainingSeconds === 0; // fix 5 - truthful: only when time is actually up
+  const marksRow = document.createElement('div');
+  marksRow.className = 'app-marks-row';
 
+  apps.forEach(appName => {
+    const info = appMarkInfo(appName);
     const tile = document.createElement('button');
     tile.className = 'app-used-tile';
     tile.setAttribute('data-app', appName);
+    tile.setAttribute('aria-label', isLocked ? `${appName}, locked` : appName);
     tile.innerHTML = `
-      <div class="app-used-icon" style="background:${info.bg};color:${info.textColor||'#fff'}">${info.emoji}</div>
+      <div class="app-used-icon app-mark" style="background:${info.bg};color:${info.textColor||'#fff'}">${appMarkInnerHTML(appName)}</div>
       <span class="app-used-name">${appName}</span>
-      <span class="app-used-mins">${used}m</span>
-      ${isLocked ? '<span class="lock-badge">🔒</span>' : ''}
+      ${isLocked ? `<span class="lock-badge" aria-hidden="true">${iconHTML('i-lock', 'icon-12')}</span>` : ''}
     `;
     // B1 - breathing pause before opening an app with time remaining; straight
     // to the intercept only once time is actually gone.
@@ -559,8 +870,331 @@ function renderAppTiles() {
         showBreathingPause(appName);
       }
     });
-    container.appendChild(tile);
+    marksRow.appendChild(tile);
   });
+
+  const addTile = document.createElement('button');
+  addTile.className = 'add-apps-tile';
+  addTile.id = 'add-apps-tile';
+  addTile.innerHTML = `
+    <span class="add-apps-icon" aria-hidden="true">${iconHTML('i-plus', 'icon-16')}</span>
+    <span class="app-used-name">Add apps</span>
+  `;
+  addTile.addEventListener('click', openAppsSheet);
+  marksRow.appendChild(addTile);
+  container.appendChild(marksRow);
+
+  // One shared total in 5-min checkpoint steps. With no app picked nothing is
+  // measured, so the tile says "Not tracking yet" instead of a number.
+  const tracking = apps.length > 0;
+  const used = getCheckpointMinutesToday();
+  const total = document.createElement('div');
+  total.className = 'used-total-tile' + (tracking ? '' : ' not-tracking');
+  total.id = 'used-total-tile';
+  total.setAttribute('aria-label', tracking
+    ? `Used today, about ${used} minutes, one total shared across your apps`
+    : 'Used today, not tracking yet. Add an app to start.');
+  total.innerHTML = `
+    <span class="used-total-glyph" aria-hidden="true">${iconHTML('i-hourglass', 'icon-16')}</span>
+    <div class="used-total-text">
+      <span class="used-total-label">Used today</span>
+      <span class="used-total-sub">${tracking ? `${apps.length} ${apps.length === 1 ? 'app' : 'apps'} · one total, not per app` : 'Not tracking yet · add an app'}</span>
+    </div>
+    <span class="used-total-value">${tracking ? `<b>${used} min</b> <span class="used-total-est">est.</span>` : '<b>-</b>'}</span>
+  `;
+  container.appendChild(total);
+}
+
+// ===== APPS SHEET (W5, ND-16 parity) =====
+// The "Add apps" tile opens this sheet so the picked apps can change after
+// onboarding. Same overlay + sheet pattern as Settings. Toggling a tile saves
+// at once and repaints every Today card that depends on the picked apps.
+function renderAppsPickGrid() {
+  const grid = document.getElementById('apps-pick-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  Object.keys(APP_ICONS).forEach(appName => {
+    const info = appMarkInfo(appName);
+    const on = state.selectedApps.includes(appName);
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'app-tile apps-pick-tile' + (on ? ' selected' : '');
+    tile.setAttribute('data-app', appName);
+    tile.setAttribute('aria-pressed', on ? 'true' : 'false');
+    tile.innerHTML = `
+      <div class="app-icon app-mark" style="background:${info.bg};color:${info.textColor||'#fff'}">${appMarkInnerHTML(appName)}</div>
+      <span>${appName}</span>
+    `;
+    tile.addEventListener('click', () => {
+      const nowOn = !tile.classList.contains('selected');
+      tile.classList.toggle('selected', nowOn);
+      tile.setAttribute('aria-pressed', nowOn ? 'true' : 'false');
+      if (nowOn) {
+        if (!state.selectedApps.includes(appName)) state.selectedApps.push(appName);
+        // WFIX item 1 - setup finished with no app: monitoring begins at this first pick.
+        if (state.monitoringStartedAt === null) state.monitoringStartedAt = Date.now();
+      } else {
+        state.selectedApps = state.selectedApps.filter(a => a !== appName);
+      }
+      saveState();
+      // Repaint everything on Today that reads isTrackingApps(): the tiles
+      // row, shield pill, streak dots, stat strip, hourly chart, baseline card
+      // and the week chart's today bar, so no two cards disagree.
+      refreshTodayNumbers();
+    });
+    grid.appendChild(tile);
+  });
+}
+
+let appsSheetOpener = null;
+function openAppsSheet() {
+  appsSheetOpener = document.activeElement;
+  renderAppsPickGrid();
+  const overlay = document.getElementById('apps-overlay');
+  const sheet = document.getElementById('apps-sheet');
+  if (!overlay || !sheet) return;
+  overlay.style.display = 'block';
+  sheet.classList.add('open');
+  sheet.style.transform = 'translateY(0)';
+  sheet.setAttribute('tabindex', '-1');
+  sheet.focus({ preventScroll: true });
+  syncToastPlacement(); // W6 (WV-25)
+}
+
+function closeAppsSheet() {
+  const overlay = document.getElementById('apps-overlay');
+  const sheet = document.getElementById('apps-sheet');
+  if (!overlay || !sheet) return;
+  overlay.style.display = 'none';
+  sheet.classList.remove('dragging');
+  sheet.style.transform = 'translateY(100%)';
+  sheet.classList.remove('open');
+  syncToastPlacement(); // W6 (WV-25)
+  // Focus goes back to the opener when it is still on screen and focusable
+  // (the off-state shield pill stops being a button once an app is picked);
+  // otherwise to the freshly rendered Add apps tile.
+  const opener = appsSheetOpener;
+  appsSheetOpener = null;
+  const openerOk = opener && opener.isConnected &&
+    (opener.tagName === 'BUTTON' || opener.getAttribute('tabindex') === '0');
+  const back = openerOk ? opener : document.getElementById('add-apps-tile');
+  if (back) back.focus({ preventScroll: true });
+}
+
+// ===== STATUS LAYER (W5, XP-24) =====
+// Mirrors the native Today order: shield pill, streak dots, stat strip,
+// hourly chart, baseline card. Every number is either live demo state or
+// sits under a SAMPLE / DEMO caption in the markup.
+function renderStatusLayer() {
+  renderShieldStatusPill();
+  renderStreakDots();
+  renderStatStrip();
+  buildHourChart();
+  renderBaselineCard();
+}
+
+// Demo wording only. The web demo never blocks an app, so the pill says what
+// WOULD be on for the picked apps and never reads as a real-blocking claim.
+// Off state (no app picked): amber dot, and the pill becomes a button that
+// opens the app picker (DESIGN 3, shield status pill).
+function renderShieldStatusPill() {
+  const text = document.getElementById('shield-status-text');
+  if (!text) return;
+  const n = state.selectedApps.length;
+  const off = n === 0;
+  text.textContent = off
+    ? 'Demo - pick apps to see blocking'
+    : `Demo - blocking would be on for ${n} ${n === 1 ? 'app' : 'apps'}`;
+  const pill = document.getElementById('shield-status-pill');
+  if (!pill) return;
+  pill.classList.toggle('is-off', off);
+  if (off) {
+    pill.setAttribute('role', 'button');
+    pill.setAttribute('tabindex', '0');
+    pill.setAttribute('aria-label', 'Demo - pick apps to see blocking. Opens the app picker.');
+  } else {
+    pill.removeAttribute('role');
+    pill.removeAttribute('tabindex');
+    pill.removeAttribute('aria-label');
+  }
+}
+
+// Streak dots: built from the real streak, never from the sample week. The
+// streak starts at 1 on the first day and grows by one for each finished day
+// kept within the allowance, so the last (streak - 1) days are under budget.
+// A streak of 0 means yesterday went over with no Streak Shield left. Any
+// older day is "no data" (hollow), so a brand-new user never sees checks for
+// days before they joined. Today is "in progress" while apps are tracked.
+// Shape plus color, so no state relies on color alone.
+// WFIX item 3 - one list of day results for the last 7 days (index 0 = six
+// days ago, index 6 = today): 'under', 'over', 'none' (no data) or 'today'.
+// The streak dots and the week chart's check marks both read it, so the two
+// can never disagree.
+function streakDayResults() {
+  const streak = Math.max(0, Math.floor(state.streakDays || 0));
+  const keptDays = Math.min(6, Math.max(0, streak - 1));
+  const tracking = isTrackingApps();
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const daysBack = 6 - i;
+    if (daysBack === 0) out.push(tracking ? 'today' : 'none');
+    else if (daysBack <= keptDays) out.push('under');
+    else if (streak === 0 && daysBack === 1) out.push('over');
+    else out.push('none');
+  }
+  return out;
+}
+
+function renderStreakDots() {
+  const row = document.getElementById('streak-dots');
+  if (!row) return;
+  const DAY_LETTERS = ['S','M','T','W','T','F','S'];
+  const todayDow = new Date().getDay();
+  const tracking = isTrackingApps();
+  const results = streakDayResults();
+  let under = 0;
+  let known = 0;
+  const cols = [];
+  for (let i = 0; i < 7; i++) {
+    const daysBack = 6 - i;
+    const letter = DAY_LETTERS[(todayDow - daysBack + 7) % 7];
+    const isToday = daysBack === 0;
+    const result = results[i];
+    let cls = 'dot-none';
+    let glyph = '';
+    if (result === 'today') {
+      cls = 'dot-today';
+    } else if (result === 'under') {
+      cls = 'dot-under';
+      glyph = iconHTML('i-check', 'icon-12');
+      under++; known++;
+    } else if (result === 'over') {
+      cls = 'dot-over';
+      glyph = iconHTML('i-close', 'icon-12');
+      known++;
+    }
+    cols.push(`<div class="streak-dot-col${isToday ? ' is-today' : ''}"><span class="streak-dot ${cls}">${glyph}</span><span class="streak-dot-day">${letter}</span></div>`);
+  }
+  row.innerHTML = cols.join('');
+  const todayPart = tracking ? 'today in progress' : 'not tracking yet';
+  row.setAttribute('aria-label', known
+    ? `This week: ${under} of ${known} finished days under budget, ${todayPart}`
+    : `This week: no finished days yet, ${todayPart}`);
+}
+
+// Stat strip: Earned today (bolt, indigo), Shields (shield, teal, "1 of 2"),
+// Allowance (hourglass, amber). One combined label per tile; glyph hidden.
+const MAX_STREAK_SHIELDS = 2;
+function renderStatStrip() {
+  const strip = document.getElementById('stat-strip');
+  if (!strip) return;
+  const tiles = [
+    { glyph: 'i-earn', tint: 'indigo', value: `${state.earnedMinutes} min`, label: 'Earned today',
+      a11y: `Earned today, ${state.earnedMinutes} minutes` },
+    { glyph: 'i-shield', tint: 'teal', value: `${state.streakShields} of ${MAX_STREAK_SHIELDS}`, label: 'Shields',
+      a11y: `Shields, ${state.streakShields} of ${MAX_STREAK_SHIELDS}` },
+    { glyph: 'i-hourglass', tint: 'amber', value: `${state.dailyAllowanceMinutes} min`, label: 'Allowance',
+      a11y: `Allowance, ${state.dailyAllowanceMinutes} minutes a day` },
+  ];
+  strip.innerHTML = tiles.map(t => `
+    <div class="stat-tile" role="group" aria-label="${t.a11y}">
+      <span class="stat-glyph stat-glyph-${t.tint}" aria-hidden="true">${iconHTML(t.glyph, 'icon-16')}</span>
+      <span class="stat-value">${t.value}</span>
+      <span class="stat-label">${t.label}</span>
+    </div>`).join('');
+}
+
+// Hourly chart, labeled "Sample data" in the card title. The demo has no
+// per-hour record, so it spreads today's "Used today" checkpoint total over
+// the hours already past using a fixed sample shape, in 5-min steps. The bars
+// therefore always add up to the total on the same screen and never invent
+// extra minutes. Past hours draw teal; the current hour and the hours still to
+// come draw as empty tracks, with a 1px "now" line. Between midnight and 1 am
+// no hour has passed yet, so hour 0 holds the total and draws as measured;
+// otherwise the bars would add up to 0 while Used today shows minutes.
+// WFIX - on the day monitoring began, the hours before that moment were never
+// measured: they draw as unmeasured tracks and hold no minutes. The hour it
+// began in is the first measured hour (it holds the total while it is still
+// the current hour, the same rule as midnight to 1 am). From the next day on,
+// and for a save that has no start time, every past hour is measured.
+const HOURLY_SAMPLE_SHAPE = [5, 0, 0, 0, 0, 0, 5, 10, 10, 5, 5, 5, 15, 10, 5, 5, 5, 10, 10, 15, 20, 15, 10, 5];
+function monitoringStartHourToday(now) {
+  const t = state.monitoringStartedAt;
+  if (typeof t !== 'number' || !Number.isFinite(t)) return 0;
+  const start = new Date(t);
+  const sameDay = start.getFullYear() === now.getFullYear()
+    && start.getMonth() === now.getMonth()
+    && start.getDate() === now.getDate();
+  return sameDay ? start.getHours() : 0;
+}
+// First and last measured hour (inclusive). startHour 0 gives the old rule:
+// hours 0 to nowHour - 1, or hour 0 alone before 1 am.
+function measuredHourRange(nowHour, startHour = 0) {
+  const first = Math.min(Math.max(0, startHour), nowHour);
+  const last = Math.max(first, nowHour - 1);
+  return { first, last };
+}
+function hourlySampleMinutes(nowHour, totalMinutes, startHour = 0) {
+  const out = new Array(24).fill(0);
+  const steps = Math.floor(totalMinutes / 5);
+  if (steps <= 0) return out;
+  const { first, last } = measuredHourRange(nowHour, startHour);
+  let weights = HOURLY_SAMPLE_SHAPE.slice(first, last + 1);
+  let weightSum = weights.reduce((a, b) => a + b, 0);
+  if (weightSum === 0) { weights = weights.map(() => 1); weightSum = weights.length; }
+  // Largest-remainder split so the 5-min steps add up exactly.
+  const raw = weights.map(w => (w / weightSum) * steps);
+  const base = raw.map(Math.floor);
+  let left = steps - base.reduce((a, b) => a + b, 0);
+  raw.map((r, h) => ({ h, frac: r - Math.floor(r) }))
+    .sort((a, b) => b.frac - a.frac || b.h - a.h)
+    .forEach(({ h }) => { if (left > 0) { base[h] += 1; left--; } });
+  base.forEach((n, i) => { out[first + i] = n * 5; });
+  return out;
+}
+function buildHourChart() {
+  const chart = document.getElementById('hour-chart');
+  if (!chart) return;
+  const now = new Date();
+  const nowHour = now.getHours();
+  const tracking = isTrackingApps();
+  const startHour = monitoringStartHourToday(now); // WFIX item 1
+  const { first, last } = measuredHourRange(nowHour, startHour);
+  const minutes = hourlySampleMinutes(nowHour, tracking ? getCheckpointMinutesToday() : 0, startHour);
+  const max = Math.max(...minutes, 15);
+  chart.innerHTML = minutes.map((mins, h) => {
+    const measured = tracking && h >= first && h <= last;
+    const pct = measured ? Math.round((mins / max) * 100) : 0;
+    return `<div class="hour-col ${measured ? 'measured' : 'unmeasured'}"><div class="hour-fill" style="height:${pct}%"></div></div>`;
+  }).join('');
+  const nowLine = document.createElement('div');
+  nowLine.className = 'hour-now-line';
+  nowLine.style.left = `${(((nowHour + now.getMinutes() / 60) / 24) * 100).toFixed(2)}%`;
+  chart.appendChild(nowLine);
+}
+
+// Baseline card: the user's own guess (rounded to 5 min by the same helper
+// the shock stat uses) against what the demo ring has counted so far today.
+// No invented "actual" figure anywhere in this card.
+function renderBaselineCard() {
+  const rows = document.getElementById('baseline-rows');
+  if (!rows) return;
+  const guessMin = roundedGuessMinutes();
+  const tracking = isTrackingApps();
+  const todayMin = tracking ? getCheckpointMinutesToday() : 0;
+  const scale = Math.max(guessMin, todayMin, 5);
+  const pct = m => (m > 0 ? Math.max(2, Math.round((m / scale) * 100)) : 0);
+  rows.innerHTML = `
+    <div class="baseline-row">
+      <span class="baseline-label">Your guess</span>
+      <div class="baseline-bar" aria-hidden="true"><div class="baseline-fill baseline-fill-guess" style="width:${pct(guessMin)}%"></div></div>
+      <span class="baseline-value" id="baseline-guess-value">${guessLabel(guessMin)}</span>
+    </div>
+    <div class="baseline-row">
+      <span class="baseline-label">So far today</span>
+      <div class="baseline-bar" aria-hidden="true"><div class="baseline-fill baseline-fill-today" style="width:${pct(todayMin)}%"></div></div>
+      <span class="baseline-value" id="baseline-today-value">${tracking ? `${guessLabel(todayMin)} <span class="baseline-est">est.</span>` : '<span class="baseline-est">Not tracking yet</span>'}</span>
+    </div>`;
 }
 
 // ===== WEEKLY CHART =====
@@ -574,24 +1208,46 @@ const WEEK_TODAY_IDX = 6;
 function getWeekSeries() {
   const social = WEEK_SOCIAL_HISTORICAL.slice();
   const earned = WEEK_EARNED_HISTORICAL.slice();
-  social[WEEK_TODAY_IDX] = getUsedMinutesToday();
+  // W5 - same 5-min checkpoint as Used today, and nothing is measured while
+  // no app is picked (the today bar then reads "-", see buildWeekChart).
+  social[WEEK_TODAY_IDX] = isTrackingApps() ? getCheckpointMinutesToday() : 0;
   earned[WEEK_TODAY_IDX] = state.earnedMinutes;
   return { social, earned };
 }
 
 // fix 7 - two slim side-by-side bars per day (social=mint, earned=amber),
-// a dashed reference line at the user's daily allowance, and a tiny mint ✓
-// on days that stayed under it. Today uses live numbers; the other 6 days
+// a dashed reference line at the user's daily allowance, and a tiny mint
+// check glyph on days that stayed under it. Today uses live numbers; the other 6 days
 // are labeled sample history so the fake part is honest about being fake.
 function buildWeekChart() {
   const chart = document.getElementById('week-chart');
   if (!chart) return;
   chart.innerHTML = '';
 
-  const days = ['M','T','W','T','F','S','S'];
+  // WF-21 - the chart is the last 7 days ending today, so the last column is
+  // always today's real weekday and the six before it are the sample history.
+  const DAY_LETTERS = ['S','M','T','W','T','F','S'];
+  const todayDow = new Date().getDay();
+  const days = [];
+  for (let back = 6; back >= 0; back--) days.push(DAY_LETTERS[(todayDow - back + 7) % 7]);
   const { social, earned } = getWeekSeries();
   const todayIdx = WEEK_TODAY_IDX;
+  const tracking = isTrackingApps();
   const allowance = state.dailyAllowanceMinutes;
+  // WFIX item 3 - the earlier days' checks come from the same day results as
+  // the streak dots; only the bar heights are sample history.
+  const dayResults = streakDayResults();
+  // WFIX repair - the drawn sample bar never contradicts that day result: a
+  // kept day ('under') is drawn at or under the goal line and the day that
+  // went over is drawn above it, keeping the sample's day-to-day shape. 'none'
+  // days and today keep their own heights.
+  const sampleMax = Math.max(...WEEK_SOCIAL_HISTORICAL);
+  for (let i = 0; i < social.length; i++) {
+    if (i === todayIdx) continue;
+    const shape = social[i] / sampleMax;
+    if (dayResults[i] === 'under' && social[i] > allowance) social[i] = Math.round(allowance * (0.6 + 0.3 * shape));
+    else if (dayResults[i] === 'over' && social[i] <= allowance) social[i] = Math.round(allowance * (1.15 + 0.2 * shape));
+  }
   // fix 7 - headroom is derived from the DATA, not from whichever value
   // (data or allowance) currently happens to be the max. The old formula
   // multiplied the max by 1.15, so whenever the allowance itself was the
@@ -613,14 +1269,19 @@ function buildWeekChart() {
     const socialPct = Math.min(100, (social[i] / scaleMax) * 100);
     const earnedPct = Math.min(100, (earned[i] / scaleMax) * 100);
     const isToday = i === todayIdx;
-    const underAllowance = social[i] <= allowance;
+    // Today: checked while tracked and within the allowance (no check while
+    // nothing is tracked: there is no measured day to judge). Earlier days:
+    // checked only where the streak dots show a kept day.
+    const underAllowance = isToday
+      ? (tracking && social[i] <= allowance)
+      : dayResults[i] === 'under';
 
     const wrap = document.createElement('div');
     wrap.className = 'chart-bar-wrap';
     wrap.innerHTML = `
       <div class="chart-bar-bg">
         <div class="chart-bar-col">
-          ${isToday ? `<span class="chart-bar-value">${social[i]}</span>` : ''}
+          ${isToday ? `<span class="chart-bar-value" data-target="${socialPct}">${tracking ? social[i] : '-'}</span>` : ''}
           <div class="chart-bar-fill social${isToday ? ' today' : ''}" style="height:0%" data-target="${socialPct}"></div>
         </div>
         <div class="chart-bar-col">
@@ -634,16 +1295,19 @@ function buildWeekChart() {
     labelCol.className = 'week-label-col';
     labelCol.innerHTML = `
       <span class="chart-day-label">${isToday ? '<b style="color:#fff">'+day+'</b>' : day}</span>
-      <span class="chart-day-check"${underAllowance ? '' : ' style="visibility:hidden"'}>✓</span>
+      <span class="chart-day-check"${underAllowance ? '' : ' style="visibility:hidden"'}>${iconHTML('i-check', 'icon-12')}</span>
     `;
     labelsRow.appendChild(labelCol);
   });
 
   const goalLine = document.createElement('div');
   goalLine.className = 'chart-goal-line';
-  goalLine.style.bottom = `${goalPct}%`;
-  goalLine.innerHTML = `<span class="chart-goal-label">${allowance} min goal</span>`;
+  // W6 (WV-05) - the row reserves 20px on top for today's value, so the line
+  // is placed inside the 80px bar area, not the full row height.
+  goalLine.style.bottom = `calc((100% - 20px) * ${(goalPct / 100).toFixed(4)})`;
   barsRow.appendChild(goalLine);
+  // WV-05 - the goal label is a pill in the title row, never on the line.
+  setTextContent('chart-goal-pill', `Goal ${allowance} min`);
 
   chart.appendChild(barsRow);
   chart.appendChild(labelsRow);
@@ -657,129 +1321,11 @@ function buildWeekChart() {
           bar.style.transition = 'height 0.6s cubic-bezier(0.4,0,0.2,1)';
         }, i * 40);
       });
+      // WV-05 - today's value rides just above its own bar, on the same curve.
+      const value = chart.querySelector('.chart-bar-value');
+      if (value) setTimeout(() => { value.style.bottom = `calc(${value.dataset.target}% + 4px)`; }, todayIdx * 2 * 40);
     }, 100);
   });
-}
-
-function formatHM(mins) {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-
-// ===== LEADERBOARD (A8) =====
-// "You" row is computed from the same week series as the chart, so the
-// leaderboard and the "behind/ahead" line can never disagree with reality.
-function updateLeaderboard() {
-  const card = document.getElementById('leaderboard-card');
-  if (!card) return;
-
-  const { social } = getWeekSeries();
-  const youMins = social.reduce((a, b) => a + b, 0);
-
-  const others = [
-    { name: 'Lauren', mins: 134, avatar: 'linear-gradient(135deg,#A855F7,#6366F1)', initial: 'L' },
-    { name: 'Jake', mins: 352, avatar: 'linear-gradient(135deg,#F59E0B,#F87171)', initial: 'J' },
-    { name: 'Marcus', mins: 381, avatar: 'linear-gradient(135deg,#6366F1,#A855F7)', initial: 'M' },
-  ];
-  const rows = [...others, { name: 'You', mins: youMins, avatar: 'linear-gradient(135deg,#2DD4BF,#34D399)', initial: 'B', isYou: true }];
-  rows.sort((a, b) => a.mins - b.mins);
-
-  const rowsHtml = rows.map((r, i) => {
-    const rankHtml = i === 0
-      ? `<span class="lb-rank trophy">🏆</span>`
-      : `<span class="lb-rank${r.isYou ? ' you-rank' : ''}">${i + 1}</span>`;
-    return `
-      <div class="lb-row${r.isYou ? ' you-row' : ''}">
-        ${rankHtml}
-        <div class="lb-avatar" style="background:${r.avatar}">${r.initial}</div>
-        <span class="lb-name">${r.name}</span>
-        <span class="lb-mins">${formatHM(r.mins)}</span>
-      </div>`;
-  }).join('');
-
-  const youIndex = rows.findIndex(r => r.isYou);
-  let behindText = '';
-  if (youIndex === rows.length - 1) {
-    const prev = rows[youIndex - 1];
-    if (prev) behindText = `${formatHM(rows[youIndex].mins - prev.mins)} behind ${prev.name}`;
-  } else {
-    const next = rows[youIndex + 1];
-    if (next) behindText = `${formatHM(next.mins - rows[youIndex].mins)} ahead of ${next.name}`;
-  }
-
-  card.innerHTML = rowsHtml + `<div class="lb-behind" id="lb-behind">${behindText}</div>`;
-}
-
-// ===== BONUS CARD (fix 9) =====
-// state.stepsToday is real - it's incremented every time a workout is logged
-// (Quick log or an intercept exercise). Bar width is derived from the same
-// number shown in the label, in one place, so they can never disagree.
-const STEPS_GOAL = 8000;
-const STEP_RATE_OVERRIDES = { Walk: 100, Run: 170, Cycle: 60 }; // steps/min; everything else is 40/min
-
-function stepsForWorkout(name, mins) {
-  const rate = STEP_RATE_OVERRIDES[name] || 40;
-  return Math.round(rate * mins);
-}
-
-function bonusCardDefaultHTML() {
-  return `
-      <div class="bonus-row">
-        <span class="bonus-icon">🚶</span>
-        <div class="bonus-text">
-          <div class="bonus-title-row">
-            <div class="bonus-title">Hit 8,000 steps today</div>
-          </div>
-          <div class="bonus-sub">+10 min tomorrow</div>
-        </div>
-        <span class="bonus-reward">+10m</span>
-      </div>
-      <div class="bonus-progress-wrap">
-        <div class="bonus-progress-bar" id="bonus-progress-bar" style="width:0%"></div>
-      </div>
-      <div class="bonus-prog-label" id="bonus-prog-label">0 / 8,000 steps</div>`;
-}
-
-function bonusCardAchievedHTML() {
-  return `
-      <div class="bonus-row bonus-achieved-row">
-        <span class="bonus-icon">🎉</span>
-        <div class="bonus-text">
-          <div class="bonus-title">Goal hit! +10 min added to tomorrow 🎉</div>
-        </div>
-      </div>`;
-}
-
-function updateBonusCard() {
-  const card = document.querySelector('.bonus-card');
-  if (!card) return;
-  const achieved = state.stepsToday >= STEPS_GOAL;
-
-  if (achieved) {
-    if (!card.classList.contains('achieved')) {
-      card.classList.add('achieved');
-      card.innerHTML = bonusCardAchievedHTML();
-    }
-    // fix 1 - actually set the flag the rollover consumer reads, exactly
-    // once per day the goal is crossed (guarded so re-renders after the
-    // flag is already set don't re-fire or re-save).
-    if (!state.stepBonusTomorrow) {
-      state.stepBonusTomorrow = true;
-      saveState();
-    }
-    return;
-  }
-
-  if (card.classList.contains('achieved')) {
-    card.classList.remove('achieved');
-    card.innerHTML = bonusCardDefaultHTML();
-  }
-
-  const pct = Math.min(100, (state.stepsToday / STEPS_GOAL) * 100);
-  const bar = document.getElementById('bonus-progress-bar');
-  if (bar) bar.style.width = `${pct.toFixed(1)}%`;
-  setTextContent('bonus-prog-label', `${state.stepsToday.toLocaleString()} / ${STEPS_GOAL.toLocaleString()} steps`);
 }
 
 // ===== EARNED TODAY LIST (fix 3) =====
@@ -792,7 +1338,7 @@ function renderEarnedList() {
   list.innerHTML = '';
 
   if (state.worktimeLoggedToday.length === 0) {
-    list.innerHTML = `<div class="earned-empty" id="earned-empty">Nothing yet today, log a workout to earn time.</div>`;
+    list.innerHTML = `<div class="earned-empty" id="earned-empty">Nothing yet today - log a workout to earn time.</div>`;
     return;
   }
 
@@ -800,7 +1346,7 @@ function renderEarnedList() {
     const item = document.createElement('div');
     item.className = 'earned-item';
     item.innerHTML = `
-      <span class="earned-icon">💪</span>
+      <span class="earned-icon tint-${workoutTint(entry.label)}" aria-hidden="true">${iconHTML(workoutGlyphId(entry.label), 'icon-20')}</span>
       <span class="earned-label">${entry.label}</span>
       <span class="earned-mins">+${entry.earned} min</span>
     `;
@@ -812,7 +1358,7 @@ function renderEarnedList() {
 function refreshTodayNumbers() {
   renderAppTiles();
   buildWeekChart();
-  updateLeaderboard();
+  renderStatusLayer(); // W5 - the stat strip and baseline card derive from the same numbers
 }
 
 // ===== DATE LABEL =====
@@ -835,12 +1381,30 @@ function updateInterceptRewards() {
   });
 }
 
+// W6 (WV-23) - the ask block and the partner reply share one fixed slot
+// (index.html #intercept-slot). Both stay laid out so the slot height never
+// changes; only the active one is visible. mode: 'ask' | 'response' | 'none'.
+function setInterceptSlot(mode) {
+  const slot = document.getElementById('intercept-slot');
+  const bottom = document.getElementById('intercept-bottom');
+  const resp = document.getElementById('partner-response');
+  if (slot) slot.dataset.mode = mode;
+  if (bottom) {
+    bottom.classList.toggle('slot-hidden', mode !== 'ask');
+    bottom.setAttribute('aria-hidden', mode === 'ask' ? 'false' : 'true');
+  }
+  if (resp) {
+    resp.classList.toggle('slot-hidden', mode !== 'response');
+    resp.setAttribute('aria-hidden', mode === 'response' ? 'false' : 'true');
+  }
+}
+
 function showIntercept(appName) {
+  interceptGen++;        // WF-07 - any timer from a previous open is now stale
   interceptAskCount = 0; // B3 - fresh ask count each time the intercept opens
 
-  const info = APP_ICONS[appName] || { emoji: '📱' };
-  setTextContent('intercept-app-icon', info.emoji);
-  setTextContent('intercept-allowance', state.dailyAllowanceMinutes);
+  setAppMark('intercept-app-icon', appName);
+  setTextContent('intercept-allowance', dayTotalMinutes());
   setTextContent('intercept-title', state.userName ? `Time's up, ${state.userName}.` : `Time's up.`);
   updateInterceptRewards(); // A6 - reward rows reflect the current earn-rate multiplier
 
@@ -849,8 +1413,6 @@ function showIntercept(appName) {
   const optionsLabel = document.querySelector('.intercept-options-label');
   const tracking = document.getElementById('tracking-state');
   const success = document.getElementById('intercept-success');
-  const bottom = document.getElementById('intercept-bottom');
-  const partnerResp = document.getElementById('partner-response');
   const waiting = document.getElementById('pr-waiting');
   const declined = document.getElementById('pr-declined');
   const approved = document.getElementById('pr-approved');
@@ -859,8 +1421,7 @@ function showIntercept(appName) {
   if (optionsLabel) optionsLabel.style.display = 'block';
   if (tracking) tracking.style.display = 'none';
   if (success) success.style.display = 'none';
-  if (bottom) bottom.style.display = 'flex';
-  if (partnerResp) partnerResp.style.display = 'none';
+  setInterceptSlot('ask');
   if (waiting) waiting.style.display = 'block';
   if (declined) declined.style.display = 'none';
   if (approved) approved.style.display = 'none';
@@ -869,6 +1430,7 @@ function showIntercept(appName) {
 }
 
 function hideIntercept() {
+  interceptGen++; // WF-07 - closing invalidates every pending intercept timer
   hideOverlay('intercept-screen');
 }
 
@@ -876,42 +1438,40 @@ function hideIntercept() {
 // the partner-response state so the next open starts clean.
 function closeInterceptNoEarn() {
   hideIntercept();
-  const bottom = document.getElementById('intercept-bottom');
-  const partnerResp = document.getElementById('partner-response');
-  if (bottom) bottom.style.display = 'flex';
-  if (partnerResp) partnerResp.style.display = 'none';
+  setInterceptSlot('ask');
   interceptAskCount = 0;
 }
 
-// B3 - partner approve path: first ask is declined with an "Ask again"
-// option; the second ask is approved and awards a flat +10 (not multiplied).
+// B3 / XP-10 - scripted demo reply, labeled as a demo on screen: the first
+// ask is declined with an "Ask again" option; the second is approved and
+// grants a flat 30 partner minutes (never multiplied, never earned time).
+// No code is ever shown here; the real app's partner texts it back.
 let interceptAskCount = 0;
 
 function askSarah() {
+  const gen = interceptGen; // WF-07 - bail out below if the intercept closed or reopened
   interceptAskCount++;
-  const bottom = document.getElementById('intercept-bottom');
-  const resp = document.getElementById('partner-response');
   const waiting = document.getElementById('pr-waiting');
   const declined = document.getElementById('pr-declined');
   const approved = document.getElementById('pr-approved');
 
-  if (bottom) bottom.style.display = 'none';
-  if (resp) resp.style.display = 'block';
+  setInterceptSlot('response');
   if (waiting) waiting.style.display = 'block';
   if (declined) declined.style.display = 'none';
   if (approved) approved.style.display = 'none';
 
   setTimeout(() => {
+    if (gen !== interceptGen) return;
     if (waiting) waiting.style.display = 'none';
     if (interceptAskCount === 1) {
       if (declined) declined.style.display = 'block';
     } else {
       if (approved) approved.style.display = 'block';
-      addEarnedMinutes(10);
-      sarahUnlockedToday = true; // fix 12 - reflected on her Friends-tab status line
-      renderSarahStatus();
+      grantPartnerMinutes(30);
+      renderSarahStatus(); // the Friends card reads the persisted counter
       launchConfetti();
       setTimeout(() => {
+        if (gen !== interceptGen) return;
         hideIntercept();
         interceptAskCount = 0;
       }, 1500);
@@ -923,24 +1483,47 @@ function askSarah() {
 let breathingTimer = null;
 let breathingAppName = null; // item 2c - which app "Open X" should start a session for
 
+// W6 (WV-24) - the 4-second pause counts down on the button itself
+// ("Open TikTok in 4s", 3s, 2s, 1s), then shows the normal label and unlocks.
+// The countdown runs with reduced motion too; only the ring animation stops.
+const BREATHING_PAUSE_S = 4;
+function renderBreathingOpenLabel(btn, appName, secondsLeft) {
+  if (!btn) return;
+  btn.textContent = '';
+  if (secondsLeft > 0) {
+    btn.textContent = `Open ${appName} in ${secondsLeft}s`;
+    return;
+  }
+  const name = document.createElement('span');
+  name.id = 'breathing-open-appname';
+  name.textContent = appName;
+  btn.append('Open ', name, ' (uses your time)');
+}
+
 function showBreathingPause(appName) {
   breathingAppName = appName;
-  const info = APP_ICONS[appName] || { emoji: '📱' };
-  setTextContent('breathing-app-icon', info.emoji);
+  setAppMark('breathing-app-icon', appName);
   setTextContent('breathing-app-name', appName);
-  setTextContent('breathing-open-appname', appName);
   const openBtn = document.getElementById('breathing-open-btn');
+  let secondsLeft = BREATHING_PAUSE_S;
   if (openBtn) openBtn.disabled = true;
+  renderBreathingOpenLabel(openBtn, appName, secondsLeft);
   showOverlay('breathing-screen');
-  if (breathingTimer) clearTimeout(breathingTimer);
-  breathingTimer = setTimeout(() => {
-    if (openBtn) openBtn.disabled = false;
-  }, 4000);
+  if (breathingTimer) clearInterval(breathingTimer);
+  breathingTimer = setInterval(() => {
+    secondsLeft--;
+    renderBreathingOpenLabel(openBtn, appName, secondsLeft);
+    if (secondsLeft <= 0) {
+      clearInterval(breathingTimer);
+      breathingTimer = null;
+      if (openBtn) openBtn.disabled = false;
+    }
+  }, 1000);
 }
 
 function hideBreathingPause() {
   hideOverlay('breathing-screen');
-  if (breathingTimer) { clearTimeout(breathingTimer); breathingTimer = null; }
+  if (breathingTimer) { clearInterval(breathingTimer); breathingTimer = null; }
 }
 
 // ===== APP SESSION (item 2c) =====
@@ -953,6 +1536,12 @@ let pendingSessionTimer = null;
 
 function startAppSession(appName) {
   hideBreathingPause();
+  // WF-09 - a session left unresolved (reload inside the transition) is
+  // charged first, never silently overwritten.
+  if (state.pendingSession) {
+    resolvePendingSession({ quiet: true });
+    if (state.remainingSeconds <= 0) return; // that used the last of it; the intercept is up
+  }
   const plannedMinutes = Math.floor(Math.random() * 8) + 8; // 8-15 min
   state.pendingSession = { appName, startedAt: Date.now(), plannedMinutes };
   saveState();
@@ -960,10 +1549,10 @@ function startAppSession(appName) {
 }
 
 function showAppTransition(appName) {
-  const info = APP_ICONS[appName] || { bg: '#333', emoji: '📱' };
+  const info = appMarkInfo(appName);
   const screen = document.getElementById('app-transition-screen');
   if (screen) screen.style.background = info.bg;
-  setTextContent('transition-app-icon', info.emoji);
+  setAppMark('transition-app-icon', appName, { keepBackground: true });
   setTextContent('transition-app-name', appName);
   const nameEl = document.getElementById('transition-app-name');
   const capEl = document.querySelector('.app-transition-caption');
@@ -982,7 +1571,10 @@ function showAppTransition(appName) {
 // none started). Deducts min(plannedMinutes, remaining) so remaining can
 // never go negative, then returns to Today - straight to the intercept if
 // that used up the last of it, matching the old countdown's zero-path.
-function resolvePendingSession() {
+// opts.quiet skips the tab switch and the "Welcome back" toast (used when a
+// stale session is charged right before a new one starts); the intercept still
+// opens if that used the last of the time.
+function resolvePendingSession(opts = {}) {
   const session = state.pendingSession;
   if (!session) return;
   state.pendingSession = null;
@@ -995,14 +1587,14 @@ function resolvePendingSession() {
   updateRingDisplay();
   refreshTodayNumbers();
   saveState();
-  switchTab('today');
+  if (!opts.quiet) switchTab('today');
 
   if (state.remainingSeconds <= 0) {
     renderAppTiles(); // fix 5 - lock badges appear the instant time actually hits 0
     showIntercept(session.appName);
-  } else {
-    const minsLeft = Math.floor(state.remainingSeconds / 60);
-    showToast(`Welcome back. ${session.appName} used ${actualMinutes} min today - ${minsLeft} min left.`);
+  } else if (!opts.quiet) {
+    const minsLeft = Math.ceil(state.remainingSeconds / 60);
+    showToast(`Welcome back. ${actualMinutes} min on ${session.appName} this session - ${minsLeft} min left today.`);
   }
 }
 
@@ -1026,8 +1618,25 @@ function addEarnedMinutes(mins) {
   setTextContent('earned-display', state.earnedMinutes);
   setTextContent('earn-today-display', state.earnedMinutes);
   updateRingDisplay();
-  refreshTodayNumbers(); // A8 - chart/leaderboard/tiles stay consistent
+  refreshTodayNumbers(); // A8 - chart/tiles stay consistent
   saveState(); // A7
+}
+
+// W3 / XP-10 - a partner approval adds minutes to today only. It is kept
+// apart from earnedMinutes (nobody worked out), survives a reload through
+// state.unlockMinutesToday, and applyDailyReset clears it at midnight.
+// Used minutes (total minus remaining) do not move, so no tile or chart
+// can mistake the grant for scrolling.
+function grantPartnerMinutes(mins) {
+  state.unlockMinutesToday += mins;
+  state.remainingSeconds += mins * 60;
+  state.totalSeconds += mins * 60;
+  // The intercept's "used your N minutes" line is left alone here: it is set
+  // on every open, and the new minutes are not used yet.
+  updateRingDisplay();
+  updateRingCaption();
+  refreshTodayNumbers();
+  saveState();
 }
 
 // ===== LIVE WORKOUT TIMER (item 3b) =====
@@ -1040,6 +1649,28 @@ function startWorkoutTimer(workoutName) {
   state.activeWorkout = { name: workoutName, startedAt: Date.now(), pausedTotalMs: 0, pausedAt: null };
   saveState();
   showWorkoutTimerUI();
+  revealLiveTimerCard();
+}
+
+// W6 (WV-09, ND-27 parity) - the card already sits above the quick-log grid;
+// this scrolls the Earn tab's own scroll container (never scrollIntoView, which
+// would also walk up to #phone-frame) so the whole card is in view above the
+// tab bar, e.g. when the workout was picked from the Other sheet further down.
+function revealLiveTimerCard() {
+  const card = document.getElementById('live-timer-card');
+  const scroller = document.querySelector('#tab-earn .tab-scroll');
+  if (!card || !scroller || card.style.display === 'none') return;
+  const tabBar = document.querySelector('.tab-bar');
+  const sRect = scroller.getBoundingClientRect();
+  const cRect = card.getBoundingClientRect();
+  const visibleTop = sRect.top + 12;
+  const visibleBottom = Math.min(sRect.bottom, tabBar ? tabBar.getBoundingClientRect().top : sRect.bottom) - 12;
+  let delta = 0;
+  if (cRect.top < visibleTop) delta = cRect.top - visibleTop;
+  else if (cRect.bottom > visibleBottom) delta = Math.min(cRect.bottom - visibleBottom, cRect.top - visibleTop);
+  if (delta !== 0) {
+    scroller.scrollTo({ top: scroller.scrollTop + delta, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  }
 }
 
 function showWorkoutTimerUI() {
@@ -1047,6 +1678,8 @@ function showWorkoutTimerUI() {
   if (!aw) { hideWorkoutTimerUI(); return; }
   const card = document.getElementById('live-timer-card');
   if (card) card.style.display = 'block';
+  const earnTab = document.getElementById('tab-earn');
+  if (earnTab) earnTab.classList.add('timer-active');
   setTextContent('live-timer-workout-name', aw.name);
   updatePauseResumeBtn();
   tickLiveTimer();
@@ -1060,6 +1693,8 @@ function showWorkoutTimerUI() {
 function hideWorkoutTimerUI() {
   const card = document.getElementById('live-timer-card');
   if (card) card.style.display = 'none';
+  const earnTab = document.getElementById('tab-earn');
+  if (earnTab) earnTab.classList.remove('timer-active');
   clearInterval(liveTimerTickInterval);
   liveTimerTickInterval = null;
   document.querySelectorAll('.workout-tile').forEach(t => { t.disabled = false; });
@@ -1082,7 +1717,8 @@ function tickLiveTimer() {
 function updatePauseResumeBtn() {
   const btn = document.getElementById('live-timer-pause-btn');
   if (!btn) return;
-  btn.textContent = (state.activeWorkout && state.activeWorkout.pausedAt) ? '▶ Resume' : '⏸ Pause';
+  const paused = !!(state.activeWorkout && state.activeWorkout.pausedAt);
+  btn.innerHTML = paused ? `${iconHTML('i-play', 'icon-16')}Resume` : `${iconHTML('i-pause', 'icon-16')}Pause`;
 }
 
 function toggleWorkoutPause() {
@@ -1122,6 +1758,17 @@ function endWorkoutTimer() {
   const elapsedMs = computeActiveWorkoutElapsedMs();
   const elapsedMinutes = Math.max(0, Math.round(elapsedMs / 60000));
   const earnedPreview = Math.round(elapsedMinutes * state.earnRateMultiplier);
+
+  // WF-08 / WV-08 - under half a minute rounds to nothing: no credit, no
+  // confetti, no "+0 min" row. Same wording as the native app.
+  if (earnedPreview === 0) {
+    state.activeWorkout = null;
+    hideWorkoutTimerUI();
+    saveState();
+    showToast('Too short to count - nothing logged');
+    return;
+  }
+
   flyEarnedMinsLabel(document.getElementById('live-timer-card'), `+${earnedPreview} min`);
 
   state.activeWorkout = null;
@@ -1130,29 +1777,30 @@ function endWorkoutTimer() {
   creditWorkout(aw.name, elapsedMinutes);
 }
 
-// ===== SHARED WORKOUT CREDIT (drives Earned Today, steps, Streak Shield) =====
+// ===== SHARED WORKOUT CREDIT (drives Earned Today, Streak Shield) =====
 // Every workout-completion path (Quick log's live timer, the "Other"
 // library) funnels through here so the downstream effects can never
 // diverge. duration is always REAL minutes, never a picked/retroactive value.
-function creditWorkout(workoutName, duration) {
+// opts.quiet (WF-26, a workout credited during the day rollover) skips the
+// confetti and the live toast; any toast goes through the pending queue.
+function creditWorkout(workoutName, duration, opts = {}) {
+  const quiet = !!opts.quiet;
   const earnedMins = Math.round(duration * state.earnRateMultiplier);
   addEarnedMinutes(earnedMins);
-  state.lastWorkout = { name: workoutName, mins: earnedMins, at: Date.now() }; // B6
-  launchConfetti();
+  state.lastWorkout = { name: workoutName, mins: earnedMins, at: Date.now(), done: true }; // B6, WC-18
+  if (!quiet) launchConfetti();
 
   state.worktimeLoggedToday.push({ label: workoutName, mins: duration, earned: earnedMins });
   renderEarnedList();
 
-  state.stepsToday += stepsForWorkout(workoutName, duration);
-  updateBonusCard();
-
-  showToast(`Logged! +${earnedMins} min earned 🎉`);
+  if (!quiet) showToast(`Logged! +${earnedMins} min earned 🎉`);
 
   // B2 - a 30-min-plus workout banks a Streak Shield (max 2).
   if (duration >= 30 && state.streakShields < 2) {
     state.streakShields++;
     updateShieldChip();
-    setTimeout(() => showToast('🛡️ Streak Shield earned!'), 400);
+    if (quiet) pendingToastMessages.push('Streak Shield earned! 🛡️');
+    else setTimeout(() => showToast('Streak Shield earned! 🛡️'), 400);
   }
 
   saveState();
@@ -1160,6 +1808,7 @@ function creditWorkout(workoutName, duration) {
 
 // ===== CONFETTI =====
 function launchConfetti() {
+  if (prefersReducedMotion()) return; // W6 (WV-19) - no confetti with Reduce Motion
   const canvas = document.getElementById('confetti-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -1223,11 +1872,12 @@ function launchConfetti() {
 function showToast(message, duration = 3000) {
   const container = document.getElementById('toast-container');
   if (!container) return;
+  syncToastPlacement(true); // W6 (WV-25)
   const toast = document.createElement('div');
   toast.className = 'toast';
   toast.textContent = message;
   container.appendChild(toast);
-  setTimeout(() => toast.remove(), duration);
+  setTimeout(() => { toast.remove(); syncToastPlacement(); }, duration);
 }
 
 // ===== UTIL =====
@@ -1242,8 +1892,19 @@ function setTextContent(id, text) {
 function updateRingCaption() {
   const caption = document.querySelector('.ring-caption');
   if (!caption) return;
-  const expiryText = state.expiresAtMidnight ? 'resets at midnight' : 'rolls over tomorrow';
-  caption.innerHTML = `${state.dailyAllowanceMinutes} min allowance + <span id="earned-display">${state.earnedMinutes}</span> min earned · ${expiryText}`;
+  const expiryText = state.expiresAtMidnight ? 'resets at midnight' : 'earned time carries over';
+  const partnerPart = state.unlockMinutesToday > 0 ? ` + ${state.unlockMinutesToday} min from Sarah` : '';
+  caption.innerHTML = `${state.dailyAllowanceMinutes} min allowance + <span id="earned-display">${state.earnedMinutes}</span> min earned${partnerPart} · ${expiryText}`;
+}
+
+// Earn-rate explainer on the Earn tab (same strings as the real app).
+// Refreshed whenever the rate changes, in onboarding or in Settings.
+function updateEarnRateNote() {
+  const rate = state.earnRateMultiplier;
+  const text = rate === 1
+    ? 'Every minute you move earns 1 minute of scroll time.'
+    : `Every minute you move earns ${rate} min of scroll time - change it in Settings.`;
+  setTextContent('earn-rate-note', text);
 }
 
 // item 5 - shared nickname validation: onboarding's nickname step and the
@@ -1260,7 +1921,7 @@ function validateNickname(raw) {
 function getGreeting() {
   const h = new Date().getHours();
   const period = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-  return state.userName ? `${period}, ${state.userName} 👋` : `${period} 👋`;
+  return state.userName ? `${period}, ${state.userName}` : period;
 }
 
 function updateGreeting() {
@@ -1274,8 +1935,6 @@ function formatStreakText(n) {
 
 function updateAllStreakDisplays() {
   setTextContent('streak-display', formatStreakText(state.streakDays));
-  const duelCount = document.querySelector('.duel-side.you .duel-count');
-  if (duelCount) duelCount.textContent = state.streakDays;
 }
 
 // B2 - streak-shield chip next to the streak pill.
@@ -1283,11 +1942,12 @@ function updateShieldChip() {
   const chip = document.getElementById('shield-chip');
   if (!chip) return;
   if (state.streakShields > 0) {
-    chip.style.display = 'inline-block';
-    chip.textContent = `🛡️ ×${state.streakShields}`;
+    chip.style.display = 'inline-flex';
+    chip.innerHTML = `${iconHTML('i-shield', 'icon-14')}×${state.streakShields}`;
   } else {
     chip.style.display = 'none';
   }
+  renderStatStrip(); // W5 - the Shields tile follows the chip
 }
 
 // ===== KEYBOARD-AWARE CTA (item 4) =====
@@ -1420,21 +2080,163 @@ function setupKeyboardAwareCTA(inputEl, containerEl, ctaEl) {
   }
 }
 
+// ===== BOTTOM SHEETS (W6: WV-22, WF-11) =====
+// One controller for every sheet: dialog focus (moved into the sheet on open,
+// back to the opener on close), the header close button, Escape, a scrim tap,
+// and drag-to-dismiss on the grabber or header (past 120px, or a fast flick).
+const SHEET_DISMISS_PX = 120;
+const SHEET_FLICK_PX_PER_MS = 0.6;
+const sheetClosers = {};  // sheet id -> the close function that owns its state
+const sheetOpeners = {};  // sheet id -> element focused before it opened
+
+function openSheet(sheetId, overlayId, fallbackOpenerId) {
+  const sheet = document.getElementById(sheetId);
+  if (!sheet) return;
+  const overlay = overlayId ? document.getElementById(overlayId) : null;
+  const active = document.activeElement;
+  sheetOpeners[sheetId] = (active && active !== document.body && !sheet.contains(active))
+    ? active
+    : (fallbackOpenerId ? document.getElementById(fallbackOpenerId) : null);
+  if (overlay) overlay.style.display = 'block';
+  sheet.classList.remove('dragging');
+  sheet.classList.add('open');
+  sheet.style.transform = 'translateY(0)';
+  if (!sheet.hasAttribute('tabindex')) sheet.setAttribute('tabindex', '-1');
+  sheet.focus({ preventScroll: true });
+  syncToastPlacement();
+}
+
+function closeSheet(sheetId, overlayId) {
+  const sheet = document.getElementById(sheetId);
+  if (!sheet) return;
+  const overlay = overlayId ? document.getElementById(overlayId) : null;
+  const wasOpen = sheet.classList.contains('open');
+  if (overlay) overlay.style.display = 'none';
+  sheet.classList.remove('dragging');
+  sheet.style.transform = 'translateY(100%)';
+  sheet.classList.remove('open');
+  syncToastPlacement();
+  const opener = sheetOpeners[sheetId];
+  sheetOpeners[sheetId] = null;
+  if (wasOpen && opener && opener.isConnected && typeof opener.focus === 'function' &&
+      (sheet.contains(document.activeElement) || document.activeElement === document.body)) {
+    opener.focus({ preventScroll: true });
+  }
+}
+
+function registerSheet(sheetId, closeFn) {
+  const sheet = document.getElementById(sheetId);
+  if (!sheet) return;
+  sheetClosers[sheetId] = closeFn;
+  sheet.querySelectorAll('[data-close-sheet]').forEach(btn => btn.addEventListener('click', closeFn));
+
+  // Drag down on the grabber or the header row. Buttons inside the header
+  // (the close button) keep their normal tap.
+  let startY = 0, dy = 0, startT = 0, pointerId = null;
+  const onDown = (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    if (e.target.closest('button, input, a, label')) return;
+    pointerId = e.pointerId;
+    startY = e.clientY;
+    startT = performance.now();
+    dy = 0;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) { /* capture is best effort */ }
+    sheet.classList.add('dragging');
+  };
+  const onMove = (e) => {
+    if (pointerId === null || e.pointerId !== pointerId) return;
+    dy = Math.max(0, e.clientY - startY);
+    sheet.style.transform = `translateY(${dy}px)`;
+  };
+  const onUp = (e) => {
+    if (pointerId === null || e.pointerId !== pointerId) return;
+    pointerId = null;
+    sheet.classList.remove('dragging');
+    const elapsed = Math.max(1, performance.now() - startT);
+    const flick = dy > 40 && dy / elapsed > SHEET_FLICK_PX_PER_MS;
+    if (dy > SHEET_DISMISS_PX || flick) closeFn();
+    else sheet.style.transform = 'translateY(0)';
+  };
+  sheet.querySelectorAll('.sheet-handle, .sheet-header').forEach(zone => {
+    zone.addEventListener('pointerdown', onDown);
+    zone.addEventListener('pointermove', onMove);
+    zone.addEventListener('pointerup', onUp);
+    zone.addEventListener('pointercancel', onUp);
+  });
+}
+
+// Escape closes the confirm dialog first, then the open sheet.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const confirmPopup = document.getElementById('confirm-popup');
+  if (confirmPopup && confirmPopup.style.display === 'flex') {
+    e.preventDefault();
+    hideConfirm();
+    return;
+  }
+  const openId = Object.keys(sheetClosers).find(id => {
+    const el = document.getElementById(id);
+    return el && el.classList.contains('open');
+  });
+  if (openId) {
+    e.preventDefault();
+    sheetClosers[openId]();
+  }
+});
+
+// WFIX item 5 - while a sheet or the confirm dialog is open, Tab and
+// Shift+Tab cycle through its own controls and never reach the dimmed screen
+// behind it. Focus is wrapped by hand (not inert), so the scrim tap, the
+// Escape handler above and drag-to-close keep working exactly as before.
+const FOCUS_TRAP_SHEETS = ['apps-sheet', 'settings-sheet', 'legal-sheet', 'other-sheet'];
+function topOpenDialog() {
+  const confirmPopup = document.getElementById('confirm-popup');
+  if (confirmPopup && confirmPopup.style.display === 'flex') return confirmPopup;
+  for (const id of FOCUS_TRAP_SHEETS) {
+    const el = document.getElementById(id);
+    if (el && el.classList.contains('open')) return el;
+  }
+  return null;
+}
+// WFIX repair - the Legal sheet's text box carries tabindex="0" in index.html,
+// so it stays a Tab stop inside the trap and PageDown, End and the arrow keys
+// can still scroll it (the browser's own scroller stop is skipped once Tab is
+// handled here).
+function dialogFocusables(root) {
+  return Array.from(root.querySelectorAll('button, a[href], input, select, textarea, [tabindex]'))
+    .filter(el => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length > 0 &&
+      getComputedStyle(el).visibility !== 'hidden');
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  const dialog = topOpenDialog();
+  if (!dialog) return;
+  e.preventDefault();
+  const items = dialogFocusables(dialog);
+  if (!items.length) { dialog.focus({ preventScroll: true }); return; }
+  const idx = items.indexOf(document.activeElement);
+  let next;
+  if (e.shiftKey) next = idx <= 0 ? items[items.length - 1] : items[idx - 1];
+  else next = (idx === -1 || idx === items.length - 1) ? items[0] : items[idx + 1];
+  next.focus();
+});
+
 // ===== SETTINGS SHEET =====
 let settingsOpen = false;
 
 function openSettings() {
-  document.getElementById('settings-overlay').style.display = 'block';
-  const sheet = document.getElementById('settings-sheet');
-  sheet.classList.add('open');
-  sheet.style.transform = 'translateY(0)';
+  openSheet('settings-sheet', 'settings-overlay', 'gear-btn');
   settingsOpen = true;
   // A1 - initialize from state, not stale local vars
   setTextContent('allow-val', `${state.dailyAllowanceMinutes} min`);
+  setTextContent('goal-set-val', `${state.workoutGoalMin} min`); // WONB
   // fix 6 - sync the earn-rate segmented control's selected button from state
   document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(b => {
     b.classList.toggle('selected', parseFloat(b.dataset.rate) === state.earnRateMultiplier);
   });
+  // WF-23 - the expiry choice made in onboarding is editable here too.
+  const settingsExpires = document.getElementById('settings-expires-toggle');
+  if (settingsExpires) settingsExpires.checked = !!state.expiresAtMidnight;
   updateSettingsAccountSection(); // item 5 - re-sync every time the sheet opens
 }
 
@@ -1457,10 +2259,10 @@ function updateSettingsAccountSection() {
 function applyAllowanceChange(newAllowance) {
   const usedSeconds = state.totalSeconds - state.remainingSeconds;
   state.dailyAllowanceMinutes = newAllowance;
-  state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
+  state.totalSeconds = dayTotalMinutes() * 60;
   state.remainingSeconds = Math.max(0, Math.min(state.totalSeconds, state.totalSeconds - usedSeconds));
   setTextContent('allow-val', `${state.dailyAllowanceMinutes} min`);
-  setTextContent('intercept-allowance', state.dailyAllowanceMinutes);
+  setTextContent('intercept-allowance', dayTotalMinutes());
   updateRingDisplay();
   updateRingCaption();
   refreshTodayNumbers();
@@ -1468,27 +2270,18 @@ function applyAllowanceChange(newAllowance) {
 }
 
 function closeSettings() {
-  document.getElementById('settings-overlay').style.display = 'none';
-  const sheet = document.getElementById('settings-sheet');
-  sheet.style.transform = 'translateY(100%)';
-  sheet.classList.remove('open');
+  closeSheet('settings-sheet', 'settings-overlay');
   settingsOpen = false;
 }
 
 // ===== OTHER WORKOUT LIBRARY SHEET (item 3c) =====
-// Same open/close pattern as the Settings sheet, its own overlay + sheet.
+// Same sheet controller as Settings, its own overlay + sheet.
 function openOtherLibrary() {
-  document.getElementById('other-overlay').style.display = 'block';
-  const sheet = document.getElementById('other-sheet');
-  sheet.classList.add('open');
-  sheet.style.transform = 'translateY(0)';
+  openSheet('other-sheet', 'other-overlay', 'other-workout-tile');
 }
 
 function closeOtherLibrary() {
-  document.getElementById('other-overlay').style.display = 'none';
-  const sheet = document.getElementById('other-sheet');
-  sheet.style.transform = 'translateY(100%)';
-  sheet.classList.remove('open');
+  closeSheet('other-sheet', 'other-overlay');
 }
 
 // ===== SAVE/LOAD (A4, A11) =====
@@ -1506,10 +2299,35 @@ function daysBetween(dateStr1, dateStr2) {
   return Math.round((d2 - d1) / 86400000);
 }
 
+// WF-03 - the page can stay open across midnight (it ships as a home-screen
+// web app). Compare the day the numbers belong to with the clock and run the
+// daily reset the moment they differ: before every save, on return to the
+// foreground, and once a minute. Returns true when a reset ran.
+let dayCheckRunning = false;
+
+function ensureCurrentDay() {
+  const today = todayStr();
+  if (!state.currentDay) { state.currentDay = today; return false; }
+  if (state.currentDay === today) return false;
+  if (!localStorage.getItem('balance_onboarded')) { state.currentDay = today; return false; } // nothing real to roll over yet
+  if (daysBetween(state.currentDay, today) < 0) { state.currentDay = today; return false; } // clock moved backward (fix 14)
+  if (dayCheckRunning) return false;
+  dayCheckRunning = true;
+  try {
+    applyDailyReset(state.currentDay, today);
+    paintAppShell(); // ring, caption, tiles, date pill, greeting, streak, chart, timer card
+  } finally {
+    dayCheckRunning = false;
+  }
+  return true;
+}
+
 // Single storage key (A11) - everything lives in balance_state.
 function saveState() {
+  ensureCurrentDay(); // WF-03 - never stamp a new date on yesterday's numbers
   localStorage.setItem('balance_state', JSON.stringify({
     earnedMinutes: state.earnedMinutes,
+    unlockMinutesToday: state.unlockMinutesToday, // W3
     streakDays: state.streakDays,
     streakShields: state.streakShields,
     dailyAllowanceMinutes: state.dailyAllowanceMinutes,
@@ -1519,61 +2337,82 @@ function saveState() {
     expiresAtMidnight: state.expiresAtMidnight,
     remainingSeconds: state.remainingSeconds,
     userName: state.userName,
+    dailyHours: state.dailyHours, // W5 - the baseline card shows the user's own guess after a reload
+    workoutGoalMin: state.workoutGoalMin, // WONB
+    monitoringStartedAt: state.monitoringStartedAt, // WFIX item 1 - left out of the save while undefined (older saves)
     account: state.account, // item 5
     lastWorkout: state.lastWorkout,
     worktimeLoggedToday: state.worktimeLoggedToday,
-    stepsToday: state.stepsToday,
-    stepBonusTomorrow: state.stepBonusTomorrow,
     pendingSession: state.pendingSession,
     activeWorkout: state.activeWorkout,
-    savedDate: todayStr(),
+    savedDate: state.currentDay || todayStr(), // WF-03 - the day the numbers belong to, not the clock
   }));
 }
 
-// A13 - honest streak growth/decay on a new day, with streak-shield rescue (B2).
+// New day (A13, B2, WF-04, WF-05, WF-26).
+// Streak rule: the last saved day counts when its used minutes stayed within
+// that day's allowance (base + earned + minutes a partner approved). A day
+// over the allowance spends a Streak Shield, or ends the
+// streak. Days with no saved data at all (the app was never opened) neither
+// count nor break. Earned time carries over only if it was not used and the
+// expiry toggle is off; minutes a partner approved never carry over. A
+// workout still running at midnight is credited to the new day instead of
+// being dropped.
 function applyDailyReset(prevDateStr, curDateStr) {
   const daysElapsed = daysBetween(prevDateStr, curDateStr);
+  state.currentDay = curDateStr; // first, so the saves below cannot re-enter this reset
 
-  const carriedEarned = state.expiresAtMidnight ? 0 : state.earnedMinutes;
-  state.earnedMinutes = carriedEarned;
-  state.remainingSeconds = (state.dailyAllowanceMinutes + carriedEarned) * 60;
+  // Yesterday's verdict, from the numbers as they stood when that day ended.
+  const usedYesterday = getUsedMinutesToday();
+  const allowanceYesterday = dayTotalMinutes();
+  const yesterdayKept = usedYesterday <= allowanceYesterday;
+
+  // A live workout that crossed midnight: remember it, credit it below (WF-26).
+  const crossingWorkout = state.activeWorkout;
+  const crossingMinutes = crossingWorkout
+    ? Math.max(0, Math.round(computeActiveWorkoutElapsedMs() / 60000))
+    : 0;
+  state.activeWorkout = null;
+  state.pendingSession = null;
+
+  // Carry only the unused part of what was earned (WF-04). Minutes a partner
+  // approved (W3) were granted after time ran out, so they are the last ones
+  // spent: anything left at midnight is theirs first, and those never carry.
+  // Only what is left beyond them can be unused earned time.
+  const leftoverMinutes = Math.floor(state.remainingSeconds / 60);
+  const unusedEarned = leftoverMinutes - state.unlockMinutesToday;
+  const carried = state.expiresAtMidnight
+    ? 0
+    : Math.max(0, Math.min(unusedEarned, state.earnedMinutes));
+  state.earnedMinutes = carried;
+  state.unlockMinutesToday = 0; // W3 - a partner unlock is for one day only, never carried
+  state.remainingSeconds = (state.dailyAllowanceMinutes + carried) * 60;
   state.totalSeconds = state.remainingSeconds;
   state.lastWorkout = null;
   state.worktimeLoggedToday = [];
-  // item 2c/3b - a session/workout in progress shouldn't survive into a new
-  // calendar day in a confusing way; drop it rather than crediting stale
-  // minutes against a brand-new day's allowance.
-  state.pendingSession = null;
-  state.activeWorkout = null;
+  if (carried > 0) pendingToastMessages.push(`${carried} min of unused earned time carried over`);
 
-  if (daysElapsed === 1) {
-    state.streakDays += 1;
-  } else if (daysElapsed > 1) {
-    if (state.streakShields > 0) {
-      state.streakShields -= 1;
+  if (daysElapsed >= 1) {
+    if (yesterdayKept) {
       state.streakDays += 1;
-      pendingToastMessages.push(`🛡️ Streak Shield used, ${state.streakDays}-day streak saved!`);
+    } else if (state.streakShields > 0) {
+      state.streakShields -= 1;
+      pendingToastMessages.push(`Streak Shield used - ${state.streakDays}-day streak saved`);
     } else {
-      state.streakDays = 1;
+      state.streakDays = 0;
     }
   }
 
-  // fix 9 - steps reset every day; yesterday's 8,000-step bonus (if earned)
-  // applies to today's totals exactly once.
-  state.stepsToday = 0;
-  if (state.stepBonusTomorrow) {
-    const bonus = 10;
-    state.earnedMinutes += bonus;
-    state.remainingSeconds += bonus * 60;
-    state.totalSeconds += bonus * 60;
-    state.stepBonusTomorrow = false;
-    pendingToastMessages.push("Bonus applied: +10 min from yesterday's steps 🚶");
-  }
-
   saveState(); // persist the reset with today's savedDate right away
+
+  if (crossingWorkout && crossingMinutes > 0) {
+    creditWorkout(crossingWorkout.name, crossingMinutes, { quiet: true });
+    pendingToastMessages.push('Your workout from last night was logged today.');
+  }
 }
 
 function loadState() {
+  state.currentDay = todayStr();
   const raw = localStorage.getItem('balance_state');
   let saved = null;
   if (raw) {
@@ -1587,6 +2426,15 @@ function loadState() {
       try { state.selectedApps = JSON.parse(legacyApps); } catch (e) { /* ignore */ }
     }
     return;
+  }
+
+  // An older save may still carry the made-up "actual usage" number from the
+  // removed reveal step. Drop it before it can land on state, and rewrite the
+  // save so it is gone from storage too.
+  let scrubbedStaleKeys = false;
+  if ('actualDailyHours' in saved) {
+    delete saved.actualDailyHours;
+    scrubbedStaleKeys = true;
   }
 
   Object.assign(state, saved);
@@ -1613,37 +2461,55 @@ function loadState() {
   // anywhere it's displayed, not just the ring (which already clamped).
   const numericDefaults = {
     earnedMinutes: 0,
+    unlockMinutesToday: 0,
     streakDays: 1,
     streakShields: 0,
     dailyAllowanceMinutes: 45,
     earnRateMultiplier: 1,
     remainingSeconds: 45 * 60,
-    stepsToday: 0,
   };
   Object.keys(numericDefaults).forEach(key => {
     const n = Number(state[key]);
     state[key] = Number.isFinite(n) ? n : numericDefaults[key];
   });
 
+  // WFIX item 1 - the start time is a finite number, or null while setup
+  // finished with no app picked. Anything else (missing in an older save, or
+  // garbled) means "started before today", so a returning visitor sees no jump.
+  if (state.monitoringStartedAt !== null &&
+      !(typeof state.monitoringStartedAt === 'number' && Number.isFinite(state.monitoringStartedAt))) {
+    state.monitoringStartedAt = undefined;
+  }
+
+  // XP-11 - a stored allowance outside today's range snaps into it (5-min steps).
+  state.dailyAllowanceMinutes = clampAllowance(state.dailyAllowanceMinutes);
+  // WONB - a save from before the movement goal existed has none: 30. Any
+  // stored value snaps into 10 to 120 in 5-min steps.
+  state.workoutGoalMin = clampWorkoutGoal(state.workoutGoalMin);
+  // Totals are derived, never stored; the day engine below reads them.
+  state.totalSeconds = dayTotalMinutes() * 60;
+  state.remainingSeconds = Math.max(0, Math.min(state.remainingSeconds, state.totalSeconds));
+
   const today = todayStr();
 
   if (!saved.savedDate || saved.savedDate === today) {
-    state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
+    state.currentDay = today;
   } else {
     const daysElapsed = daysBetween(saved.savedDate, today);
     if (daysElapsed < 0) {
       // fix 14 - clock-skew guard: the saved date is LATER than today (the
       // system clock moved backward). Don't run the daily reset at all -
       // that would zero earnedMinutes/worktimeLoggedToday and leave the
-      // streak logic in a half-updated state (it falls through both the
-      // ===1 and >1 branches for a negative delta). Just recompute totals
-      // and re-stamp today's date; nothing else changes.
-      state.totalSeconds = (state.dailyAllowanceMinutes + state.earnedMinutes) * 60;
+      // streak logic in a half-updated state. Just re-stamp today's date;
+      // nothing else changes.
+      state.currentDay = today;
       saveState();
     } else {
       applyDailyReset(saved.savedDate, today);
     }
   }
+
+  if (scrubbedStaleKeys) saveState();
 }
 
 function replayDemo() {
@@ -1656,48 +2522,73 @@ function replayDemo() {
 // Generic destructive-action confirm dialog, shared by Sign out and Delete
 // account so both get the same "no dead end, always cancelable" treatment.
 let confirmCallback = null;
+let confirmOpener = null; // WFIX item 5 - focus goes back here when the dialog closes
 
-function showConfirm(title, body, onConfirm) {
+function showConfirm(title, body, onConfirm, okLabel = 'Confirm') {
   setTextContent('confirm-title', title);
   setTextContent('confirm-body', body);
+  setTextContent('confirm-ok-btn', okLabel);
   confirmCallback = onConfirm;
   const popup = document.getElementById('confirm-popup');
-  if (popup) popup.style.display = 'flex';
+  if (!popup) return;
+  const active = document.activeElement;
+  confirmOpener = (active && active !== document.body && !popup.contains(active)) ? active : null;
+  popup.style.display = 'flex';
+  const cancel = document.getElementById('confirm-cancel-btn');
+  if (cancel) cancel.focus({ preventScroll: true });
 }
 
 function hideConfirm() {
   const popup = document.getElementById('confirm-popup');
+  const wasOpen = !!(popup && popup.style.display === 'flex');
   if (popup) popup.style.display = 'none';
   confirmCallback = null;
+  const opener = confirmOpener;
+  confirmOpener = null;
+  if (wasOpen && opener && opener.isConnected && typeof opener.focus === 'function') {
+    opener.focus({ preventScroll: true });
+  }
 }
 
-// Sign out clears the account + nickname and sends the user back to account
-// creation, but leaves the rest of their plan (apps, allowance, earn rate,
-// streaks) untouched in storage so signing back in picks up where they left
-// off rather than replaying the whole app-picker/plan flow.
+// Sign out (WF-02) only signs the account out. The plan, streak, earned time,
+// history and nickname stay in balance_state on this device, balance_onboarded
+// stays set, and a balance_signed_out flag routes the next launch to the
+// sign-in step; signing back in clears the flag and lands straight in the app.
+// Every session-only beat and timer is stopped here (WF-16, WF-01) because
+// sign out never reloads the page.
 function signOutAccount() {
   closeSettings();
-  state.account = { provider: null, accountId: null };
-  state.userName = '';
-  localStorage.removeItem('balance_onboarded');
+  state.account = { provider: null, accountId: (state.account && state.account.accountId) || null };
+  localStorage.setItem(SIGNED_OUT_KEY, 'true');
   localStorage.removeItem(ONBOARDING_PROGRESS_KEY);
+
+  // W3 - the partner card reflects persisted state only; just repaint it.
+  renderSarahStatus();
+
+  // Overlays and their timers.
+  hideBreathingPause();
+  clearTimeout(pendingSessionTimer);
+  pendingSessionTimer = null;
+  hideOverlay('app-transition-screen');
+  hideIntercept();
+  hideLockScreen();
+  hideShareScreen();
+  closeOtherLibrary();
+
+  // A running workout or an unresolved session does not follow the account.
+  state.activeWorkout = null;
+  state.pendingSession = null;
+  hideWorkoutTimerUI(); // stops the tick and re-enables the quick-log tiles
   saveState();
 
-  // Sign out (unlike Delete account / Replay demo) never reloads the page,
-  // so any purely-visual, session-only onboarding UI has to be reset here
-  // by hand - otherwise a second trip through onboarding in the same page
-  // session would carry it over (e.g. the paywall's promo-code disclosure
-  // staying open from last time, or the old nickname still sitting in the
-  // input).
-  const nicknameInputEl = document.getElementById('nickname-input');
-  if (nicknameInputEl) nicknameInputEl.value = '';
+  // Paywall leftovers from an earlier pass through onboarding.
   const promoWrap = document.getElementById('promo-input-wrap');
   if (promoWrap) promoWrap.style.display = 'none';
   const promoInputEl = document.getElementById('promo-input');
   if (promoInputEl) promoInputEl.value = '';
-  const promoErrorEl = document.getElementById('promo-error');
-  if (promoErrorEl) promoErrorEl.style.display = 'none';
+  clearPromoError();
 
+  switchTab('today');
   showScreen('onboarding-screen');
   showObStep('ob-step-account');
 }
@@ -1765,6 +2656,7 @@ function getEarnRangeSlice(range) {
 
 function countUpTo(el, target, suffix, duration) {
   if (!el) return;
+  if (prefersReducedMotion()) { el.textContent = target + suffix; return; } // W6 (WV-19) - values appear final
   const start = performance.now();
   function step(now) {
     const elapsed = now - start;
@@ -1785,7 +2677,7 @@ function buildAnalyticsSVG(svgId, data, color, isScreenTime, range) {
   svg.innerHTML = '';
 
   const W = 320, H = 120;
-  const padL = 30, padR = 4, padT = 16, padB = 20; // fix 8 - room for left-side axis labels
+  const padL = 42, padR = 4, padT = 16, padB = 20; // fix 8 - left gutter fits the widest 11px label ("247m") plus its 6px gap, nothing clips (W4-r1)
 
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -1816,8 +2708,9 @@ function buildAnalyticsSVG(svgId, data, color, isScreenTime, range) {
     label.setAttribute('x', padL - 6);
     label.setAttribute('y', (y + 3).toFixed(1));
     label.setAttribute('text-anchor', 'end');
-    label.setAttribute('font-size', '9');
-    label.setAttribute('fill', 'rgba(240,244,255,0.4)');
+    label.setAttribute('font-size', '11');
+    label.setAttribute('font-weight', '600');
+    label.setAttribute('fill', 'rgba(240,244,255,0.55)');
     label.textContent = `${Math.round(val)}m`;
     svg.appendChild(label);
   });
@@ -2101,6 +2994,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   loadState();
 
+  // W6 (WV-19) - no pulsing Earn more button with Reduce Motion on
+  syncEarnPulse();
+  if (window.matchMedia) {
+    const rm = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (rm.addEventListener) rm.addEventListener('change', syncEarnPulse);
+  }
+
   // Check if already onboarded
   const onboarded = localStorage.getItem('balance_onboarded');
   // fix 2 - a mid-onboarding reload used to be binary on 'balance_onboarded'
@@ -2111,13 +3011,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (onboardingProgress) {
       state.selectedApps = onboardingProgress.selectedApps || [];
       state.dailyHours = onboardingProgress.dailyHours ?? state.dailyHours;
-      state.actualDailyHours = onboardingProgress.actualDailyHours ?? null;
       state.dailyAllowanceMinutes = onboardingProgress.dailyAllowanceMinutes ?? state.dailyAllowanceMinutes;
       state.earnRateMultiplier = onboardingProgress.earnRateMultiplier ?? state.earnRateMultiplier;
       state.expiresAtMidnight = onboardingProgress.expiresAtMidnight ?? state.expiresAtMidnight;
       state.userName = onboardingProgress.userName || '';
       state.paywallYears = onboardingProgress.paywallYears ?? null;
       state.account = onboardingProgress.account || state.account; // item 5
+      state.healthConnected = onboardingProgress.healthConnected ?? state.healthConnected; // WF-12
+      state.workoutGoalMin = clampWorkoutGoal(onboardingProgress.workoutGoalMin ?? state.workoutGoalMin); // WONB
+      screenTimeAnswered = !!onboardingProgress.screenTimeAnswered; // WONB
     } else {
       state.selectedApps = [];
     }
@@ -2128,11 +3030,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function hasAccount() {
     return !!(state.account && state.account.provider && state.userName);
   }
-
-  document.getElementById('welcome-cta').addEventListener('click', () => {
-    showScreen('onboarding-screen');
-    showObStep(hasAccount() ? 'ob-step-a' : 'ob-step-account');
-  });
 
   // ── SPLASH ──
   const splashScreen = document.getElementById('splash-screen');
@@ -2146,38 +3043,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Auto-advance splash
   setTimeout(() => {
-    if (onboarded) {
+    if (onboarded && localStorage.getItem(SIGNED_OUT_KEY) === 'true') {
+      // WF-02 - signed out, plan kept: straight to sign-in, nothing else.
+      showScreen('onboarding-screen');
+      showObStep('ob-step-account');
+    } else if (onboarded) {
       showScreen('app-shell');
-      renderEarnedList(); // fix 3 - rebuild from persisted state, not stale DOM
-      renderAppTiles();
-      buildWeekChart();
-      updateLeaderboard();
-      updateBonusCard();
-      renderEarnAnalytics('month');
-      updateRingDisplay();
-      updateDateLabel();
-      updateGreeting();
-      updateAllStreakDisplays();
-      updateStreakDuel();
-      updateShieldChip();
-      updateRingCaption();
-      setTextContent('earned-display', state.earnedMinutes);
-      setTextContent('earn-today-display', state.earnedMinutes);
-      restoreActiveWorkoutIfAny(); // item 3b - an in-progress workout stays evident across a reload
-      maybeAutoResolvePendingSession(); // item 2c - resolve a session whose time genuinely elapsed while away
-      if (pendingToastMessages.length) {
-        pendingToastMessages.forEach(msg => showToast(msg));
-        pendingToastMessages = [];
-      }
+      paintAppShell(); // fix 3 - rebuild from persisted state, not stale DOM
+    } else if (onboardingProgress && onboardingProgress.step === 'paywall') {
+      // WF-12 - a reload on the paywall comes back to the paywall; Health was
+      // already answered and is not asked again.
+      resumeOnboardingUI('ob-step-d');
+      currentObStep = 'paywall';
+      screenTimeAnswered = true;
+      updatePaywallPersonalLine();
+      showScreen('paywall-screen');
     } else if (onboardingProgress && onboardingProgress.step) {
-      // fix 2 - resume mid-onboarding exactly where the user left off.
+      // fix 2 - resume mid-onboarding exactly where the user left off. Steps
+      // after the Screen Time prompt count it as answered, so it never pops
+      // again; the Health prompt is only ever shown from the movement goal
+      // button, never on resume.
       showScreen('onboarding-screen');
       resumeOnboardingUI(onboardingProgress.step);
+      if (OB_STEP_ORDER.indexOf(onboardingProgress.step) >= OB_STEP_ORDER.indexOf('ob-step-b')) screenTimeAnswered = true;
       showObStep(onboardingProgress.step);
     } else {
-      showScreen('welcome-screen');
+      // WONB - no Welcome screen: sign in is the first screen after the
+      // splash. Someone who already has an account skips straight to the
+      // app picker, as before.
+      showScreen('onboarding-screen');
+      resumeOnboardingUI(hasAccount() ? 'ob-step-a' : 'ob-step-account');
+      if (hasAccount()) showObStep('ob-step-a');
+      else saveOnboardingProgress();
     }
   }, 1800);
+
+  // WF-03 - a page left open rolls over at midnight on its own.
+  setInterval(ensureCurrentDay, 60000);
+
+  // WF-28 - back chevrons in the onboarding headers.
+  document.querySelectorAll('.ob-back-btn').forEach(btn => btn.addEventListener('click', goBackObStep));
 
   // ── ONBOARDING ──
 
@@ -2204,6 +3109,17 @@ document.addEventListener('DOMContentLoaded', () => {
       provider,
       accountId: (state.account && state.account.accountId) || generateMockAccountId(),
     };
+    // WF-02 - signing back in after Sign out: the plan and history were kept
+    // on this device, so skip onboarding and its new-user resets entirely.
+    if (localStorage.getItem(SIGNED_OUT_KEY) === 'true'
+        && localStorage.getItem('balance_onboarded')
+        && localStorage.getItem('balance_state')) {
+      localStorage.removeItem(SIGNED_OUT_KEY);
+      saveState();
+      showScreen('app-shell');
+      paintAppShell();
+      return;
+    }
     saveOnboardingProgress();
     saveState();
     showObStep('ob-step-nickname');
@@ -2221,16 +3137,17 @@ document.addEventListener('DOMContentLoaded', () => {
         <p>Using Balance requires an account. Your Balance membership, including your daily allowance, earned time, and any paid subscription, is tied to the account you create here - it does not carry over if you create a different account.</p>
         <p>You can sign out of your account at any time from Settings. Signing out does not delete your data - your progress is waiting for you next time you sign back in.</p>
         <p>You can also permanently delete your account from Settings. Deleting your account removes your saved plan, streaks, and history from this device and cannot be undone.</p>
-        <p>Be respectful of the Friends feature - nudges, streaks, and shared totals are meant to be encouraging, not a way to monitor or pressure another person.</p>
-        <p>This is a demo build of Balance. Account sign-in in this demo is simulated and does not create a real account with Apple, Google, or Facebook.</p>
+        <p>Be respectful of the Friends feature - it is meant to encourage, not to monitor or pressure another person.</p>
+        <p>This is a demo build of Balance. Account sign-in in this demo is simulated and does not create a real account with Apple or Google.</p>
       `,
     },
     privacy: {
       title: 'Privacy Policy',
       html: `
-        <p>When you create a Balance account, we store basic account details (like your sign-in provider and the nickname you choose) and your in-app activity, such as workouts you log and the plan settings you choose.</p>
-        <p>We may use your account and in-app activity data to operate Balance, personalize your experience, and improve the product over time. This data may also be used for advertising.</p>
+        <p>When you create a Balance account, we store basic account details (like your sign-in provider and the nickname you choose) and your in-app activity, such as the plan settings you choose.</p>
+        <p>We may use your account and in-app activity data to operate Balance, personalize your experience, and improve the product over time. This data may also be used for advertising. Workout data from Apple Health is read-only, used only to calculate earned minutes, and is never shared, sold, or used for advertising.</p>
         <p>Your Screen Time data works differently. Screen Time usage is read and processed entirely on your device. It is never uploaded to our servers, never sold, and never used for advertising - it stays on your iPhone and is only used to power the features you see inside the app, like your daily allowance and usage charts.</p>
+        <p>Balance never sends your usage to anyone, including an accountability partner. A partner only sees the unlock code you choose to share with them.</p>
         <p>You can sign out or permanently delete your account at any time in Settings.</p>
         <p>This is a demo build. No real Screen Time or Health data is collected in this demo - the numbers you see are simulated.</p>
       `,
@@ -2242,25 +3159,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!doc) return;
     setTextContent('legal-sheet-title', doc.title);
     const body = document.getElementById('legal-scroll-body');
-    if (body) body.innerHTML = doc.html;
-    const overlay = document.getElementById('legal-overlay');
-    if (overlay) overlay.style.display = 'block';
-    const sheet = document.getElementById('legal-sheet');
-    if (sheet) {
-      sheet.classList.add('open');
-      sheet.style.transform = 'translateY(0)';
-    }
+    if (body) { body.innerHTML = doc.html; body.scrollTop = 0; }
+    openSheet('legal-sheet', 'legal-overlay', kind === 'terms' ? 'terms-link' : 'privacy-link');
   }
 
   function closeLegalSheet() {
-    const overlay = document.getElementById('legal-overlay');
-    if (overlay) overlay.style.display = 'none';
-    const sheet = document.getElementById('legal-sheet');
-    if (sheet) {
-      sheet.style.transform = 'translateY(100%)';
-      sheet.classList.remove('open');
-    }
+    closeSheet('legal-sheet', 'legal-overlay');
   }
+  registerSheet('legal-sheet', closeLegalSheet); // W6 (WV-22) - close button, Escape, drag
 
   document.getElementById('terms-link').addEventListener('click', () => openLegalSheet('terms'));
   document.getElementById('privacy-link').addEventListener('click', () => openLegalSheet('privacy'));
@@ -2275,6 +3181,13 @@ document.addEventListener('DOMContentLoaded', () => {
     nicknameInput.addEventListener('input', () => {
       nicknameInput.classList.remove('error');
       if (nicknameError) nicknameError.style.display = 'none';
+    });
+    // WF-17 - Return behaves like Continue, same as the promo field.
+    nicknameInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const next = document.getElementById('ob-nickname-next');
+      if (next) next.click();
     });
   }
 
@@ -2309,88 +3222,88 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         state.selectedApps = state.selectedApps.filter(a => a !== app);
       }
+      updateAppPickerNext(); // WC-28
       saveOnboardingProgress(); // fix 2 - checkpoint the pick itself, not just "Continue"
     });
   });
+  updateAppPickerNext();
+
+  // WC-28 - no silent default: Continue is disabled until an app is picked.
+  // WONB - like the iPhone app, the Screen Time prompt comes right after the
+  // apps are picked. Answered once: coming back here later goes straight on.
+  let stDenyCount = 0;
 
   document.getElementById('ob-a-next').addEventListener('click', () => {
-    if (state.selectedApps.length === 0) {
-      state.selectedApps = ['Instagram', 'TikTok', 'YouTube'];
-    }
+    if (state.selectedApps.length === 0) return;
     saveState();
-    showObStep('ob-step-b');
+    if (screenTimeAnswered) {
+      showObStep('ob-step-b');
+      return;
+    }
+    stDenyCount = 0;
+    const stLink = document.getElementById('st-continue-btn');
+    if (stLink) stLink.style.display = 'none';
+    const stPopup = document.getElementById('screen-time-popup');
+    if (stPopup) stPopup.style.display = 'flex';
   });
 
   // Step B: slider
   const slider = document.getElementById('time-slider');
   const sliderVal = document.getElementById('slider-value');
 
-  function updateSliderDisplay(val) {
-    const mins = parseInt(val);
+  function updateSliderLabel(mins) {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
     sliderVal.textContent = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+  }
+
+  function updateSliderDisplay(val) {
+    const mins = parseInt(val);
+    updateSliderLabel(mins);
     state.dailyHours = mins / 60;
   }
 
   slider.addEventListener('input', () => { updateSliderDisplay(slider.value); saveOnboardingProgress(); });
-  updateSliderDisplay(slider.value);
+  // W5 - the saved guess sets the slider on load, never the other way round,
+  // so a reload cannot reset the user's guess to the slider's default.
+  const savedGuessMins = Math.round(Number(state.dailyHours) * 60);
+  if (Number.isFinite(savedGuessMins) && savedGuessMins > 0) {
+    slider.value = String(savedGuessMins);
+  } else {
+    state.dailyHours = parseInt(slider.value) / 60;
+  }
+  updateSliderLabel(parseInt(slider.value));
 
+  // WONB - the Screen Time prompt is behind us by now: straight to the reveal.
   document.getElementById('ob-b-next').addEventListener('click', () => {
-    const stPopup = document.getElementById('screen-time-popup');
-    if (stPopup) stPopup.style.display = 'flex';
+    showObStep('ob-step-c');
+    initOnboardingStepC();
   });
 
-  // Screen Time popup
-  document.getElementById('st-allow-btn').addEventListener('click', () => {
+  // Screen Time popup. The demo cannot read past usage, so either answer goes
+  // on to the hours guess; the reveal after it is built only from that guess.
+  function closeScreenTimePopup() {
     const stPopup = document.getElementById('screen-time-popup');
     if (stPopup) stPopup.style.display = 'none';
+  }
 
-    // Show loading toast
-    showToast('Reading your last 30 days…');
+  function advancePastScreenTime() {
+    closeScreenTimePopup();
+    screenTimeAnswered = true; // set first, so the step change saves it
+    showObStep('ob-step-b');
+  }
 
-    setTimeout(() => {
-      // Compute actual = guess * 1.27, rounded to nearest 5 min
-      const guessMins = Math.round(state.dailyHours * 60);
-      const actualMins = Math.round((guessMins * 1.27) / 5) * 5;
-      state.actualDailyHours = actualMins / 60;
+  document.getElementById('st-allow-btn').addEventListener('click', advancePastScreenTime);
 
-      // Format guess
-      const gh = Math.floor(guessMins / 60);
-      const gm = guessMins % 60;
-      const guessStr = gh > 0 ? (gm > 0 ? `${gh}h ${gm}m` : `${gh}h`) : `${gm}m`;
-
-      // Format actual
-      const ah = Math.floor(actualMins / 60);
-      const am = actualMins % 60;
-      const actualStr = ah > 0 ? (am > 0 ? `${ah}h ${am}m` : `${ah}h`) : `${am}m`;
-
-      setTextContent('reveal-guess-text', guessStr);
-      setTextContent('reveal-actual-value', actualStr);
-
-      const pill = document.getElementById('reveal-delta-pill');
-      if (pill) {
-        if (actualMins > guessMins) {
-          pill.textContent = '↑ 27% more than you thought';
-          pill.className = 'reveal-delta-pill red';
-        } else {
-          pill.textContent = '↓ Less than you thought';
-          pill.className = 'reveal-delta-pill green';
-        }
-      }
-
-      showObStep('ob-step-b2');
-    }, 1500);
-  });
-
-  // item 4 - Screen Time is now mandatory: declining never advances past this
-  // popup. Instead it explains why, in place, and leaves Allow as the only
-  // way forward - no dead end, just an honest ask.
-  const ST_DESC_DEFAULT = 'Balance reads your Screen Time to show your real usage. Your data stays on your iPhone.';
-  const ST_DESC_REQUIRED = "Balance can't work without this - it's how we count your time. Tap Allow to continue.";
+  // Declining explains why, in place, and asks again. After the second
+  // Don't Allow a quiet "Continue without it" link appears, so a permission
+  // never stands between the user and the rest of setup.
+  const ST_DESC_DEFAULT = "Balance uses Screen Time to measure time in the apps you pick and to shield them once your allowance runs out. This stays on your iPhone - it's never uploaded anywhere.";
+  const ST_DESC_REQUIRED = "Measuring and limiting your app time is the product - without Screen Time there's nothing for Balance to do. Your data never leaves this iPhone.";
   let stDescRevertTimer = null;
 
   document.getElementById('st-deny-btn').addEventListener('click', () => {
+    stDenyCount++;
     const desc = document.getElementById('st-popup-desc');
     if (desc) {
       desc.textContent = ST_DESC_REQUIRED;
@@ -2401,21 +3314,52 @@ document.addEventListener('DOMContentLoaded', () => {
         desc.style.color = '';
       }, 4000);
     }
+    if (stDenyCount >= 2) {
+      const stLink = document.getElementById('st-continue-btn');
+      if (stLink) stLink.style.display = 'block';
+    }
   });
 
-  // ob-step-b2 continue
-  document.getElementById('ob-b2-next').addEventListener('click', () => {
-    showObStep('ob-step-c');
-    initOnboardingStepC();
-  });
+  document.getElementById('st-continue-btn').addEventListener('click', advancePastScreenTime);
 
   // Step C: shock screen - continue
   document.getElementById('ob-c-next').addEventListener('click', () => {
     showObStep('ob-step-d');
   });
 
-  // Step D: let's do this
+  // Step D: let's do this - on to the movement goal (WONB)
   document.getElementById('ob-d-next').addEventListener('click', () => {
+    renderWorkoutGoal(); // the earn line follows the rate just chosen
+    showObStep('ob-step-e');
+  });
+
+  // Step E (WONB): daily movement goal. Minus / plus move in 5-min steps and
+  // stop at 10 and 120; a chip jumps to its value. "Set my goal" saves it and
+  // opens the Health look-alike, like the iPhone app.
+  let healthDenyCount = 0;
+
+  document.getElementById('goal-dec').addEventListener('click', () => {
+    if (state.workoutGoalMin > WORKOUT_GOAL_MIN) setWorkoutGoal(state.workoutGoalMin - WORKOUT_GOAL_STEP);
+  });
+  document.getElementById('goal-inc').addEventListener('click', () => {
+    if (state.workoutGoalMin < WORKOUT_GOAL_MAX) setWorkoutGoal(state.workoutGoalMin + WORKOUT_GOAL_STEP);
+  });
+  document.querySelectorAll('.goal-chip').forEach(chip => {
+    chip.addEventListener('click', () => setWorkoutGoal(Number(chip.dataset.goal)));
+  });
+  renderWorkoutGoal();
+
+  document.getElementById('ob-e-next').addEventListener('click', () => {
+    setWorkoutGoal(state.workoutGoalMin);
+    saveState();
+    if (state.healthConnected === true || state.healthConnected === false) {
+      // Already answered on this device: never asked twice.
+      advanceToPaywall();
+      return;
+    }
+    healthDenyCount = 0;
+    const healthLink = document.getElementById('health-continue-btn');
+    if (healthLink) healthLink.style.display = 'none';
     const healthPopup = document.getElementById('health-popup');
     if (healthPopup) healthPopup.style.display = 'flex';
   });
@@ -2437,6 +3381,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('#earn-rate-ctrl .earn-rate-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       state.earnRateMultiplier = parseFloat(btn.dataset.rate);
+      updateEarnRateNote();
+      renderWorkoutGoal(); // WONB - the goal's earn line follows the rate
       saveOnboardingProgress(); // fix 2
     });
   });
@@ -2449,36 +3395,45 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // B4 - personalized line on the paywall, using the same numbers from onboarding.
+  // B4 - personalized line on the paywall, from the same guess-based helpers
+  // as the shock step, so the two screens always agree.
   function updatePaywallPersonalLine() {
     const el = document.getElementById('paywall-personal-line');
-    if (!el || state.paywallYears == null) return;
-    const hours = state.actualDailyHours !== null ? state.actualDailyHours : state.dailyHours;
-    const h = Math.floor(hours);
-    const m = Math.round((hours - h) * 60);
-    const timeLabel = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
-    el.textContent = `Your ${timeLabel}/day adds up to ${state.paywallYears.toFixed(1)} years of your remaining life.`;
+    if (!el) return;
+    const label = guessLabel(roundedGuessMinutes());
+    const years = guessYears().toFixed(1);
+    el.textContent = `If ${label} a day is about right, that's ${years} years of your remaining waking life.`;
   }
 
-  // item 4 - Health is now mandatory too, and (since it's guaranteed) there's
-  // no separate Settings entry point anymore - this popup only ever opens
-  // from onboarding, so Allow always advances to the paywall.
-  document.getElementById('health-allow-btn').addEventListener('click', () => {
+  // Health popup. Allow connects Health and moves on to the paywall. Nothing
+  // claims a sync happened, because none did.
+  function closeHealthPopup() {
     const healthPopup = document.getElementById('health-popup');
     if (healthPopup) healthPopup.style.display = 'none';
-    state.healthConnected = true;
-    showToast('✓ Synced with Apple Health');
+  }
+
+  function advanceToPaywall() {
     updatePaywallPersonalLine();
-    setTimeout(() => showScreen('paywall-screen'), 1500);
+    currentObStep = 'paywall';
+    saveOnboardingProgress(); // WF-12 - a reload here resumes on the paywall with Health already answered
+    setTimeout(() => showScreen('paywall-screen'), 600);
+  }
+
+  document.getElementById('health-allow-btn').addEventListener('click', () => {
+    closeHealthPopup();
+    state.healthConnected = true;
+    advanceToPaywall();
   });
 
-  // item 4 - declining explains why, in place, and never advances - Allow is
-  // the only way forward, matching the Screen Time popup's behavior.
+  // Declining explains what is lost, in place, and asks again. After the
+  // second Don't Allow a quiet "Continue without it" link appears; the
+  // paywall is never gated behind a permission.
   const HEALTH_DESC_DEFAULT = 'Balance reads your workouts so every active minute becomes scroll time.';
-  const HEALTH_DESC_REQUIRED = "Balance can't work without this - it's how we count your workouts. Tap Allow to continue.";
+  const HEALTH_DESC_REQUIRED = "Without Health access, workouts from your Watch and other apps can't turn into scroll time - earning would only work with Balance's own timer.";
   let healthDescRevertTimer = null;
 
   document.getElementById('health-deny-btn').addEventListener('click', () => {
+    healthDenyCount++;
     const desc = document.getElementById('health-popup-desc');
     if (desc) {
       desc.textContent = HEALTH_DESC_REQUIRED;
@@ -2489,6 +3444,16 @@ document.addEventListener('DOMContentLoaded', () => {
         desc.style.color = '';
       }, 4000);
     }
+    if (healthDenyCount >= 2) {
+      const healthLink = document.getElementById('health-continue-btn');
+      if (healthLink) healthLink.style.display = 'block';
+    }
+  });
+
+  document.getElementById('health-continue-btn').addEventListener('click', () => {
+    closeHealthPopup();
+    state.healthConnected = false;
+    advanceToPaywall();
   });
 
   // ── PAYWALL ──
@@ -2503,8 +3468,8 @@ document.addEventListener('DOMContentLoaded', () => {
     d.setDate(d.getDate() + 7);
     const dateStr = `${months[d.getMonth()]} ${d.getDate()}`;
     const yearlySelected = !!document.querySelector('#plan-yearly.selected');
-    const priceText = yearlySelected ? 'then $39.99/yr' : 'then $7.99/mo';
-    el.textContent = `Free until ${dateStr} - ${priceText}. We'll remind you the day before. Cancel anytime in Settings.`;
+    const price = yearlySelected ? '$39.99/yr' : '$7.99/mo';
+    el.textContent = `7 days free (until ${dateStr}), then ${price} unless you cancel at least a day before the trial ends. Manage or cancel anytime in Settings.`;
   }
 
   document.querySelectorAll('.price-card').forEach(card => {
@@ -2531,6 +3496,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('promo-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handlePromoCode();
   });
+  document.getElementById('promo-input').addEventListener('input', clearPromoError); // WF-18
 
   document.getElementById('restore-link').addEventListener('click', () => {
     showToast('No purchases found.');
@@ -2605,8 +3571,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // A12 - keep the segmented-control indicator aligned across viewport resizes.
+  // W6 repair - the hero number is re-fitted too (the ring is 176px on a short phone).
   window.addEventListener('resize', () => {
     if (state.currentTab === 'earn') positionSegIndicator(currentEarnRange);
+    fitRingCountdown();
   });
 
   // item 3b - tap a workout tile to start its live timer immediately
@@ -2636,44 +3604,49 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ── FRIENDS TAB (fix 1, 2, 12) ──
-  document.getElementById('nudge-btn').addEventListener('click', handleNudge);
-  document.getElementById('send-time-btn').addEventListener('click', handleSendTime);
-
-  // Partner surprise gift - +5 min flat (NOT multiplied by earn rate).
-  // Accepted state is session-only on purpose: it may reappear next session.
-  // The card itself only appears after a nudge (fix 1) - see showPartnerGift().
-  document.getElementById('gift-accept-btn').addEventListener('click', () => {
-    addEarnedMinutes(5);
-    launchConfetti();
-    showToast('+5 min from Sarah 💚');
-    const card = document.getElementById('partner-gift-card');
-    if (card) {
-      card.classList.add('accepted');
-      card.innerHTML = `
-        <div class="gift-row">
-          <span class="gift-icon">🎁</span>
-          <div class="gift-text">
-            <div class="gift-title">Accepted ✓</div>
-          </div>
-        </div>
-      `;
-    }
-  });
-
-  // B5(c) - invite code chip: real clipboard copy, with a graceful fallback.
-  document.getElementById('share-code-btn').addEventListener('click', () => {
+  // ── FRIENDS TAB (W3) ──
+  // Invite: the system share sheet when there is one, otherwise a clipboard
+  // copy. If the sheet fails for any reason other than the user closing it
+  // (AbortError), the copy runs instead. The toast only fires after the copy
+  // succeeded, and no promo code is ever printed or shared.
+  const copyInvite = () => {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText('FRIENDS')
-        .then(() => showToast('Invite code FRIENDS copied 🎉'))
-        .catch(() => showToast('Invite code copied: FRIENDS 🎉'));
+      navigator.clipboard.writeText(INVITE_TEXT)
+        .then(() => showToast('Invite copied. Paste it to a friend.'))
+        .catch(() => showToast("Couldn't copy the invite. Try again."));
     } else {
-      showToast('Invite code copied: FRIENDS 🎉');
+      showToast("Couldn't copy the invite. Try again.");
     }
+  };
+  document.getElementById('share-code-btn').addEventListener('click', () => {
+    if (navigator.share) {
+      navigator.share({ text: INVITE_TEXT }).catch((err) => {
+        if (err && err.name === 'AbortError') return; // user closed the sheet - nothing to report
+        copyInvite();
+      });
+      return;
+    }
+    copyInvite();
   });
 
   // ── SETTINGS SHEET ──
   document.getElementById('settings-overlay').addEventListener('click', closeSettings);
+  // W6 (WV-22, WF-11) - close button, Escape and drag-to-dismiss on every sheet
+  registerSheet('settings-sheet', closeSettings);
+  registerSheet('other-sheet', closeOtherLibrary);
+  registerSheet('apps-sheet', closeAppsSheet);
+  // W5 - apps sheet opened from the "Add apps" tile on Today
+  document.getElementById('apps-overlay').addEventListener('click', closeAppsSheet);
+  document.getElementById('apps-sheet-done').addEventListener('click', closeAppsSheet);
+  // W5 - the off-state shield pill (no app picked) opens the same picker.
+  const shieldPill = document.getElementById('shield-status-pill');
+  if (shieldPill) {
+    shieldPill.addEventListener('click', () => { if (!isTrackingApps()) openAppsSheet(); });
+    shieldPill.addEventListener('keydown', (e) => {
+      if (isTrackingApps()) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAppsSheet(); }
+    });
+  }
 
   // item 5 - Account section: nickname edit, sign out, delete account.
   const settingsNicknameInput = document.getElementById('settings-nickname-input');
@@ -2682,7 +3655,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const nickname = validateNickname(settingsNicknameInput.value);
       if (!nickname) {
         settingsNicknameInput.value = state.userName || '';
-        showToast('Nickname must be 2-20 characters');
+        showToast('Enter a nickname, 2 to 20 characters.');
         return;
       }
       state.userName = nickname;
@@ -2695,8 +3668,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('settings-signout-btn').addEventListener('click', () => {
     showConfirm(
       'Sign out?',
-      "You'll need to sign in again next time. Your progress stays saved.",
-      signOutAccount
+      "Your plan and history stay on this device.",
+      signOutAccount,
+      'Sign Out'
     );
   });
 
@@ -2704,7 +3678,8 @@ document.addEventListener('DOMContentLoaded', () => {
     showConfirm(
       'Delete account?',
       "This permanently deletes your saved plan, streaks, and history from this device. This can't be undone.",
-      deleteAccount
+      deleteAccount,
+      'Delete'
     );
   });
 
@@ -2717,11 +3692,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // A1 - steppers write straight to state; openSettings() re-syncs the display.
   document.getElementById('allow-dec').addEventListener('click', () => {
-    if (state.dailyAllowanceMinutes > 15) applyAllowanceChange(state.dailyAllowanceMinutes - 5);
+    if (state.dailyAllowanceMinutes > ALLOWANCE_MIN) applyAllowanceChange(clampAllowance(state.dailyAllowanceMinutes - ALLOWANCE_STEP));
   });
   document.getElementById('allow-inc').addEventListener('click', () => {
-    if (state.dailyAllowanceMinutes < 120) applyAllowanceChange(state.dailyAllowanceMinutes + 5);
+    if (state.dailyAllowanceMinutes < ALLOWANCE_MAX) applyAllowanceChange(clampAllowance(state.dailyAllowanceMinutes + ALLOWANCE_STEP));
   });
+  // WONB - daily movement goal in Settings: same steps and range as setup.
+  document.getElementById('goal-set-dec').addEventListener('click', () => {
+    if (state.workoutGoalMin > WORKOUT_GOAL_MIN) setWorkoutGoal(state.workoutGoalMin - WORKOUT_GOAL_STEP);
+  });
+  document.getElementById('goal-set-inc').addEventListener('click', () => {
+    if (state.workoutGoalMin < WORKOUT_GOAL_MAX) setWorkoutGoal(state.workoutGoalMin + WORKOUT_GOAL_STEP);
+  });
+  // WF-23 - expiry toggle in Settings, same state as the onboarding toggle.
+  const settingsExpiresToggle = document.getElementById('settings-expires-toggle');
+  if (settingsExpiresToggle) {
+    settingsExpiresToggle.addEventListener('change', () => {
+      state.expiresAtMidnight = settingsExpiresToggle.checked;
+      updateRingCaption();
+      saveState();
+    });
+  }
   // fix 6 - single earn-rate control: same segmented buttons as onboarding,
   // reused inside Settings. Writes state and persists; the live workout
   // timer (item 3b) picks up the new multiplier on its next tick.
@@ -2730,6 +3721,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('#settings-earn-rate-ctrl .earn-rate-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       state.earnRateMultiplier = parseFloat(btn.dataset.rate);
+      updateEarnRateNote();
+      renderWorkoutGoal(); // WONB
       saveState();
     });
   });
@@ -2744,7 +3737,11 @@ document.addEventListener('DOMContentLoaded', () => {
     showShareScreen();
   });
 
-  document.getElementById('replay-demo-btn').addEventListener('click', replayDemo);
+  // W6 (WV-22) - Replay wipes everything on this device, so it asks first,
+  // through the same confirm dialog as Delete account.
+  document.getElementById('replay-demo-btn').addEventListener('click', () => {
+    showConfirm('Replay the demo?', 'This clears everything on this device.', replayDemo, 'Replay');
+  });
 
   // ── LOCK SCREEN ──
   document.getElementById('lockscreen-screen').addEventListener('click', hideLockScreen);
@@ -2774,109 +3771,42 @@ document.addEventListener('DOMContentLoaded', () => {
 // foreground cycle on a phone.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  if (ensureCurrentDay()) return; // WF-03 - the rollover repainted everything already
   maybeAutoResolvePendingSession();
   updateRingDisplay();
   if (state.currentTab === 'today') refreshTodayNumbers();
 });
 
-// ===== FRIENDS TAB - PARTNER (fix 1, 2, 12) =====
-// Session-only (not persisted) by design, same as the gift card itself -
-// Sarah's state is a "beat" that can replay next session.
-const SARAH_STREAK_DAYS = 9;
-let sarahMinutesLeft = 14;
-let partnerNudgeState = 'idle'; // idle -> nudged -> moving -> gifted
-let sarahUnlockedToday = false;
+// ===== FRIENDS TAB - PARTNER (W3) =====
+// Sarah is a labeled sample partner. She never sends anything on her own:
+// the only thing she does is answer an unlock request the user starts from
+// the Time's up screen. Her card reads the persisted counter, so it is right
+// after a reload and clears with the daily reset.
+const INVITE_TEXT = "I'm using Balance to earn my scroll time with real workouts. Get on it so we can hold each other to it - it's in beta on TestFlight, ask me for an invite.";
 
-// fix 1(b), 12 - composes Sarah's one status line from whatever's true right
-// now: idle/moving, plus an "unlocked you today" suffix if she approved an
-// intercept ask this session.
 function renderSarahStatus() {
   const el = document.getElementById('partner-status');
   if (!el) return;
-  let text = (partnerNudgeState === 'moving' || partnerNudgeState === 'gifted')
-    ? '🚶 Moving now - your nudge worked'
-    : `🟢 ${sarahMinutesLeft} min left · 🔥 ${SARAH_STREAK_DAYS} days`;
-  if (sarahUnlockedToday) text += ' · 🔓 unlocked you today';
-  el.textContent = text;
-}
-
-// fix 2 - streak duel is computed from real numbers: your actual streak vs
-// Sarah's fixed 9-day streak (matches her status line). Bar widths are
-// proportional, so a Day-1 user honestly sees 1 vs 9.
-function updateStreakDuel() {
-  const you = state.streakDays;
-  const total = you + SARAH_STREAK_DAYS;
-  const youPct = total > 0 ? (you / total) * 100 : 50;
-  const youFill = document.querySelector('.you-fill');
-  const sarahFill = document.querySelector('.sarah-fill');
-  if (youFill) youFill.style.width = `${youPct.toFixed(1)}%`;
-  if (sarahFill) sarahFill.style.width = `${(100 - youPct).toFixed(1)}%`;
-  const youCount = document.querySelector('.duel-side.you .duel-count');
-  const sarahCount = document.querySelector('.duel-side.sarah .duel-count');
-  if (youCount) youCount.textContent = you;
-  if (sarahCount) sarahCount.textContent = SARAH_STREAK_DAYS;
-}
-
-// fix 1(b) - nudge → toast → (3s) Sarah starts moving → (3s) she gifts you
-// +5 back. Once per session; a repeat nudge just acknowledges she's moving.
-function handleNudge() {
-  if (partnerNudgeState !== 'idle') {
-    showToast("Sarah's already moving 🚶");
-    return;
-  }
-  partnerNudgeState = 'nudged';
-  showToast('Nudge sent 👋');
-  setTimeout(() => {
-    partnerNudgeState = 'moving';
-    renderSarahStatus();
-    setTimeout(() => {
-      partnerNudgeState = 'gifted';
-      showPartnerGift();
-    }, 3000);
-  }, 3000);
-}
-
-function showPartnerGift() {
-  const card = document.getElementById('partner-gift-card');
-  if (!card) return;
-  setTextContent('gift-title', 'Sarah sent you +5 min');
-  setTextContent('gift-sub', 'right back at you 💪');
-  card.classList.remove('accepted');
-  card.style.display = 'block';
-  card.classList.remove('gift-entrance');
-  void card.offsetWidth; // reflow so the entrance animation replays cleanly
-  card.classList.add('gift-entrance');
-}
-
-// fix 1(c) - reciprocal: sending Sarah time costs YOUR real remaining time.
-function handleSendTime() {
-  if (state.remainingSeconds < 5 * 60) {
-    showToast('Not enough time left to gift');
-    return;
-  }
-  state.remainingSeconds = Math.max(0, state.remainingSeconds - 5 * 60);
-  sarahMinutesLeft += 5;
-  renderSarahStatus();
-  updateRingDisplay();
-  refreshTodayNumbers();
-  showToast('You sent Sarah 5 min 💚');
-  saveState();
+  el.textContent = state.unlockMinutesToday > 0
+    ? `Sarah unlocked ${state.unlockMinutesToday} min for you today`
+    : 'Replies when you ask for an unlock';
 }
 
 // ===== INTERCEPT EXERCISE FLOW =====
 function startInterceptExercise(mins, exercise, baseMins) {
+  const gen = interceptGen; // WF-07 - closing the intercept cancels the credit below
   const options = document.getElementById('intercept-options');
   const tracking = document.getElementById('tracking-state');
   const success = document.getElementById('intercept-success');
-  const bottom = document.getElementById('intercept-bottom');
   const optionsLabel = document.querySelector('.intercept-options-label');
 
   if (options) options.style.display = 'none';
   if (optionsLabel) optionsLabel.style.display = 'none';
   if (tracking) tracking.style.display = 'block';
-  if (bottom) bottom.style.display = 'none';
+  setInterceptSlot('none');
 
   setTimeout(() => {
+    if (gen !== interceptGen) return;
     if (tracking) tracking.style.display = 'none';
     if (success) {
       success.style.display = 'block';
@@ -2889,19 +3819,18 @@ function startInterceptExercise(mins, exercise, baseMins) {
     // Add minutes
     addEarnedMinutes(mins);
     const label = EXERCISE_LABELS[exercise] || 'Workout';
-    state.lastWorkout = { name: label, mins, at: Date.now() }; // B6
+    state.lastWorkout = { name: label, mins, at: Date.now(), done: true }; // B6, WC-18
 
-    // sweep (fix 13) - intercept exercises now count toward Earned Today and
-    // steps too, same as Quick-log workouts, so they can't disagree.
+    // sweep (fix 13) - intercept exercises count toward Earned Today, same
+    // as Quick-log workouts, so they can't disagree.
     state.worktimeLoggedToday.push({ label, mins: baseMins, earned: mins });
     renderEarnedList();
-    state.stepsToday += stepsForWorkout(label, baseMins);
-    updateBonusCard();
 
     saveState();
     launchConfetti();
 
     setTimeout(() => {
+      if (gen !== interceptGen) return;
       hideIntercept();
       const expiryText = state.expiresAtMidnight ? 'resets at midnight' : 'rolls over tomorrow';
       showToast(`Nice work! +${mins} min added, ${expiryText}.`);
@@ -2909,7 +3838,7 @@ function startInterceptExercise(mins, exercise, baseMins) {
       if (options) options.style.display = 'flex';
       if (optionsLabel) optionsLabel.style.display = 'block';
       if (success) success.style.display = 'none';
-      if (bottom) bottom.style.display = 'flex';
+      setInterceptSlot('ask');
     }, 2000);
   }, 2000);
 }
@@ -2940,26 +3869,66 @@ function hideLockScreen() {
 
 // ===== SHARE SCREEN (B5) =====
 
-// (a) Share card numbers come straight from state - no invented figures (fix 4).
+// W5 (WF-13, WV-06, WV-07, WC-17) - the card is built from today's real
+// state only: minutes earned today, workouts logged today, the streak. No app
+// name (the demo never knows a per-app split) and no sample week. The ring on
+// screen and the exported PNG share one fraction: minutes earned today as a
+// share of today's whole budget.
 function getShareStats() {
-  const { earned } = getWeekSeries();
-  const totalEarnedMins = earned.reduce((a, b) => a + b, 0);
-  const hours = (totalEarnedMins / 60);
-  const firstApp = state.selectedApps[0] || 'TikTok';
+  const minutes = Math.max(0, Math.round(state.earnedMinutes));
   const workouts = state.worktimeLoggedToday.length;
-  return { hours, firstApp, workouts, streak: state.streakDays };
+  const total = dayTotalMinutes();
+  const pct = total > 0 ? Math.min(1, Math.max(0, minutes / total)) : 0;
+  const arcPct = Math.max(0.02, pct); // a hairline arc even on an empty day, same on both surfaces
+  return { minutes, workouts, streak: state.streakDays, pct, arcPct };
+}
+
+// WFIX item 2 - under 90 minutes in whole minutes ("61 min", never "1.0
+// hours"); from 90 on in hours with at most one decimal and no trailing ".0"
+// ("1.5 hours", "2 hours", "2.5 hours").
+function shareDurationLabel(mins) {
+  if (mins < 90) return `${mins} min`;
+  const hours = Math.round(mins / 6) / 10;
+  const label = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
+  return `${label} hours`;
+}
+
+function shareWorkoutsLabel(n) {
+  return `${n} ${n === 1 ? 'workout' : 'workouts'}`;
+}
+
+// Plain-text headline shared by the PNG and the share sheet. With no workout
+// yet today the card falls back to the streak line (WV-07). WFIX item 2 - a
+// streak of 0 never prints "0-day": the card uses a neutral line with no
+// number in it (with or without a workout today), and the streak row is left
+// off the card and the image.
+const SHARE_NEUTRAL_HEADLINE = "I'm trading scroll time for movement";
+function shareHeadlineText() {
+  const { minutes, workouts, streak } = getShareStats();
+  if (streak <= 0) return SHARE_NEUTRAL_HEADLINE;
+  if (workouts > 0) return `Today I earned ${shareDurationLabel(minutes)} of scroll time with ${shareWorkoutsLabel(workouts)}`;
+  return `I'm on a ${streak}-day streak of scrolling less`;
 }
 
 function updateShareCard() {
-  const { hours, firstApp, workouts, streak } = getShareStats();
-  const hoursStr = hours.toFixed(1);
+  const { minutes, workouts, streak, arcPct } = getShareStats();
   const headline = document.getElementById('share-headline');
   if (headline) {
-    headline.innerHTML = workouts === 0
-      ? `I'm on a <b>${streak}-day streak</b><br>of scrolling less`
-      : `This week I traded<br><span class="share-highlight">${hoursStr} hours of ${firstApp}</span><br>for ${workouts} workouts`;
+    if (streak <= 0) {
+      headline.textContent = SHARE_NEUTRAL_HEADLINE;
+    } else if (workouts > 0) {
+      headline.innerHTML = `Today I earned <span class="share-highlight">${shareDurationLabel(minutes)}</span> of scroll time with ${shareWorkoutsLabel(workouts)}`;
+    } else {
+      headline.innerHTML = `I'm on a <b>${streak}-day streak</b><br>of scrolling less`;
+    }
   }
-  setTextContent('share-streak', `🔥 ${streak}-day streak`);
+  const shareStreak = document.getElementById('share-streak');
+  if (shareStreak) {
+    shareStreak.innerHTML = streak > 0 ? `${iconHTML('i-flame', 'icon-20')}${streak}-day streak` : '';
+    shareStreak.style.display = streak > 0 ? '' : 'none';
+  }
+  const arc = document.getElementById('share-ring-arc');
+  if (arc) arc.setAttribute('stroke-dashoffset', (264 * (1 - arcPct)).toFixed(1));
 }
 
 function showShareScreen() {
@@ -3001,7 +3970,7 @@ function wrapCenteredText(ctx, text, x, y, maxWidth, lineHeight) {
 }
 
 function renderShareCanvas() {
-  const { hours, firstApp, workouts, streak } = getShareStats();
+  const { streak, arcPct } = getShareStats();
   const W = 600, H = 750;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
@@ -3016,8 +3985,12 @@ function renderShareCanvas() {
   roundRectPath(ctx, 0, 0, W, H, 40);
   ctx.fill();
 
+  // WFIX repair - with no streak line (streak 0) the ring and the headline
+  // move down together, so the image has no empty band above the footer.
+  const dy = streak > 0 ? 0 : 90;
+
   // Ring arc (approximates .share-ring)
-  const cx = W / 2, cy = 190, r = 90;
+  const cx = W / 2, cy = 190 + dy, r = 90;
   ctx.lineWidth = 16;
   ctx.strokeStyle = 'rgba(255,255,255,0.12)';
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
@@ -3028,25 +4001,22 @@ function renderShareCanvas() {
   ringGrad.addColorStop(1, '#2DD4BF');
   ctx.strokeStyle = ringGrad;
   ctx.lineCap = 'round';
-  const pct = state.totalSeconds > 0 ? (state.remainingSeconds / state.totalSeconds) : 0.75;
   ctx.beginPath();
-  ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.max(0.02, pct) * Math.PI * 2);
+  ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + arcPct * Math.PI * 2);
   ctx.stroke();
 
   ctx.textAlign = 'center';
 
-  // Headline (fix 4 - same real-or-fallback logic as the on-screen card)
+  // Headline - the same text as the on-screen card, built by shareHeadlineText()
   ctx.fillStyle = '#fff';
   ctx.font = '700 30px -apple-system, BlinkMacSystemFont, sans-serif';
-  const headlineText = workouts === 0
-    ? `I'm on a ${streak}-day streak of scrolling less`
-    : `This week I traded ${hours.toFixed(1)} hours of ${firstApp} for ${workouts} workouts`;
-  wrapCenteredText(ctx, headlineText, cx, 360, 480, 40);
+  wrapCenteredText(ctx, shareHeadlineText(), cx, 360 + dy, 480, 40);
 
-  // Streak
+  // Streak (no emoji glyphs on the exported image; the SAMPLE / roadmap
+  // caption lives outside the card and is never drawn here)
   ctx.font = '700 28px -apple-system, BlinkMacSystemFont, sans-serif';
   ctx.fillStyle = '#F59E0B';
-  ctx.fillText(`🔥 ${streak}-day streak`, cx, 560);
+  if (streak > 0) ctx.fillText(`${streak}-day streak`, cx, 560); // WFIX item 2 - never "0-day streak"
 
   // Footer
   ctx.font = '400 16px -apple-system, BlinkMacSystemFont, sans-serif';
@@ -3057,23 +4027,33 @@ function renderShareCanvas() {
 }
 
 // (b)+(d) Save image - real PNG export, with native share when available.
-// Wrapped defensively so it can never throw on a desktop browser.
+// WC-19 - "Saved!" only after the download click actually ran (or "Shared!"
+// after the share sheet resolved). Every failure path says so instead, and
+// points to Copy image only when that button is actually on screen.
+function shareFailureMessage() {
+  const copyBtn = document.getElementById('share-copy-btn');
+  const copyVisible = !!(copyBtn && copyBtn.style.display !== 'none' && copyBtn.offsetParent !== null);
+  return "Couldn't save image" + (copyVisible ? ' - try Copy image' : '');
+}
+
 function saveShareImage() {
   try {
     const canvas = renderShareCanvas();
     canvas.toBlob((blob) => {
-      if (!blob) { showToast('Saved!'); return; }
+      if (!blob) { showToast(shareFailureMessage()); return; }
 
       if (navigator.share && typeof navigator.canShare === 'function') {
         try {
-          const file = new File([blob], 'balance-week.png', { type: 'image/png' });
+          const file = new File([blob], 'balance-today.png', { type: 'image/png' });
           if (navigator.canShare({ files: [file] })) {
-            const { streak } = getShareStats();
             navigator.share({
               files: [file],
               title: 'Balance',
-              text: `🔥 ${streak}-day streak - traded scroll time for workouts.`,
-            }).then(() => showToast('Shared!')).catch(() => { /* user cancelled - no-op */ });
+              text: `${shareHeadlineText()} - Balance`,
+            }).then(() => showToast('Shared!')).catch((err) => {
+              if (err && err.name === 'AbortError') return; // user closed the sheet - nothing to report
+              showToast(shareFailureMessage());
+            });
             return;
           }
         } catch (e) { /* fall through to download */ }
@@ -3083,16 +4063,18 @@ function saveShareImage() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'balance-week.png';
+        a.download = 'balance-today.png';
         document.body.appendChild(a);
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
-      } catch (e) { /* ignore - toast still confirms for the demo */ }
-      showToast('Saved!');
+        showToast('Saved!');
+      } catch (e) {
+        showToast(shareFailureMessage());
+      }
     }, 'image/png');
   } catch (e) {
-    showToast('Saved!');
+    showToast(shareFailureMessage());
   }
 }
 

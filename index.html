@@ -7,13 +7,61 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Balance - Move to Scroll</title>
-  <link rel="stylesheet" href="style.css?v=12" />
+  <link rel="stylesheet" href="style.css?v=18" />
 
   <!-- SVG Favicon -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%236366F1' stroke-width='3' stroke-dasharray='66 8' stroke-linecap='round' transform='rotate(-90 16 16)'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%230B0F1A'/%3E%3Ccircle cx='90' cy='90' r='60' fill='none' stroke='url(%23g)' stroke-width='14' stroke-dasharray='330 48' stroke-linecap='round' transform='rotate(-90 90 90)'/%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236366F1'/%3E%3Cstop offset='0.5' stop-color='%23A855F7'/%3E%3Cstop offset='1' stop-color='%232DD4BF'/%3E%3C/linearGradient%3E%3C/defs%3E%3C/svg%3E" />
 </head>
 <body>
+  <!-- W4 - one inline glyph sprite (DESIGN_DIRECTION section 2). Every UI icon
+       on the page is <svg class="icon"><use href="#i-..."/></svg>; app.js builds
+       the same markup through iconHTML(), so the two never drift. Glyphs are
+       drawn on a 24 x 24 grid with round caps to read like their SF Symbol. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-walk" viewBox="0 0 24 24"><circle cx="13.5" cy="4" r="1.75"/><path d="M12.5 7.5 11 13l-2.5 8M11 13l3.5 3 1 5M12.5 7.5l-3 3.5-1.5 2.5M12.5 7.5l3 2.5 2 1.5"/></symbol>
+    <symbol id="i-run" viewBox="0 0 24 24"><circle cx="15.5" cy="4" r="1.75"/><path d="M14 7.5 11 12.5M11 12.5 7.5 15 6 19M11 12.5l4 3-1.5 5.5M14 7.5l3.5 2.5 3-1.5M14 7.5 10.5 9.5 8 8.5"/></symbol>
+    <symbol id="i-lift" viewBox="0 0 24 24"><path d="M4 6h16M6.5 3.5v5M17.5 3.5v5"/><circle cx="12" cy="10.5" r="1.75"/><path d="M8.5 7.5 12 12.5l3.5-5M12 12.5v4M12 16.5l-3 4.5M12 16.5l3 4.5"/></symbol>
+    <symbol id="i-yoga" viewBox="0 0 24 24"><circle cx="12" cy="4.5" r="1.75"/><path d="M12 7v6.5M12 8.5 7.5 5.5M12 8.5l4.5-3M4 18c2-3.5 5-4.5 8-4.5s6 1 8 4.5M4 18h16"/></symbol>
+    <symbol id="i-cycle" viewBox="0 0 24 24"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17 9 10h5.5l4 7M9 10l3 7H5.5M14.5 10 13 6.5h3M9 10 7.5 8.5"/></symbol>
+    <symbol id="i-swim" viewBox="0 0 24 24"><circle cx="17.5" cy="8.5" r="1.75"/><path d="M4 14.5l5.5-5 4.5 3M9.5 9.5 7 7M3 19c1.5-1.4 3-1.4 4.5 0s3 1.4 4.5 0 3-1.4 4.5 0 3 1.4 4.5 0"/></symbol>
+    <symbol id="i-hike" viewBox="0 0 24 24"><circle cx="12.5" cy="4" r="1.75"/><path d="M12 7.5 11 13l-3 7.5M11 13l3.5 3 .5 4.5M12 8.5l5 2.5M18 9.5l1.5 11.5M12 8.5l-3 1-1 3.5"/></symbol>
+    <symbol id="i-row" viewBox="0 0 24 24"><circle cx="14" cy="6" r="1.75"/><path d="M4 18.5h16M13 8.5 9 12l1 4.5M9 12l8 1M5 9.5l6.5 6"/></symbol>
+    <symbol id="i-dance" viewBox="0 0 24 24"><circle cx="12" cy="4" r="1.75"/><path d="M12 7.5V13M12 9 7 7.5l-1.5 3M12 9l4-2.5L19 8M12 13l-4.5 5.5L9 21M12 13l3 3.5-1 4.5"/></symbol>
+    <symbol id="i-climb" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.75"/><path d="M12 8.5 11 14l-3 6.5M11 14l4 2 1 5M12 8.5l4-3.5M12 9.5 8 7 7 3.5"/></symbol>
+    <symbol id="i-ball" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v4.5l4 3-1.5 4.5h-5L8 10.5zM3.3 10.5H8M20.7 10.5H16M14.5 15l2.5 4M9.5 15l-2.5 4"/></symbol>
+    <symbol id="i-move" viewBox="0 0 24 24"><circle cx="12" cy="4" r="1.75"/><path d="M12 7.5v6M12 9.5 6.5 6.5M12 9.5l5.5-3M12 13.5 8 21M12 13.5l4 7.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 3c1.5 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.2-4 2.2-5.5.6 1.4 1.3 2.2 2.3 2.5C11.2 8 11.5 5.5 12 3z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.5-3 8.3-7 9.5-4-1.2-7-5-7-9.5V6z"/><path fill="currentColor" stroke="none" d="M12 3 5 6v5.5c0 4.5 3 8.3 7 9.5z"/></symbol>
+    <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M7 3h10M7 21h10M8 3v3.5c0 2.2 4 3.5 4 5.5s-4 3.3-4 5.5V21M16 3v3.5c0 2.2-4 3.5-4 5.5s4 3.3 4 5.5V21"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z"/></symbol>
+    <symbol id="i-duel" viewBox="0 0 24 24"><path d="M4 20 15 9M20 20 9 9M13 7l4 4M7 11l4-4M4 20l-1.5-1.5M20 20l1.5-1.5"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5.5a2.5 2.5 0 0 0 2.5 3M16 6h2.5a2.5 2.5 0 0 1-2.5 3M12 13v3.5M8.5 21h7M12 16.5c-1.8 0-3 1.5-3.5 4.5h7c-.5-3-1.7-4.5-3.5-4.5"/></symbol>
+    <symbol id="i-gift" viewBox="0 0 24 24"><path d="M3.5 10.5h17v9a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5zM3 7h18v3.5H3zM12 7v14M12 7c-1-2.5-2.5-4-4-3s-.5 3 4 3zM12 7c1-2.5 2.5-4 4-3s.5 3-4 3z"/></symbol>
+    <symbol id="i-health" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4.5"/><path d="M12 16.5c-3-2-5-3.8-5-6a2.5 2.5 0 0 1 5-1 2.5 2.5 0 0 1 5 1c0 2.2-2 4-5 6z"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 16V11a5.5 5.5 0 0 1 11 0v5l1.5 2h-14zM10 20.5a2 2 0 0 0 4 0"/><circle cx="17.5" cy="5.5" r="2.25" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4M7.5 10.5H6a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6.5a2 2 0 0 0-2-2h-1.5"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect fill="currentColor" x="6.5" y="4.5" width="3.5" height="15" rx="1"/><rect fill="currentColor" x="14" y="4.5" width="3.5" height="15" rx="1"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.5v15l12.5-7.5z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+    <symbol id="i-today" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-earn" viewBox="0 0 24 24"><path d="M13 2.5 4.5 13.5H11L10 21.5l8.5-11H13z"/></symbol>
+    <symbol id="i-friends" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.5-2.5h5L16 6h1.5A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.5"/></symbol>
+    <symbol id="i-flashlight" viewBox="0 0 24 24"><path d="M9 3h6v3.5l-1.5 3V21h-3V9.5L9 6.5zM9 6.5h6"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M9.5 18.5V5l10-2.5V16"/><circle cx="7" cy="18.5" r="2.5"/><circle cx="17" cy="16" r="2.5"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.75v.5"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5 2.5 20h19zM12 10v4.5M12 17.25v.5"/></symbol>
+    <symbol id="i-door" viewBox="0 0 24 24"><path d="M13 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h7M17 8l4 4-4 4M21 12H10"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6 7l1 13.5h10L18 7M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4.5V10h-5.5"/></symbol>
+  </svg>
   <!-- iPhone Frame Wrapper (desktop only) -->
   <div id="phone-frame">
     <div id="dynamic-island"></div>
@@ -43,36 +91,35 @@
       </div>
     </div>
 
-    <!-- ===== WELCOME SCREEN ===== -->
-    <div id="welcome-screen" class="screen">
-      <div class="welcome-content">
-        <div class="welcome-ring-wrap">
-          <svg viewBox="0 0 120 120" width="120" height="120">
-            <circle class="ring-track" cx="60" cy="60" r="50"/>
-            <circle class="ring-arc" cx="60" cy="60" r="50"
-              stroke="url(#ring-gradient)"
-              stroke-dasharray="314"
-              stroke-dashoffset="78"
-              transform="rotate(-90 60 60)"
-              stroke-width="6"/>
-          </svg>
-        </div>
-        <div class="welcome-headline">Welcome to Balance</div>
-        <p class="welcome-body">Most people don't realize how much time they lose to doom scrolling each day. Balance gives you a daily allowance and lets you earn more by moving your body.</p>
-        <button class="btn-primary" id="welcome-cta">Let's restore balance →</button>
-      </div>
-    </div>
-
     <!-- ===== ONBOARDING SCREEN ===== -->
     <div id="onboarding-screen" class="screen">
-      <!-- Step Account: create account via SSO (item 5) -->
+      <!-- Step 1 of 7, Sign in (WONB): the first screen after the splash. The old
+           Welcome screen's brand moment sits on top, then the sign-in buttons,
+           in the same order as the iPhone app. -->
       <div id="ob-step-account" class="ob-step active">
-        <div class="ob-header">
-          <div class="ob-progress">
-            <div class="ob-progress-bar" style="width:17%"></div>
+        <div class="ob-header signin-header">
+          <div class="ob-nav-row">
+            <span class="ob-back-spacer" aria-hidden="true"></span>
+            <div class="ob-progress">
+              <div class="ob-progress-bar" style="width:14.29%"></div>
+            </div>
           </div>
-          <h2 class="ob-title">Create your account</h2>
-          <p class="ob-subtitle">Your Balance membership lives here</p>
+        </div>
+
+        <div class="signin-brand">
+          <div class="signin-ring-wrap" aria-hidden="true">
+            <svg viewBox="0 0 120 120" width="88" height="88">
+              <circle class="ring-track" cx="60" cy="60" r="50"/>
+              <circle class="ring-arc" cx="60" cy="60" r="50"
+                stroke="url(#ring-gradient)"
+                stroke-dasharray="314"
+                stroke-dashoffset="78"
+                transform="rotate(-90 60 60)"
+                stroke-width="6"/>
+            </svg>
+          </div>
+          <h2 class="signin-headline">Welcome to Balance</h2>
+          <p class="signin-promise">A daily scroll allowance. Move to earn more.</p>
         </div>
 
         <div class="sso-stack">
@@ -93,15 +140,9 @@
             </span>
             <span>Continue with Google</span>
           </button>
-          <button class="sso-btn sso-facebook" data-provider="Facebook">
-            <span class="sso-icon">
-              <svg viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M22.675 0h-21.35c-.732 0-1.325.593-1.325 1.325v21.351c0 .731.593 1.324 1.325 1.324h11.495v-9.294h-3.128v-3.622h3.128v-2.671c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12v9.293h6.116c.73 0 1.323-.593 1.323-1.324v-21.35c0-.732-.593-1.325-1.325-1.325z"/></svg>
-            </span>
-            <span>Continue with Facebook</span>
-          </button>
         </div>
 
-        <p class="sso-demo-note">Demo sign-in - the real app connects to Apple, Google, or Facebook. No real account is created here.</p>
+        <p class="sso-demo-note">Demo sign-in - no real account is created here. The real app uses Sign in with Apple. Google sign-in is coming soon.</p>
 
         <p class="account-terms-line">By continuing, you agree to our <button type="button" class="account-legal-link" id="terms-link">Terms</button> and <button type="button" class="account-legal-link" id="privacy-link">Privacy Policy</button>.</p>
       </div>
@@ -109,14 +150,17 @@
       <!-- Step Nickname: name the account (item 5) -->
       <div id="ob-step-nickname" class="ob-step">
         <div class="ob-header">
-          <div class="ob-progress">
-            <div class="ob-progress-bar" style="width:33%"></div>
+          <div class="ob-nav-row">
+            <span class="ob-back-spacer" aria-hidden="true"></span>
+            <div class="ob-progress">
+              <div class="ob-progress-bar" style="width:28.57%"></div>
+            </div>
           </div>
           <h2 class="ob-title">What should we call you?</h2>
           <p class="ob-subtitle">This is how Balance will greet you</p>
         </div>
         <div class="nickname-wrap">
-          <input type="text" id="nickname-input" maxlength="20" placeholder="Your nickname" class="plan-name-input" />
+          <input type="text" id="nickname-input" maxlength="20" placeholder="Your nickname" class="plan-name-input" enterkeyhint="next" autocomplete="nickname" />
           <div class="nickname-error" id="nickname-error" style="display:none">Enter a nickname, 2 to 20 characters.</div>
         </div>
         <button class="btn-primary ob-next" id="ob-nickname-next">Continue</button>
@@ -125,46 +169,53 @@
       <!-- Step A: Pick apps -->
       <div id="ob-step-a" class="ob-step">
         <div class="ob-header">
-          <div class="ob-progress">
-            <div class="ob-progress-bar" style="width:50%"></div>
+          <div class="ob-nav-row">
+            <button type="button" class="ob-back-btn" aria-label="Back"><span class="ob-back-circle"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></span></button>
+            <div class="ob-progress">
+              <div class="ob-progress-bar" style="width:42.86%"></div>
+            </div>
           </div>
           <h2 class="ob-title">Which apps eat your time?</h2>
           <p class="ob-subtitle">Select all that apply</p>
         </div>
         <div class="app-grid">
           <button class="app-tile" data-app="Instagram">
-            <div class="app-icon" style="background: linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)">📸</div>
+            <div class="app-icon app-mark" style="background:linear-gradient(135deg,#F09433,#E6683C,#DC2743,#CC2366,#BC1888)"><svg class="icon mark-glyph" aria-hidden="true"><use href="#i-camera"/></svg></div>
             <span>Instagram</span>
           </button>
           <button class="app-tile" data-app="TikTok">
-            <div class="app-icon" style="background:#010101">🎵</div>
+            <div class="app-icon app-mark" style="background:#010101"><svg class="icon mark-glyph" aria-hidden="true"><use href="#i-note"/></svg></div>
             <span>TikTok</span>
           </button>
           <button class="app-tile" data-app="X">
-            <div class="app-icon" style="background:#000">✖</div>
+            <div class="app-icon app-mark" style="background:#000"><span class="mark-letter">X</span></div>
             <span>X</span>
           </button>
           <button class="app-tile" data-app="YouTube">
-            <div class="app-icon" style="background:#FF0000">▶</div>
+            <div class="app-icon app-mark" style="background:#FF0000"><svg class="icon mark-glyph" aria-hidden="true"><use href="#i-play"/></svg></div>
             <span>YouTube</span>
           </button>
           <button class="app-tile" data-app="Snapchat">
-            <div class="app-icon" style="background:#FFFC00;color:#000">👻</div>
+            <div class="app-icon app-mark" style="background:#FFFC00;color:#000"><span class="mark-letter">S</span></div>
             <span>Snapchat</span>
           </button>
           <button class="app-tile" data-app="Reddit">
-            <div class="app-icon" style="background:#FF4500">👾</div>
+            <div class="app-icon app-mark" style="background:#FF4500"><span class="mark-letter">R</span></div>
             <span>Reddit</span>
           </button>
         </div>
-        <button class="btn-primary ob-next" id="ob-a-next">Continue</button>
+        <p class="ob-heads-up" id="ob-a-heads-up">Next, iPhone will ask if Balance can use Screen Time for these apps.</p>
+        <button class="btn-primary ob-next" id="ob-a-next" disabled>Continue</button>
       </div>
 
       <!-- Step B: Time slider -->
       <div id="ob-step-b" class="ob-step">
         <div class="ob-header">
-          <div class="ob-progress">
-            <div class="ob-progress-bar" style="width:67%"></div>
+          <div class="ob-nav-row">
+            <button type="button" class="ob-back-btn" aria-label="Back"><span class="ob-back-circle"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></span></button>
+            <div class="ob-progress">
+              <div class="ob-progress-bar" style="width:57.14%"></div>
+            </div>
           </div>
           <h2 class="ob-title">How much time do you think you spend?</h2>
           <p class="ob-subtitle">Take your best guess, no judgment.</p>
@@ -181,44 +232,30 @@
         <button class="btn-primary ob-next" id="ob-b-next">Continue</button>
       </div>
 
-      <!-- Step B2: Guess vs Reality Reveal -->
-      <div id="ob-step-b2" class="ob-step">
-        <div class="ob-header">
-          <div class="ob-progress">
-            <div class="ob-progress-bar" style="width:83%"></div>
-          </div>
-          <h2 class="ob-title">Your real usage</h2>
-          <p class="ob-subtitle">Straight from Screen Time</p>
-        </div>
-        <div class="reveal-card glass-card">
-          <div class="reveal-guess">You guessed <span id="reveal-guess-text">3h 30m</span></div>
-          <div class="reveal-actual-label">Your daily average:</div>
-          <div class="reveal-actual-value" id="reveal-actual-value">4h 26m</div>
-          <div class="reveal-delta-pill" id="reveal-delta-pill">↑ 27% more than you thought</div>
-        </div>
-        <button class="btn-primary ob-next" id="ob-b2-next">Continue</button>
-      </div>
-
       <!-- Step C: Shock screen -->
       <div id="ob-step-c" class="ob-step">
+        <button type="button" class="ob-back-btn ob-back-abs" aria-label="Back"><span class="ob-back-circle"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></span></button>
         <div class="computing-state" id="computing-state">
           <div class="compute-spinner"></div>
           <p class="compute-label">Crunching your numbers…</p>
         </div>
         <div class="shock-state" id="shock-state" style="display:none">
-          <p class="shock-lead" id="shock-lead-text">At 3h 30m a day, you will spend</p>
-          <div class="shock-years" id="shock-years">9.2 years</div>
+          <p class="shock-lead" id="shock-lead-text">At 3h 30m a day, if that's about right, you'll spend</p>
+          <div class="shock-years" id="shock-years">10.9 years</div>
           <p class="shock-tail">of your remaining waking life<br>on these apps.</p>
           <p class="shock-mint" id="shock-mint">Balance helps you take those years back.</p>
-          <button class="btn-primary ob-next" id="ob-c-next" style="margin-top:32px">I want my time back</button>
+          <button class="btn-primary ob-next" id="ob-c-next">I want my time back</button>
         </div>
       </div>
 
       <!-- Step D: Plan -->
       <div id="ob-step-d" class="ob-step">
         <div class="ob-header">
-          <div class="ob-progress">
-            <div class="ob-progress-bar" style="width:100%"></div>
+          <div class="ob-nav-row">
+            <button type="button" class="ob-back-btn" aria-label="Back"><span class="ob-back-circle"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></span></button>
+            <div class="ob-progress">
+              <div class="ob-progress-bar" style="width:85.71%"></div>
+            </div>
           </div>
           <h2 class="ob-title">Your plan</h2>
           <p class="ob-subtitle">Tune it to fit</p>
@@ -228,7 +265,7 @@
           <div class="plan-edit-row">
             <div class="plan-edit-label">Daily allowance</div>
             <div class="plan-allowance-display" id="plan-allowance-display">45 min</div>
-            <input type="range" id="plan-allowance-slider" min="15" max="120" step="5" value="45" class="plan-allowance-range" />
+            <input type="range" id="plan-allowance-slider" min="15" max="240" step="5" value="45" class="plan-allowance-range" />
           </div>
           <!-- Earn rate row -->
           <div class="plan-edit-row">
@@ -249,6 +286,39 @@
           </div>
         </div>
         <button class="btn-primary ob-next" id="ob-d-next">Let's do this →</button>
+      </div>
+
+      <!-- Step E, 7 of 7 (WONB): daily movement goal, then the Health prompt.
+           Same parts as the plan step. 5-minute steps, 10 to 120 min. -->
+      <div id="ob-step-e" class="ob-step">
+        <div class="ob-header">
+          <div class="ob-nav-row">
+            <button type="button" class="ob-back-btn" aria-label="Back"><span class="ob-back-circle"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></span></button>
+            <div class="ob-progress">
+              <div class="ob-progress-bar" style="width:100%"></div>
+            </div>
+          </div>
+          <h2 class="ob-title">Set your daily movement goal</h2>
+          <p class="ob-subtitle">How many workout minutes a day?</p>
+        </div>
+        <div class="glass-card plan-edit-card goal-card">
+          <div class="plan-edit-row goal-stepper-row" role="group" aria-label="Daily movement goal">
+            <button type="button" class="goal-step-btn" id="goal-dec" aria-label="5 minutes less"><span class="ob-back-circle goal-step-circle" aria-hidden="true">−</span></button>
+            <div class="goal-value" id="goal-value" aria-live="polite"><span class="goal-value-num" id="goal-value-num">30</span><span class="goal-value-unit">min</span></div>
+            <button type="button" class="goal-step-btn" id="goal-inc" aria-label="5 minutes more"><span class="ob-back-circle goal-step-circle" aria-hidden="true">+</span></button>
+          </div>
+          <div class="plan-edit-row goal-chips" role="group" aria-label="Quick picks">
+            <button type="button" class="goal-chip" data-goal="15" aria-pressed="false">15 min</button>
+            <button type="button" class="goal-chip selected" data-goal="30" aria-pressed="true">30 min</button>
+            <button type="button" class="goal-chip" data-goal="45" aria-pressed="false">45 min</button>
+            <button type="button" class="goal-chip" data-goal="60" aria-pressed="false">60 min</button>
+          </div>
+          <div class="plan-edit-row">
+            <p class="goal-earn-line" id="goal-earn-line">30 min of movement earns 30 min of scroll time</p>
+          </div>
+        </div>
+        <p class="ob-heads-up" id="ob-e-heads-up">Next, iPhone will ask if Balance can read your workouts from Health.</p>
+        <button class="btn-primary ob-next" id="ob-e-next">Set my goal</button>
       </div>
     </div>
 
@@ -275,16 +345,18 @@
             <div class="price-name">Yearly</div>
             <div class="price-amount">$39.99<span>/yr</span></div>
             <div class="price-monthly">~$3.33/mo</div>
-            <div class="price-daily-note">≈ $0.11/day to take them back.</div>
+            <div class="price-daily-note">About $0.11 a day</div>
           </div>
           <div class="price-card" id="plan-monthly" data-plan="monthly">
             <div class="price-name">Monthly</div>
             <div class="price-amount">$7.99<span>/mo</span></div>
-            <div class="price-monthly">&nbsp;</div>
+            <div class="price-monthly">Cancel anytime</div>
+            <div class="price-daily-note">About $0.26 a day</div>
           </div>
         </div>
 
         <button class="btn-primary btn-cta" id="start-trial-btn">Start my free trial</button>
+        <div class="paywall-demo-caption" id="paywall-demo-caption">Web demo - nothing is charged</div>
 
         <div class="trial-billing-line" id="trial-billing-line">&nbsp;</div>
 
@@ -307,10 +379,7 @@
       <div class="app-topbar">
         <div class="app-date-pill" id="app-date-label">Today, June 11</div>
         <button class="gear-btn" id="gear-btn" aria-label="Settings">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
+          <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>
         </button>
       </div>
 
@@ -321,12 +390,13 @@
         <div id="tab-today" class="tab-pane active">
           <div class="tab-scroll">
             <div class="greeting-row">
-              <span class="greeting-text" id="greeting-text">Good morning, Blake 👋</span>
+              <span class="greeting-text" id="greeting-text">Good morning, Blake</span>
               <div class="streak-chip-group">
-                <span class="streak-pill">🔥 <span id="streak-display">12 days</span></span>
-                <span class="shield-chip" id="shield-chip" style="display:none">🛡️ ×0</span>
+                <span class="streak-pill"><svg class="icon icon-14" aria-hidden="true"><use href="#i-flame"/></svg><span id="streak-display">12 days</span></span>
+                <span class="shield-chip" id="shield-chip" style="display:none"><svg class="icon icon-14" aria-hidden="true"><use href="#i-shield"/></svg>×0</span>
               </div>
             </div>
+            <p class="streak-rule-caption">A day counts when you stay within your allowance.</p>
 
             <!-- Hero Ring -->
             <div class="hero-ring-wrap">
@@ -362,7 +432,21 @@
             </div>
 
             <p class="ring-caption">45 min allowance + <span id="earned-display">12</span> min earned · resets at midnight</p>
-            <a class="widget-link" id="widget-link-today">🔒 See Lock Screen widget</a>
+
+            <!-- W5 (XP-24) - shield status pill, right under the hero as in the
+                 DESIGN_DIRECTION Today recipe. Demo wording only: the web demo
+                 never blocks an app, so the pill never claims that it does. -->
+            <div class="status-pill-row">
+              <span class="status-pill status-pill-demo" id="shield-status-pill"><span class="status-dot" aria-hidden="true"></span><span class="status-pill-text" id="shield-status-text">Demo - blocking would be on for 3 apps</span></span>
+            </div>
+
+            <!-- W5 (XP-24) - streak dots: shape plus color, one accessible element -->
+            <div class="streak-dots" id="streak-dots" role="img" aria-label="This week"></div>
+            <!-- W5 (XP-22) - the Lock Screen widget is a roadmap item, labeled as such -->
+            <a class="widget-link" id="widget-link-today">
+              <span class="widget-link-main"><svg class="icon icon-16" aria-hidden="true"><use href="#i-lock"/></svg>See Lock Screen widget</span>
+              <span class="sample-chip roadmap-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Coming to the real app</span>
+            </a>
 
             <!-- App tiles -->
             <div class="section-title">Your apps</div>
@@ -372,35 +456,49 @@
             <!-- Earn more button -->
             <button class="btn-primary btn-earn-pulse" id="earn-more-btn">+ Earn more</button>
 
+            <!-- W5 (XP-24) - stat strip: Earned today, Shields, Allowance -->
+            <div class="section-title-row stat-strip-title">
+              <div class="section-title">Today</div>
+              <span class="sample-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Demo data</span>
+            </div>
+            <div class="stat-strip" id="stat-strip"></div>
+
             <!-- Weekly chart -->
             <div class="glass-card chart-card">
               <div class="chart-title-row">
                 <div class="card-title">This week</div>
-                <span class="sample-chip sample-chip-sm">sample history</span>
+                <span class="chart-title-meta">
+                  <span class="sample-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Sample history</span>
+                  <span class="chart-goal-pill" id="chart-goal-pill">Goal 60 min</span>
+                </span>
               </div>
               <div class="week-chart" id="week-chart"></div>
               <div class="chart-legend">
-                <span class="legend-dot mint"></span><span>Social mins</span>
+                <span class="legend-dot mint"></span><span>Scroll mins</span>
                 <span class="legend-dot amber" style="margin-left:12px"></span><span>Earned mins</span>
               </div>
             </div>
 
-            <!-- Bonus card (real - driven by state.stepsToday, fix 9) -->
-            <div class="glass-card bonus-card">
-              <div class="bonus-row">
-                <span class="bonus-icon">🚶</span>
-                <div class="bonus-text">
-                  <div class="bonus-title-row">
-                    <div class="bonus-title">Hit 8,000 steps today</div>
-                  </div>
-                  <div class="bonus-sub">+10 min tomorrow</div>
-                </div>
-                <span class="bonus-reward">+10m</span>
+            <!-- W5 (XP-24) - hourly chart. The bars are a fixed sample day and say so. -->
+            <div class="glass-card hourly-card" id="hourly-card">
+              <div class="chart-title-row">
+                <div class="card-title">Today by hour</div>
+                <span class="sample-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Sample data</span>
               </div>
-              <div class="bonus-progress-wrap">
-                <div class="bonus-progress-bar" id="bonus-progress-bar" style="width:0%"></div>
+              <div class="hour-chart" id="hour-chart" role="img" aria-label="Sample spread of today's used minutes by hour, past hours only"></div>
+              <div class="hour-axis" aria-hidden="true"><span>12a</span><span>6a</span><span>12p</span><span>6p</span></div>
+              <p class="hour-caption">By checkpoint time, 5-min steps</p>
+            </div>
+
+            <!-- W5 (XP-24) - baseline card: the user's own guess against today so far.
+                 No invented "actual" figure anywhere in this card. -->
+            <div class="glass-card baseline-card" id="baseline-card">
+              <div class="chart-title-row">
+                <div class="card-title">Your guess vs today</div>
+                <span class="sample-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Demo data</span>
               </div>
-              <div class="bonus-prog-label" id="bonus-prog-label">0 / 8,000 steps</div>
+              <div class="baseline-rows" id="baseline-rows"></div>
+              <p class="baseline-caption">Your guess is per day. Today counts only the apps you picked, in 5-min steps.</p>
             </div>
           </div>
         </div>
@@ -423,56 +521,56 @@
               <div class="earn-header-text">
                 <div class="earn-header-title">Move more, scroll more.</div>
                 <div class="earn-header-sub">Earned today: <span id="earn-today-display">12</span> min</div>
-                <div class="earn-anticheat-line">Steps don't count - real workouts do. Verified through Apple Health.</div>
-                <div class="earn-anticheat-line" style="margin-top:2px">Real workouts, verified by Apple Health. Not five pushups for a camera.</div>
+                <div class="earn-anticheat-line">Steps don't count - real workouts do. Timed here, plus workouts Apple Health already has from your Watch or other apps.</div>
+              </div>
+            </div>
+
+            <!-- Live counting-up timer (item 3b). W6 (WV-09, ND-27 parity) - it sits
+                 above the quick-log grid, so a running workout is the first thing
+                 on the tab (native order). Hidden until a workout tile is tapped,
+                 and restored straight into the running/paused state on reload. -->
+            <div class="live-timer-card glass-card" id="live-timer-card" style="display:none">
+              <div class="live-timer-workout-name" id="live-timer-workout-name">Walk</div>
+              <div class="live-timer-display" id="live-timer-display">0:00</div>
+              <div class="live-timer-actions">
+                <button class="live-timer-btn live-timer-pause-btn" id="live-timer-pause-btn"><svg class="icon icon-16" aria-hidden="true"><use href="#i-pause"/></svg>Pause</button>
+                <button class="live-timer-btn live-timer-end-btn" id="live-timer-end-btn">End</button>
               </div>
             </div>
 
             <div class="section-title">Quick log</div>
             <div class="workout-grid">
-              <button class="workout-tile" data-workout="Walk">🚶<span>Walk</span></button>
-              <button class="workout-tile" data-workout="Run">🏃<span>Run</span></button>
-              <button class="workout-tile" data-workout="Lift">🏋️<span>Lift</span></button>
-              <button class="workout-tile" data-workout="Yoga">🧘<span>Yoga</span></button>
-              <button class="workout-tile" data-workout="Cycle">🚴<span>Cycle</span></button>
-              <button class="workout-tile" id="other-workout-tile" data-workout="Other">➕<span>Other</span></button>
+              <button class="workout-tile" data-workout="Walk"><span class="symbol-tile tint-teal" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg></span><span class="tile-label">Walk</span></button>
+              <button class="workout-tile" data-workout="Run"><span class="symbol-tile tint-teal" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-run"/></svg></span><span class="tile-label">Run</span></button>
+              <button class="workout-tile" data-workout="Lift"><span class="symbol-tile tint-indigo" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-lift"/></svg></span><span class="tile-label">Lift</span></button>
+              <button class="workout-tile" data-workout="Yoga"><span class="symbol-tile tint-indigo-light" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-yoga"/></svg></span><span class="tile-label">Yoga</span></button>
+              <button class="workout-tile" data-workout="Cycle"><span class="symbol-tile tint-teal" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-cycle"/></svg></span><span class="tile-label">Cycle</span></button>
+              <button class="workout-tile" id="other-workout-tile" data-workout="Other"><span class="symbol-tile tint-text-2" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></span><span class="tile-label">Other</span></button>
             </div>
+            <p class="earn-rate-note" id="earn-rate-note">Every minute you move earns 1 minute of scroll time.</p>
 
             <!-- Streak Shield explainer -->
             <div class="glass-card shield-explainer-card">
               <div class="shield-explainer-row">
-                <span class="shield-explainer-icon">🛡️</span>
+                <span class="shield-explainer-icon symbol-tile tint-teal" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></span>
                 <div class="shield-explainer-text">
                   <div class="shield-explainer-title">Streak Shield</div>
-                  <div class="shield-explainer-sub">Log a 30-min workout to bank one. It auto-saves your streak if you miss a day.</div>
+                  <div class="shield-explainer-sub">Log a 30-min workout to bank one (max 2). It auto-saves your streak if you miss a day.</div>
                 </div>
-              </div>
-            </div>
-
-            <!-- Live counting-up timer (item 3b) - replaces the old retroactive
-                 duration picker. Hidden until a workout tile is tapped, and
-                 restored directly into the running/paused state on reload so
-                 an in-progress workout is always evident. -->
-            <div class="live-timer-card glass-card" id="live-timer-card" style="display:none">
-              <div class="live-timer-workout-name" id="live-timer-workout-name">Walk</div>
-              <div class="live-timer-display" id="live-timer-display">0:00</div>
-              <div class="live-timer-actions">
-                <button class="live-timer-btn live-timer-pause-btn" id="live-timer-pause-btn">⏸ Pause</button>
-                <button class="live-timer-btn live-timer-end-btn" id="live-timer-end-btn">End</button>
               </div>
             </div>
 
             <!-- Earned today list -->
             <div class="section-title" style="margin-top:20px">Earned today</div>
             <div class="earned-list" id="earned-list">
-              <div class="earned-empty" id="earned-empty">Nothing yet today, log a workout to earn time.</div>
+              <div class="earned-empty" id="earned-empty">Nothing yet today - log a workout to earn time.</div>
             </div>
 
             <!-- Analytics section -->
             <div class="earn-analytics-section" id="earn-analytics-section">
               <div class="section-title-row">
                 <div class="section-title">Your progress</div>
-                <span class="sample-chip">Sample data</span>
+                <span class="sample-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Sample data</span>
               </div>
               <div class="sample-subtitle">Illustrative - the real app charts your own Screen Time + workouts.</div>
 
@@ -489,7 +587,7 @@
                 <div class="glass-card analytics-stat-card">
                   <span class="asc-alltime-tag">All-time</span>
                   <div class="asc-value" id="stat-screen-pct">-</div>
-                  <div class="asc-label">Screen time since you started</div>
+                  <div class="asc-label">Scroll time since you started</div>
                 </div>
                 <div class="glass-card analytics-stat-card">
                   <span class="asc-alltime-tag">All-time</span>
@@ -512,7 +610,7 @@
 
               <!-- Screen time chart -->
               <div class="glass-card analytics-chart-card">
-                <div class="acc-title">Screen time <span class="acc-trend coral" id="trend-screen">trending down ↓</span></div>
+                <div class="acc-title">Scroll time <span class="acc-trend coral" id="trend-screen">trending down ↓</span></div>
                 <div class="acc-subtitle" id="screen-chart-subtitle">minutes per day</div>
                 <div class="analytics-chart-wrap" id="chart-screen-wrap">
                   <svg id="chart-screen" viewBox="0 0 320 120" preserveAspectRatio="none" width="100%" height="120"></svg>
@@ -533,99 +631,77 @@
           </div>
         </div>
 
-        <!-- FRIENDS TAB -->
+        <!-- FRIENDS TAB (W3) - mirrors the native Friends screen: a sample
+             partner who only ever RESPONDS to a request the user sends, how
+             the code flow works, an invite, and locked teasers with no
+             invented numbers. Nothing here gives or receives time on its own. -->
         <div id="tab-friends" class="tab-pane">
           <div class="tab-scroll">
-            <div class="section-title" style="padding-top:8px">Balance Partner</div>
+            <div class="section-title-row section-title-row-first">
+              <div class="section-title">Balance Partner</div>
+              <span class="sample-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Sample partner</span>
+            </div>
 
             <!-- Partner card -->
             <div class="glass-card partner-card">
               <div class="partner-row">
-                <div class="partner-avatar">S</div>
+                <div class="partner-avatar" aria-hidden="true">S</div>
                 <div class="partner-info">
                   <div class="partner-name">Sarah</div>
-                  <div class="partner-status" id="partner-status">🟢 14 min left · 🔥 9 days</div>
+                  <div class="partner-status" id="partner-status">Replies when you ask for an unlock</div>
                 </div>
               </div>
-              <div class="partner-actions">
-                <button class="nudge-btn" id="nudge-btn">Nudge 👋</button>
-                <button class="send-time-btn" id="send-time-btn">Send 5 min</button>
-              </div>
-              <div class="streak-duel">
-                <div class="duel-label">Streak Duel</div>
-                <div class="duel-bar-wrap">
-                  <div class="duel-side you">
-                    <div class="duel-name">You</div>
-                    <div class="duel-bar-bg">
-                      <div class="duel-bar-fill you-fill" style="width:57%"></div>
-                    </div>
-                    <div class="duel-count">12</div>
-                  </div>
-                  <div class="duel-vs">vs</div>
-                  <div class="duel-side sarah">
-                    <div class="duel-name">Sarah</div>
-                    <div class="duel-bar-bg">
-                      <div class="duel-bar-fill sarah-fill" style="width:43%"></div>
-                    </div>
-                    <div class="duel-count">9</div>
-                  </div>
-                </div>
-              </div>
-              <div class="privacy-microcopy">Sarah sees your totals, never your apps</div>
+              <div class="privacy-microcopy partner-privacy">Your partner only gets the code you text them. Never your usage, never your apps. Screen Time data stays on your phone.</div>
             </div>
 
-            <!-- Partner surprise gift - hidden until a nudge causes it (fix 1); session-only, intentionally not persisted -->
-            <div class="glass-card partner-gift-card" id="partner-gift-card" style="display:none">
-              <div class="gift-row">
-                <span class="gift-icon">🎁</span>
-                <div class="gift-text">
-                  <div class="gift-title" id="gift-title">Sarah sent you +5 min</div>
-                  <div class="gift-sub" id="gift-sub">right back at you 💪</div>
-                </div>
-                <button class="gift-accept-btn" id="gift-accept-btn">Accept</button>
+            <!-- How it works -->
+            <div class="section-title hiw-title">How it works</div>
+            <div class="glass-card hiw-card">
+              <div class="hiw-step">
+                <span class="hiw-num" aria-hidden="true">1</span>
+                <div class="hiw-text">Pick a partner from your contacts. They never need the app.</div>
+              </div>
+              <div class="hiw-step">
+                <span class="hiw-num" aria-hidden="true">2</span>
+                <div class="hiw-text">Out of time? Ask your partner from the Time's up screen. Balance writes the text, you hit send.</div>
+              </div>
+              <div class="hiw-step">
+                <span class="hiw-num" aria-hidden="true">3</span>
+                <div class="hiw-text">They text the code back and you enter it for 30 more minutes. It runs on trust, and Settings always has an off switch so you are never locked out.</div>
               </div>
             </div>
 
-            <!-- Leaderboard -->
-            <div class="section-title">Least scroll time this week</div>
-            <p class="lb-subtitle">Lowest total scroll time wins</p>
-            <div class="glass-card leaderboard-card" id="leaderboard-card">
-              <div class="lb-row">
-                <span class="lb-rank trophy">🏆</span>
-                <div class="lb-avatar" style="background:linear-gradient(135deg,#A855F7,#6366F1)">L</div>
-                <span class="lb-name">Lauren</span>
-                <span class="lb-mins">2h 14m</span>
-              </div>
-              <div class="lb-row you-row">
-                <span class="lb-rank you-rank">2</span>
-                <div class="lb-avatar" style="background:linear-gradient(135deg,#2DD4BF,#34D399)">B</div>
-                <span class="lb-name">You</span>
-                <span class="lb-mins">4h 38m</span>
-              </div>
-              <div class="lb-row">
-                <span class="lb-rank">3</span>
-                <div class="lb-avatar" style="background:linear-gradient(135deg,#F59E0B,#F87171)">J</div>
-                <span class="lb-name">Jake</span>
-                <span class="lb-mins">5h 52m</span>
-              </div>
-              <div class="lb-row">
-                <span class="lb-rank">4</span>
-                <div class="lb-avatar" style="background:linear-gradient(135deg,#6366F1,#A855F7)">M</div>
-                <span class="lb-name">Marcus</span>
-                <span class="lb-mins">6h 21m</span>
-              </div>
-              <div class="lb-behind" id="lb-behind">1h 54m ahead of Jake</div>
-            </div>
-
-            <!-- Invite row -->
+            <!-- Invite - shares a plain message; no promo code is ever shown -->
             <div class="glass-card invite-card">
               <div class="invite-row">
                 <div class="invite-text">
-                  <div class="invite-title">Invite friends</div>
-                  <div class="invite-sub">Give them a free month</div>
+                  <div class="invite-title">Invite a friend</div>
+                  <div class="invite-sub">It's in beta on TestFlight. Get a friend to hold you to it.</div>
                 </div>
-                <button class="share-chip" id="share-code-btn">FRIENDS</button>
+                <button class="share-chip" id="share-code-btn">Share</button>
               </div>
+            </div>
+
+            <!-- Locked teasers - decorative placeholders only, never numbers -->
+            <div class="glass-card teaser-card" id="leaderboard-card">
+              <div class="teaser-head">
+                <div class="teaser-title">Leaderboard - coming soon</div>
+                <span class="teaser-lock" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+              </div>
+              <div class="teaser-rows" aria-hidden="true">
+                <div class="teaser-row"><span class="teaser-rank">1</span><span class="teaser-avatar"></span><span class="teaser-bar" style="width:110px"></span><span class="teaser-bar teaser-bar-end"></span></div>
+                <div class="teaser-row"><span class="teaser-rank">2</span><span class="teaser-avatar"></span><span class="teaser-bar" style="width:90px"></span><span class="teaser-bar teaser-bar-end"></span></div>
+                <div class="teaser-row"><span class="teaser-rank">3</span><span class="teaser-avatar"></span><span class="teaser-bar" style="width:70px"></span><span class="teaser-bar teaser-bar-end"></span></div>
+              </div>
+              <div class="teaser-sub">Lowest weekly scroll time wins. Real friends only, never fake teammates.</div>
+            </div>
+
+            <div class="glass-card teaser-card" id="streak-duel-card">
+              <div class="teaser-head">
+                <div class="teaser-title">Streak Duel - coming soon</div>
+                <span class="teaser-lock" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+              </div>
+              <div class="teaser-sub">Put your streak up against a friend's. Loser owes a workout.</div>
             </div>
           </div>
         </div>
@@ -635,25 +711,15 @@
       <!-- Tab Bar -->
       <div class="tab-bar">
         <button class="tab-btn active" data-tab="today">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-          </svg>
+          <svg class="icon" aria-hidden="true"><use href="#i-today"/></svg>
           <span>Today</span>
         </button>
         <button class="tab-btn" data-tab="earn">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
+          <svg class="icon" aria-hidden="true"><use href="#i-earn"/></svg>
           <span>Earn</span>
         </button>
         <button class="tab-btn" data-tab="friends">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
+          <svg class="icon" aria-hidden="true"><use href="#i-friends"/></svg>
           <span>Friends</span>
         </button>
       </div>
@@ -661,18 +727,18 @@
 
     <!-- ===== INTERCEPT SCREEN ===== -->
     <div id="intercept-screen" class="screen overlay-screen">
-      <button class="intercept-close-btn" id="intercept-close-btn" aria-label="Close">✕</button>
+      <button class="intercept-close-btn" id="intercept-close-btn" aria-label="Close"><svg class="icon icon-16" aria-hidden="true"><use href="#i-close"/></svg></button>
       <div class="intercept-content">
-        <div class="intercept-app-icon" id="intercept-app-icon">🎵</div>
+        <div class="intercept-app-icon app-mark" id="intercept-app-icon" style="background:#010101"><svg class="icon mark-glyph" aria-hidden="true"><use href="#i-note"/></svg></div>
         <h2 class="intercept-title" id="intercept-title">Time's up, Blake.</h2>
         <p class="intercept-sub">You've used up your <span id="intercept-allowance">45</span> minutes for today.</p>
-        <p class="intercept-nocheat-line">No cheat button. A workout or Sarah - those are the ways back in.</p>
+        <p class="intercept-nocheat-line">A workout or Sarah gets you back in. Settings always has an off switch, so you are never locked out.</p>
 
         <div class="intercept-options-label">Move to get back in:</div>
 
         <div class="intercept-options" id="intercept-options">
           <button class="intercept-row" data-exercise="walk" data-base-mins="15" data-mins="15">
-            <span class="ex-icon">🚶</span>
+            <span class="ex-icon symbol-tile tint-teal" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg></span>
             <div class="ex-text">
               <div class="ex-name">15-min walk</div>
               <div class="ex-sub">Quick and easy</div>
@@ -680,7 +746,7 @@
             <span class="ex-reward">+15 min</span>
           </button>
           <button class="intercept-row" data-exercise="workout" data-base-mins="20" data-mins="20">
-            <span class="ex-icon">💪</span>
+            <span class="ex-icon symbol-tile tint-indigo" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-lift"/></svg></span>
             <div class="ex-text">
               <div class="ex-name">Quick workout</div>
               <div class="ex-sub">Pushups, squats, done</div>
@@ -688,7 +754,7 @@
             <span class="ex-reward">+20 min</span>
           </button>
           <button class="intercept-row" data-exercise="stretch" data-base-mins="10" data-mins="10">
-            <span class="ex-icon">🧘</span>
+            <span class="ex-icon symbol-tile tint-indigo-light" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-yoga"/></svg></span>
             <div class="ex-text">
               <div class="ex-name">10-min stretch</div>
               <div class="ex-sub">Breathe and reset</div>
@@ -703,7 +769,7 @@
             <div class="tracking-bar"></div>
           </div>
           <p class="tracking-label">Tracking your movement…</p>
-          <p class="tracking-microcopy">Demo shortcut - the real app verifies with Apple Health.</p>
+          <p class="tracking-microcopy">Demo shortcut - the real app times it here or reads workouts Apple Health already has.</p>
         </div>
 
         <!-- Success state -->
@@ -721,28 +787,36 @@
           </div>
         </div>
 
+        <!-- W6 (WV-23) - the ask block and the partner reply share one slot that
+             is always as tall as the taller of the two, so swapping between them
+             never reflows the screen. app.js flips them with setInterceptSlot(). -->
+        <div class="intercept-slot" id="intercept-slot" data-mode="ask">
         <div class="intercept-bottom" id="intercept-bottom">
-          <button class="ask-partner-btn" id="ask-partner-btn">Ask Sarah to unlock you 🔓</button>
-          <div class="privacy-microcopy">Sarah sees your totals, never your apps</div>
+          <button class="ask-partner-btn" id="ask-partner-btn">Ask Sarah to unlock you</button>
+          <div class="privacy-microcopy">Your partner only gets the code you text them. Never your usage, never your apps. Screen Time data stays on your phone.</div>
           <button class="wait-tomorrow" id="wait-tomorrow-btn">I'll wait until tomorrow</button>
         </div>
 
-        <!-- Partner response -->
-        <div class="partner-response" id="partner-response" style="display:none">
-          <div class="pr-waiting" id="pr-waiting">📱 Request sent to Sarah…</div>
+        <!-- Partner response (W3) - a scripted demo reply, labeled as such on
+             every state. The real app's partner texts a code back; the code is
+             entered in Settings and is never shown on this screen. -->
+        <div class="partner-response slot-hidden" id="partner-response" aria-hidden="true">
+          <div class="pr-waiting" id="pr-waiting">Request sent to Sarah</div>
           <div class="pr-declined" id="pr-declined" style="display:none">
-            Sarah declined.<br>She says: get moving 😅
+            Sarah said not yet. Try a workout instead.
             <button class="ask-again-btn" id="ask-again-btn">Ask again</button>
           </div>
-          <div class="pr-approved" id="pr-approved" style="display:none">Sarah approved 10 minutes 🔓, she's watching you though 👀</div>
+          <div class="pr-approved" id="pr-approved" style="display:none">Sarah approved 30 minutes. Make them count.</div>
+          <div class="privacy-microcopy pr-demo-note">Demo - in the real app Sarah gets a text and replies with a one-time code.</div>
         </div>
+        </div><!-- end intercept-slot -->
       </div>
     </div>
 
     <!-- ===== BREATHING PAUSE OVERLAY ===== -->
     <div id="breathing-screen" class="screen overlay-screen">
       <div class="breathing-content">
-        <div class="breathing-icon" id="breathing-app-icon">🎵</div>
+        <div class="breathing-icon app-mark" id="breathing-app-icon" style="background:#010101"><svg class="icon mark-glyph" aria-hidden="true"><use href="#i-note"/></svg></div>
         <div class="breathing-ring-wrap"><div class="breathing-ring"></div></div>
         <div class="breathing-text">Take a breath.</div>
         <div class="breathing-text-sub">Still want to open <span id="breathing-app-name">TikTok</span>?</div>
@@ -761,7 +835,7 @@
          layering pattern used by breathing-screen/lockscreen-screen. -->
     <div id="app-transition-screen" class="screen overlay-screen">
       <div class="app-transition-content">
-        <div class="app-transition-icon" id="transition-app-icon">🎵</div>
+        <div class="app-transition-icon app-mark" id="transition-app-icon"><svg class="icon mark-glyph" aria-hidden="true"><use href="#i-note"/></svg></div>
         <div class="app-transition-name" id="transition-app-name">TikTok</div>
         <div class="app-transition-caption">Leaving Balance…</div>
       </div>
@@ -770,7 +844,9 @@
     <!-- ===== LOCK SCREEN DEMO ===== -->
     <div id="lockscreen-screen" class="screen overlay-screen">
       <div class="lockscreen-bg">
-        <div class="ls-caption-pill">Lock Screen widget · updates live</div>
+        <div class="ls-caption-pill">Lock Screen widget · Preview</div>
+        <!-- W5 (XP-22) - roadmap label for the whole sheet -->
+        <span class="sample-chip roadmap-chip ls-roadmap"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Coming to the real app</span>
 
         <div class="ls-clock-area">
           <div class="ls-time" id="ls-time">12:00</div>
@@ -792,7 +868,7 @@
           </div>
           <div class="ls-widget-rect">
             <div class="ls-wr-top">Balance</div>
-            <div class="ls-wr-mid" id="ls-wr-mid">31 min left · 🔥12</div>
+            <div class="ls-wr-mid" id="ls-wr-mid">31 min left · <svg class="icon icon-12" aria-hidden="true"><use href="#i-flame"/></svg>12</div>
             <div class="ls-wr-bar">
               <div class="ls-wr-bar-fill" id="ls-wr-bar-fill" style="width:65%"></div>
             </div>
@@ -802,22 +878,23 @@
         <!-- Live Activity -->
         <div class="ls-live-activity" id="ls-live-activity" style="display:none">
           <div class="la-row">
-            <span class="la-icon">🚶</span>
+            <span class="la-icon symbol-tile symbol-tile-sm tint-teal" id="la-icon" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-walk"/></svg></span>
             <div class="la-text">
               <div class="la-title" id="la-title">Walk in progress</div>
-              <div class="la-sub">+<span id="la-mins-earned">8</span> min earned · <span id="la-elapsed">12:43</span> elapsed</div>
+              <div class="la-sub"><span id="la-mins-earned">+8 min earned</span> · <span id="la-elapsed">12:43 elapsed</span></div>
             </div>
             <span class="la-badge">Live</span>
           </div>
           <div class="la-progress">
             <div class="la-progress-fill" id="la-progress-fill" style="width:45%"></div>
           </div>
+          <div class="la-roadmap"><span class="sample-chip roadmap-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Coming to the real app</span></div>
         </div>
 
         <div class="ls-bottom-icons">
-          <div class="ls-corner-btn">🔦</div>
+          <div class="ls-corner-btn"><svg class="icon" aria-hidden="true"><use href="#i-flashlight"/></svg></div>
           <div class="ls-home-bar"></div>
-          <div class="ls-corner-btn">📷</div>
+          <div class="ls-corner-btn"><svg class="icon" aria-hidden="true"><use href="#i-camera"/></svg></div>
         </div>
 
         <p class="ls-tap-hint">Tap to go back</p>
@@ -827,20 +904,23 @@
     <!-- ===== SHARE SCREEN ===== -->
     <div id="share-screen" class="screen overlay-screen">
       <div class="share-card-wrap">
+        <!-- W5 (XP-22) - the share card is a roadmap item; the caption stays
+             outside #share-card so it never lands on the exported image. -->
+        <div class="share-roadmap-row"><span class="sample-chip roadmap-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Coming to the real app</span></div>
         <div class="share-card" id="share-card">
           <div class="share-ring">
             <svg viewBox="0 0 100 100" width="100" height="100">
               <circle class="ring-track" cx="50" cy="50" r="42" stroke-width="8"/>
-              <circle class="ring-arc" cx="50" cy="50" r="42"
+              <circle class="ring-arc" id="share-ring-arc" cx="50" cy="50" r="42"
                 stroke="url(#ring-gradient)"
                 stroke-width="8"
                 stroke-dasharray="264"
-                stroke-dashoffset="66"
+                stroke-dashoffset="264"
                 transform="rotate(-90 50 50)"/>
             </svg>
           </div>
-          <div class="share-headline" id="share-headline">This week I traded<br><span class="share-highlight">3.2 hours of TikTok</span><br>for 4 workouts</div>
-          <div class="share-streak" id="share-streak">🔥 12-day streak</div>
+          <div class="share-headline" id="share-headline">Today I earned <span class="share-highlight">0 min</span> of scroll time with 0 workouts</div>
+          <div class="share-streak" id="share-streak"><svg class="icon icon-20" aria-hidden="true"><use href="#i-flame"/></svg>12-day streak</div>
           <div class="share-footer">balance · move to scroll</div>
         </div>
         <button class="btn-primary share-save-btn" id="share-save-btn">Save image</button>
@@ -849,11 +929,24 @@
       </div>
     </div>
 
+    <!-- ===== APPS SHEET (W5, ND-16 parity) - the "Add apps" tile opens this ===== -->
+    <div id="apps-overlay" class="overlay-bg" style="display:none"></div>
+    <div id="apps-sheet" class="bottom-sheet" style="transform:translateY(100%)" role="dialog" aria-modal="true" aria-labelledby="apps-sheet-title">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title" id="apps-sheet-title">Your apps</div>
+      <p class="apps-sheet-sub">Pick the apps that share your allowance. Changes apply right away.</p>
+      <div class="app-grid apps-pick-grid" id="apps-pick-grid"></div>
+      <button class="btn-primary apps-sheet-done" id="apps-sheet-done">Done</button>
+    </div>
+
     <!-- ===== SETTINGS SHEET ===== -->
     <div id="settings-overlay" class="overlay-bg" style="display:none"></div>
-    <div id="settings-sheet" class="bottom-sheet" style="transform:translateY(100%)">
-      <div class="sheet-handle"></div>
-      <div class="sheet-title">Settings</div>
+    <div id="settings-sheet" class="bottom-sheet" style="transform:translateY(100%)" role="dialog" aria-modal="true" aria-labelledby="settings-sheet-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div class="sheet-title" id="settings-sheet-title">Settings</div>
+        <button type="button" class="sheet-close-btn" data-close-sheet="settings-sheet" aria-label="Close"><svg class="icon icon-16" aria-hidden="true"><use href="#i-close"/></svg></button>
+      </div>
 
       <div class="settings-section-label">Account</div>
       <div class="setting-row">
@@ -865,11 +958,11 @@
         <div class="settings-provider-label" id="settings-provider-label">-</div>
       </div>
       <button class="sheet-action-row" id="settings-signout-btn">
-        <span>🚪</span> Sign out
+        <span class="row-icon" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-door"/></svg></span> Sign out
         <span class="sheet-arrow">›</span>
       </button>
       <button class="sheet-action-row danger-action" id="settings-delete-account-btn">
-        <span>🗑️</span> Delete account
+        <span class="row-icon" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-trash"/></svg></span> Delete account
         <span class="sheet-arrow">›</span>
       </button>
 
@@ -892,27 +985,49 @@
         </div>
       </div>
 
+      <div class="setting-row">
+        <div class="setting-label">Daily movement goal</div>
+        <div class="stepper">
+          <button class="stepper-btn" id="goal-set-dec" aria-label="5 minutes less">−</button>
+          <span class="stepper-val" id="goal-set-val">30 min</span>
+          <button class="stepper-btn" id="goal-set-inc" aria-label="5 minutes more">+</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-label">Earned time expires at midnight</div>
+        <label class="ios-toggle">
+          <input type="checkbox" id="settings-expires-toggle" checked />
+          <span class="ios-toggle-slider"></span>
+        </label>
+      </div>
+
       <div class="settings-section-label">More</div>
       <button class="sheet-action-row" id="settings-widget-btn">
-        <span>🔒</span> See lock-screen widget
+        <span class="row-icon" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-lock"/></svg></span>
+        <span class="row-text">See Lock Screen widget<span class="sample-chip roadmap-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Coming to the real app</span></span>
         <span class="sheet-arrow">›</span>
       </button>
       <button class="sheet-action-row" id="settings-share-btn">
-        <span>📤</span> Share my week
+        <span class="row-icon" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-share"/></svg></span>
+        <span class="row-text">Share my day<span class="sample-chip roadmap-chip"><svg class="icon icon-12" aria-hidden="true"><use href="#i-info"/></svg>Coming to the real app</span></span>
         <span class="sheet-arrow">›</span>
       </button>
       <button class="sheet-action-row danger-action" id="replay-demo-btn">
-        <span>🔄</span> Replay demo
+        <span class="row-icon" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-refresh"/></svg></span> Replay demo
         <span class="sheet-arrow">›</span>
       </button>
     </div>
 
     <!-- ===== LEGAL SHEET (Terms / Privacy) ===== -->
     <div id="legal-overlay" class="overlay-bg" style="display:none"></div>
-    <div id="legal-sheet" class="bottom-sheet legal-sheet" style="transform:translateY(100%)">
-      <div class="sheet-handle"></div>
-      <div class="sheet-title" id="legal-sheet-title">Terms of Service</div>
-      <div class="legal-scroll" id="legal-scroll-body"></div>
+    <div id="legal-sheet" class="bottom-sheet legal-sheet" style="transform:translateY(100%)" role="dialog" aria-modal="true" aria-labelledby="legal-sheet-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div class="sheet-title" id="legal-sheet-title">Terms of Service</div>
+        <button type="button" class="sheet-close-btn" data-close-sheet="legal-sheet" aria-label="Close"><svg class="icon icon-16" aria-hidden="true"><use href="#i-close"/></svg></button>
+      </div>
+      <div class="legal-scroll" id="legal-scroll-body" tabindex="0" role="region" aria-labelledby="legal-sheet-title"></div>
       <button class="btn-primary" id="legal-close-btn">Close</button>
     </div>
 
@@ -923,23 +1038,26 @@
          picking a type starts the identical live-timer flow as any
          quick-log tile. -->
     <div id="other-overlay" class="overlay-bg" style="display:none"></div>
-    <div id="other-sheet" class="bottom-sheet" style="transform:translateY(100%)">
-      <div class="sheet-handle"></div>
-      <div class="sheet-title">More workout types</div>
+    <div id="other-sheet" class="bottom-sheet" style="transform:translateY(100%)" role="dialog" aria-modal="true" aria-labelledby="other-sheet-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div class="sheet-title" id="other-sheet-title">More workout types</div>
+        <button type="button" class="sheet-close-btn" data-close-sheet="other-sheet" aria-label="Close"><svg class="icon icon-16" aria-hidden="true"><use href="#i-close"/></svg></button>
+      </div>
       <div class="other-workout-list" id="other-workout-list">
-        <button class="other-workout-row" data-workout="Strength">🏋️<span>Strength</span></button>
-        <button class="other-workout-row" data-workout="Swim">🏊<span>Swim</span></button>
-        <button class="other-workout-row" data-workout="Hike">🥾<span>Hike</span></button>
-        <button class="other-workout-row" data-workout="Row">🚣<span>Row</span></button>
-        <button class="other-workout-row" data-workout="Dance">💃<span>Dance</span></button>
-        <button class="other-workout-row" data-workout="Martial Arts">🥋<span>Martial Arts</span></button>
-        <button class="other-workout-row" data-workout="Sports">⚽<span>Sports</span></button>
-        <button class="other-workout-row" data-workout="Climb">🧗<span>Climb</span></button>
+        <button class="other-workout-row" data-workout="Strength"><span class="symbol-tile symbol-tile-sm tint-indigo" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-lift"/></svg></span><span class="row-label">Strength</span></button>
+        <button class="other-workout-row" data-workout="Swim"><span class="symbol-tile symbol-tile-sm tint-teal" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-swim"/></svg></span><span class="row-label">Swim</span></button>
+        <button class="other-workout-row" data-workout="Hike"><span class="symbol-tile symbol-tile-sm tint-teal" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-hike"/></svg></span><span class="row-label">Hike</span></button>
+        <button class="other-workout-row" data-workout="Row"><span class="symbol-tile symbol-tile-sm tint-teal" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-row"/></svg></span><span class="row-label">Row</span></button>
+        <button class="other-workout-row" data-workout="Dance"><span class="symbol-tile symbol-tile-sm tint-teal" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-dance"/></svg></span><span class="row-label">Dance</span></button>
+        <button class="other-workout-row" data-workout="Martial Arts"><span class="symbol-tile symbol-tile-sm tint-teal" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-move"/></svg></span><span class="row-label">Martial Arts</span></button>
+        <button class="other-workout-row" data-workout="Sports"><span class="symbol-tile symbol-tile-sm tint-teal" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-ball"/></svg></span><span class="row-label">Sports</span></button>
+        <button class="other-workout-row" data-workout="Climb"><span class="symbol-tile symbol-tile-sm tint-teal" aria-hidden="true"><svg class="icon icon-20" aria-hidden="true"><use href="#i-climb"/></svg></span><span class="row-label">Climb</span></button>
       </div>
     </div>
 
     <!-- ===== CONFIRM DIALOG (sign out / delete account) ===== -->
-    <div id="confirm-popup" style="position:absolute;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);z-index:600;display:none;align-items:center;justify-content:center;">
+    <div id="confirm-popup" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-body" style="position:absolute;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);z-index:600;display:none;align-items:center;justify-content:center;">
       <div style="background:#1C1C1E;border-radius:14px;width:270px;overflow:hidden;">
         <div style="padding:20px 16px 16px;text-align:center;">
           <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px;" id="confirm-title">Sign out?</div>
@@ -963,22 +1081,24 @@
     </div>
 
     <!-- ===== SCREEN TIME POPUP ===== -->
-    <div id="screen-time-popup" style="position:absolute;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);z-index:500;display:none;align-items:center;justify-content:center;">
+    <div id="screen-time-popup" style="position:absolute;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);z-index:500;display:none;flex-direction:column;align-items:center;justify-content:center;">
       <div style="background:#1C1C1E;border-radius:14px;width:270px;overflow:hidden;">
         <div style="padding:20px 16px 16px;text-align:center;">
           <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px;">"Balance" Would Like to Access Your Screen Time</div>
-          <div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.5;" id="st-popup-desc">Balance reads your Screen Time to show your real usage. Your data stays on your iPhone.</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.5;" id="st-popup-desc">Balance uses Screen Time to measure time in the apps you pick and to shield them once your allowance runs out. This stays on your iPhone - it's never uploaded anywhere.</div>
         </div>
         <div style="height:1px;background:rgba(255,255,255,0.15);"></div>
         <div style="display:flex;">
           <button id="st-deny-btn" style="flex:1;padding:13px;font-size:17px;color:rgba(255,255,255,0.75);border-right:1px solid rgba(255,255,255,0.15);background:transparent;">Don't Allow</button>
           <button id="st-allow-btn" style="flex:1;padding:13px;font-size:17px;font-weight:700;color:#0A84FF;background:transparent;">Allow</button>
         </div>
+        <button class="perm-continue-link" id="st-continue-btn" style="display:none">Continue without it</button>
       </div>
+      <p class="perm-demo-caption">Demo of the iPhone prompt. The real app shows Apple's own.</p>
     </div>
 
     <!-- ===== HEALTH POPUP ===== -->
-    <div id="health-popup" style="position:absolute;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);z-index:500;display:none;align-items:center;justify-content:center;">
+    <div id="health-popup" style="position:absolute;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);z-index:500;display:none;flex-direction:column;align-items:center;justify-content:center;">
       <div style="background:#1C1C1E;border-radius:14px;width:270px;overflow:hidden;">
         <div style="padding:20px 16px 16px;text-align:center;">
           <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px;">"Balance" Would Like to Access Apple Health</div>
@@ -989,20 +1109,25 @@
           <button id="health-deny-btn" style="flex:1;padding:13px;font-size:17px;color:rgba(255,255,255,0.75);border-right:1px solid rgba(255,255,255,0.15);background:transparent;">Don't Allow</button>
           <button id="health-allow-btn" style="flex:1;padding:13px;font-size:17px;font-weight:700;color:#0A84FF;background:transparent;">Allow</button>
         </div>
+        <button class="perm-continue-link" id="health-continue-btn" style="display:none">Continue without it</button>
       </div>
+      <p class="perm-demo-caption">Demo of the iPhone prompt. The real app shows Apple's own.</p>
     </div>
+
+    <!-- Toast container. W6 repair - inside the phone frame, so on the desktop
+         frame toasts are placed against the phone (below the Dynamic Island,
+         above the tab bar) instead of against the browser window. On a phone
+         the frame is the whole screen, so nothing moves there. -->
+    <div id="toast-container"></div>
 
   </div><!-- end phone-frame -->
 
   <!-- Desktop label -->
   <div id="desktop-label">Balance - interactive demo</div>
 
-  <!-- Toast container -->
-  <div id="toast-container"></div>
-
   <!-- Confetti canvas -->
   <canvas id="confetti-canvas"></canvas>
 
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
