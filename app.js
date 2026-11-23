@@ -516,10 +516,30 @@ function earnMoreUnderToasts() {
   const zoneTop = zoneBottom - 56 * (container.childElementCount + 1);
   return b.bottom > zoneTop && b.top < zoneBottom;
 }
+// WFIN - re-checked on every scroll while toasts show, so a toast already
+// showing never sits on the button: toasts at the bottom move to the top when
+// the button scrolls into the bottom band, and move back down when it rises
+// into the top band. Toasts at the top for another reason (a sheet is open, a
+// screen with no tab bar) stay there.
+function earnMoreUnderTopToasts() {
+  if (currentScreen !== 'app-shell' || state.currentTab !== 'today') return false;
+  const btn = document.getElementById('earn-more-btn');
+  const container = document.getElementById('toast-container');
+  if (!btn || !container || !container.childElementCount) return false;
+  const b = btn.getBoundingClientRect();
+  if (!b.height) return false;
+  const c = container.getBoundingClientRect();
+  return b.bottom > c.top - 10 && b.top < c.bottom + 10; // 10px: the toasts' own slide in and out
+}
 function liftToastsOffEarnMore() {
   const container = document.getElementById('toast-container');
-  if (!container || !container.childElementCount || document.body.classList.contains('toast-top')) return;
-  if (earnMoreUnderToasts()) document.body.classList.add('toast-top');
+  if (!container || !container.childElementCount) return;
+  if (!document.body.classList.contains('toast-top')) {
+    if (earnMoreUnderToasts()) document.body.classList.add('toast-top');
+    return;
+  }
+  if (document.querySelector('.bottom-sheet.open') || TOAST_TOP_SCREENS.includes(currentScreen)) return;
+  if (earnMoreUnderTopToasts() && !earnMoreUnderToasts()) document.body.classList.remove('toast-top');
 }
 
 // W6 (WV-19) - one check for every motion effect JS drives itself (confetti,
@@ -3395,13 +3415,16 @@ function startInterceptExercise(mins, exercise, baseMins) {
     if (success) {
       success.style.display = 'block';
       setTextContent('success-mins', `+${mins} minutes earned!`);
-
-      // Animate ring refill
-      animateSuccessRing();
     }
 
     // Add minutes
+    const ringFrom = state.totalSeconds > 0 ? state.remainingSeconds / state.totalSeconds : 0;
     addEarnedMinutes(mins);
+
+    // WFIN - the ring refills after the credit, from what was left before it
+    // to the new amount (it used to run first and land on the old fraction,
+    // empty when time was up).
+    if (success) animateSuccessRing(ringFrom);
     const label = EXERCISE_LABELS[exercise] || 'Workout';
     state.lastWorkout = { name: label, mins, at: Date.now(), done: true }; // B6, WC-18
 
@@ -3428,14 +3451,20 @@ function startInterceptExercise(mins, exercise, baseMins) {
   }, 2000);
 }
 
-function animateSuccessRing() {
+function animateSuccessRing(fromPct) {
   const arc = document.getElementById('success-ring-arc');
   if (!arc) return;
-  const pct = state.remainingSeconds / state.totalSeconds;
   const circumference = 201;
-  const offset = circumference - (pct * circumference);
+  const offsetOf = (p) => (circumference - Math.max(0, Math.min(1, p)) * circumference).toFixed(2);
+  const pct = state.totalSeconds > 0 ? state.remainingSeconds / state.totalSeconds : 0;
+  if (typeof fromPct === 'number') {
+    // start from the fraction before the credit, committed so the change below animates
+    arc.style.transition = 'none';
+    arc.setAttribute('stroke-dashoffset', offsetOf(fromPct));
+    void getComputedStyle(arc).strokeDashoffset;
+  }
   arc.style.transition = 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)';
-  arc.setAttribute('stroke-dashoffset', offset.toFixed(2));
+  arc.setAttribute('stroke-dashoffset', offsetOf(pct));
 }
 
 // ===== LOCK SCREEN =====

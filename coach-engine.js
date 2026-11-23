@@ -562,6 +562,7 @@
   function repWord(n) { return plural(n, "rep", "reps"); }
   function secWord(n) { return plural(n, "second", "seconds"); }
   function minWord(n) { return plural(n, "minute", "minutes"); }
+  function sessionWord(n) { return plural(n, "session", "sessions"); }
   function exWord(n) { return plural(n, "exercise", "exercises"); }
 
   /** True when the string is 1 to maxLength printable ASCII code units (32 to 126). */
@@ -669,6 +670,7 @@
     "closeGripInclinePushUp": "Hands close together on a bench or counter, elbows in.",
     "barbellRow": "Weight includes the 45 lb bar.",
     "doorwayRow": "Hold both sides of a sturdy door frame, lean back, then pull your chest to the frame. Start with your feet close to the frame and lean back only a little.",
+    "pullUp": "Hang from a sturdy bar with straight arms, pull until your chin is over the bar, then lower slowly.",
     "dumbbellPullover": "Hold one dumbbell with both hands.",
     "rearDeltFly": "Lean forward with a flat back.",
     "reverseSnowAngel": "Lie face down and sweep your arms from your hips to overhead.",
@@ -710,7 +712,7 @@
     ex("dumbbellRow", "One-Arm Dumbbell Row", "horizontalPull", "back", "dumbbell", "compound", "weightReps", "FD", {side: true, step: 5, min: 5, start: [15, 25, 40]}),
     ex("doorwayRow", "Doorway Row", "horizontalPull", "back", "bodyweight", "compound", "reps", "FDB", {start: [8, 12, 15]}),
     ex("latPulldown", "Lat Pulldown", "verticalPull", "back", "cable", "compound", "weightReps", "F", {step: 5, min: 5, start: [40, 60, 90]}),
-    ex("pullUp", "Pull-Up", "verticalPull", "back", "bodyweight", "compound", "reps", "F", {start: [1, 3, 6]}),
+    ex("pullUp", "Pull-Up", "verticalPull", "back", "bodyweight", "compound", "reps", "F", {start: [1, 3, 6], easier: "latPulldown"}),
     ex("dumbbellPullover", "Dumbbell Pullover", "verticalPull", "back", "dumbbell", "isolation", "weightReps", "FD", {step: 5, min: 5, start: [10, 20, 30]}),
     ex("facePull", "Face Pull", "upperBack", "back", "cable", "isolation", "weightReps", "F", {step: 5, min: 5, start: [20, 30, 40]}),
     ex("rearDeltFly", "Rear Delt Fly", "upperBack", "back", "dumbbell", "isolation", "weightReps", "FD", {hand: true, step: 5, min: 5, start: [5, 10, 15]}),
@@ -733,8 +735,8 @@
     ex("dumbbellReverseLunge", "Dumbbell Reverse Lunge", "singleLeg", "quads", "dumbbell", "compound", "weightReps", "FD", {hand: true, side: true, step: 5, min: 5, start: [10, 15, 25]}),
     ex("reverseLunge", "Reverse Lunge", "singleLeg", "quads", "bodyweight", "compound", "reps", "FDB", {side: true, start: [6, 10, 12], easier: "splitSquat"}),
     ex("splitSquat", "Split Squat", "singleLeg", "quads", "bodyweight", "compound", "reps", "FDB", {side: true, start: [6, 8, 10], harder: "reverseLunge", easier: "bodyweightSquat"}),
-    ex("legExtension", "Leg Extension", "quadIsolation", "quads", "machine", "isolation", "weightReps", "F", {step: 10, min: 10, start: [30, 50, 70]}),
-    ex("legCurl", "Leg Curl", "hamstringCurl", "hamstrings", "machine", "isolation", "weightReps", "F", {step: 10, min: 10, start: [30, 50, 70]}),
+    ex("legExtension", "Leg Extension", "quadIsolation", "quads", "machine", "isolation", "weightReps", "F", {step: 5, min: 10, start: [30, 50, 70]}),
+    ex("legCurl", "Leg Curl", "hamstringCurl", "hamstrings", "machine", "isolation", "weightReps", "F", {step: 5, min: 10, start: [30, 50, 70]}),
     ex("dumbbellCalfRaise", "Dumbbell Calf Raise", "calves", "calves", "dumbbell", "isolation", "weightReps", "FD", {hand: true, step: 5, min: 5, start: [10, 20, 30]}),
     ex("calfRaise", "Calf Raise", "calves", "calves", "bodyweight", "isolation", "reps", "FDB", {start: [12, 15, 20], harder: "singleLegCalfRaise"}),
     ex("singleLegCalfRaise", "Single-Leg Calf Raise", "calves", "calves", "bodyweight", "isolation", "reps", "FDB", {side: true, start: [8, 10, 12], easier: "calfRaise"}),
@@ -847,7 +849,7 @@
     ["anchorReps", "The most reps you can do with good form."],
     ["planNote", "New to lifting? 3 or 4 days a week is plenty to start."],
     ["calibrationNote", "First time: start light. If a set feels easy, add weight on the next set. End each set while you could still do 1 or 2 more good reps."],
-    ["comebackNote", "Welcome back - a little lighter after a break."],
+    ["comebackNote", "Welcome back - easing back in after a break."],
     ["skippedTwiceNote", "You skipped this the last two times. Want to swap it for another move?"],
     ["tipTraining", "Warm up with 5 easy minutes first. End each set while you could still do 1 or 2 more good reps."],
     ["tipStop", "If a move hurts (not just hard work), stop and skip it or swap it."],
@@ -865,33 +867,39 @@
     ["CAL_UP", "That felt easy - adding {inc} lb{hand} while we find your level."],
     ["UP_NEW_BASE", "Good work at {base} lb{hand} - next time {newW} lb{hand} for {newR} {repWord(newR)}{side}."],
     ["HARD_HOLD", "You hit {hi} on every set but it felt hard - same weight next time."],
-    ["ADD_SET", "You hit {hi} on every set - adding a set before more weight."],
-    ["FINISH_SETS", "Finish all {P} {setWord(P)} at {hi} {repWord(hi)}{side} to move up."],
+    ["ADD_SET", "You hit {hi} on every set at {newW} lb{hand} - adding a set before more weight."],
+    ["FINISH_SETS", "Finish all {S} {setWord(S)} at {hi} {repWord(hi)}{side} to move up."],
     ["FINISH_AT", "Do all {P} {setWord(P)} at {Lw} lb{hand} to move up."],
     ["REPS_UP", "Same weight, aim for {newR} {repWord(newR)}{side} on every set next time."],
     ["REPS_HARD", "It felt hard - same weight and {newR} {repWord(newR)}{side} next time."],
     ["REPS_HOLD", "Same weight, aim for {newR} {repWord(newR)}{side} on every set again."],
     ["NEW_BASE", "Good work - next time {newW} lb{hand} for {newR} {repWord(newR)}{side} on every set."],
     ["NEW_BASE.lighter", "Lighter is fine - next time {newW} lb{hand} for {newR} {repWord(newR)}{side} on every set, then build up from there."],
+    ["NEW_BASE.fewer", "Fewer sets than planned - next time {newW} lb{hand} for {newR} {repWord(newR)}{side} on every set, then build up from there."],
+    ["NEW_BASE.hard", "It felt hard - next time {newW} lb{hand} for {newR} {repWord(newR)}{side} on every set, then build up from there."],
     ["GRACE", "New weight - stay at {newW} lb{hand} next time and aim for {lo} {repWord(lo)}{side}."],
-    ["MISS_ONCE", "Tough day - same weight next time, aim for {lo} {repWord(lo)}{side}."],
+    ["MISS_ONCE", "Tough day - same weight next time, aim for {newR} {repWord(newR)}{side}."],
     ["MISS_LIGHTER", "Tough day - next time {newW} lb{hand}, aim for {lo} {repWord(lo)}{side}."],
     ["DELOAD", "Two tough sessions in a row - dropping to {newW} lb{hand} to build back up."],
     ["STALL", "You have been at this weight a while - dropping to {newW} lb{hand} to build back up."],
     ["STALL_REPS", "You have been at this weight a while - same weight, aim for {lo} {repWord(lo)}{side} to build back up."],
     ["MISS_BIG", "That was much harder than planned - dropping to {newW} lb{hand} to build back up."],
+    ["RETRY_HOLD", "Strong work - {left} more {sessionWord(left)} like this, then we try {retryWeight} lb{hand} again."],
+    ["RETRY_DOWN", "Still a big jump - back to {newW} lb{hand} to build more strength first."],
     ["REBUILD", "Building back up - adding {inc} lb{hand}."],
     ["CAPPED", "Nice work - we will build up to that step by step: {newW} lb{hand} next time."],
     ["AT_MIN", "This is the lightest weight - aim for {newR} {repWord(newR)}{side} on every set next time.{easier}"],
     ["CAL_DOWN", "That was heavy for a first try - starting lighter at {newW} lb{hand}."],
     ["CAL_DOWN.later", "That was heavy - next time {newW} lb{hand} while we find your level."],
-    ["C_UP", "You hit {T} {u(T)} on every set - aim for {newT} {u(newT)} next time."],
+    ["C_UP", "You hit {v} {u(v)} on every set - aim for {newT} {u(newT)} next time."],
+    ["C_UP.cap", "You hit {v} {u(v)} on every set - {newT} {u(newT)} is the most this plan asks for on this move, so aim for {newT} {u(newT)} on every set next time."],
     ["C_UP_EASY", "That felt easy - aim for {newT} {u(newT)} next time."],
-    ["C_ADD_SET", "You hit {cap} {u(cap)} on every set - adding a set."],
+    ["C_UP_EASY.cap", "That felt easy - {newT} {u(newT)} is the most this plan asks for on this move, so aim for {newT} {u(newT)} on every set next time."],
+    ["C_ADD_SET", "You hit {v} {u(v)} on every set - adding a set and starting again at {newT} {u(newT)} on every set."],
     ["C_MAXED.harder", "You have maxed out this move. Ready for a harder move: try {harder name}."],
     ["C_MAXED.none", "You have maxed out this move - keep it steady or swap it for another move."],
     ["C_HARD", "It felt hard - same target next time."],
-    ["C_FINISH_SETS", "Finish all {P} {setWord(P)} to move up."],
+    ["C_FINISH_SETS", "Finish all {S} {setWord(S)} to move up."],
     ["C_HOLD", "Aim for {T} {u(T)} on every set again."],
     ["C_TIME", "That fills the time you set for this session - same target next time."],
     ["C_MISS_ONCE", "Tough day - same target next time."],
@@ -1021,18 +1029,38 @@
 
   function family(id) { return (typeof id === "string" && FAMILY_BY_ID.get(id)) || []; }
 
+  /** The moves of class cls (compound or isolation) when there is one, else all of them (5.3). */
+  function sameClassFirst(ids, cls) {
+    var same = ids.filter(function (m) { return exercise(m).cls === cls; });
+    return same.length === 0 ? ids : same;
+  }
+
   function libraryAlternatives(id, eq, exclude) {
-    var out = [];
+    var kept = [];
     var fam = family(id);
     for (var i = 0; i < fam.length; i++) {
       var m = fam[i];
       var e = exercise(m);
       if (!e || !fitsEq(e, eq)) continue;
       if (exclude.indexOf(m) >= 0) continue;
-      out.push(m);
-      if (out.length === 6) break;
+      kept.push(m);
     }
-    return out;
+    return sameClassFirst(kept, exercise(id).cls).slice(0, 6);
+  }
+
+  /**
+   * 8.1: a move of the new-lifter table that this profile does not get (a new lifter whose anchors do not seed
+   * it, or push-ups with a push-up anchor under 5 reps). Slot options also leave these out (9.4).
+   */
+  function barredForNew(x, p) {
+    var inTable = false;
+    for (var q = 0; q < NEW_LIFTER_SWAPS.length; q++) if (NEW_LIFTER_SWAPS[q][0] === x) inTable = true;
+    if (!inTable) return false;
+    var seeded = p.anchors.some(function (a) {
+      return seedsOfAnchor(a.exerciseId).some(function (sd) { return sd[0] === x; });
+    });
+    var weakPushUp = x === "pushUp" && p.anchors.some(function (a) { return a.exerciseId === "pushUp" && a.reps < 5; });
+    return (p.experience === "new" && !seeded) || weakPushUp;
   }
 
   // Anchors (5.4).
@@ -1263,7 +1291,8 @@
   function newLift() {
     return {
       weight: undefined, reps: undefined, seconds: undefined, extraSets: 0, missStreak: 0, calibrationLeft: 0,
-      sessions: 0, sessionsAtTarget: 0, graceLeft: undefined, rebuildTo: undefined, lastDay: undefined,
+      sessions: 0, sessionsAtTarget: 0, graceLeft: undefined, rebuildTo: undefined, retryWeight: undefined,
+      retryRounds: 0, retryReady: 0, lastDay: undefined,
     };
   }
 
@@ -1424,6 +1453,15 @@
         s.seconds = undefined;
         if (s.graceLeft === undefined) s.graceLeft = 0;
         if (s.rebuildTo !== undefined && s.rebuildTo <= s.weight) s.rebuildTo = undefined;
+        if (s.retryWeight !== undefined && s.retryWeight >= s.weight) {
+          s.retryWeight = clampInt(s.retryWeight, e.minWeight, e.maxWeight);
+          s.retryRounds = clampInt(s.retryRounds, 1, 3);
+          s.retryReady = clampInt(s.retryReady, 0, 10);
+        } else {
+          s.retryWeight = undefined;
+          s.retryRounds = 0;
+          s.retryReady = 0;
+        }
         break;
       }
       case "reps": {
@@ -1433,6 +1471,9 @@
         s.seconds = undefined;
         s.graceLeft = undefined;
         s.rebuildTo = undefined;
+        s.retryWeight = undefined;
+        s.retryRounds = 0;
+        s.retryReady = 0;
         break;
       }
       case "seconds": {
@@ -1442,6 +1483,9 @@
         s.reps = undefined;
         s.graceLeft = undefined;
         s.rebuildTo = undefined;
+        s.retryWeight = undefined;
+        s.retryRounds = 0;
+        s.retryReady = 0;
         break;
       }
       default:
@@ -1539,6 +1583,11 @@
     put(o, "seconds", l.seconds);
     put(o, "graceLeft", l.graceLeft);
     put(o, "rebuildTo", l.rebuildTo);
+    if (l.retryWeight !== undefined) {
+      o.retryWeight = l.retryWeight;
+      o.retryRounds = l.retryRounds;
+      o.retryReady = l.retryReady;
+    }
     put(o, "lastDay", l.lastDay);
     return o;
   }
@@ -2011,6 +2060,14 @@
         var g = mInt(v, "graceLeft", 0, 1);
         s.graceLeft = g === undefined ? 0 : g;
         s.rebuildTo = mInt(v, "rebuildTo", e.minWeight, e.maxWeight);
+        var rwd = mInt(v, "retryWeight", e.minWeight, e.maxWeight);
+        if (rwd !== undefined) {
+          s.retryWeight = rwd;
+          var rrd = mClamped(v, "retryRounds", 1, 3);
+          s.retryRounds = rrd === undefined ? 1 : rrd;
+          var rdy = mClamped(v, "retryReady", 0, 10);
+          s.retryReady = rdy === undefined ? 0 : rdy;
+        }
         break;
       }
       case "reps": {
@@ -2039,6 +2096,18 @@
     var at = mClamped(v, "sessionsAtTarget", 0, 30);
     s.sessionsAtTarget = at === undefined ? 0 : at;
     s.lastDay = mDay(v, "lastDay");
+    // A weighted target below lo at a weight above the lightest (a save from an older rep range) is re-seeded
+    // with the 8.2 step 1 formula instead of asking for more reps at the same weight.
+    if (e.logType === "weightReps" && p && s.weight > e.minWeight && s.reps >= 1 && s.reps < repRange(e, p).lo) {
+      var lo8 = repRange(e, p).lo;
+      s.weight = scaledWeight(e, Math.min(s.weight, e.maxWeight), s.reps, lo8);
+      s.reps = lo8;
+      s.missStreak = 0;
+      s.sessionsAtTarget = 0;
+      s.graceLeft = 0;
+      s.rebuildTo = undefined;
+      s.retryWeight = undefined;
+    }
     return clampLift(s, e, p);
   }
 
@@ -2200,7 +2269,11 @@
     }
     it.pounds = itemPounds(it);
     var ev = mValue(v, "earlier");
-    if (ev !== undefined) it.earlier = decEarlier(ev);
+    // An earlier part of the item's own move is damaged (an earlier part is always another move): dropped.
+    if (ev !== undefined) {
+      var el = decEarlier(ev);
+      if (el && el.exerciseId !== x) it.earlier = el;
+    }
     return it;
   }
 
@@ -2470,12 +2543,7 @@
         var x = bases[j];
         var row = undefined;
         for (var q = 0; q < NEW_LIFTER_SWAPS.length; q++) if (NEW_LIFTER_SWAPS[q][0] === x) { row = NEW_LIFTER_SWAPS[q]; break; }
-        if (!row) continue;
-        var seeded = p.anchors.some(function (a) {
-          return seedsOfAnchor(a.exerciseId).some(function (sd) { return sd[0] === x; });
-        });
-        var weakPushUp = x === "pushUp" && p.anchors.some(function (a) { return a.exerciseId === "pushUp" && a.reps < 5; });
-        if (!((p.experience === "new" && !seeded) || weakPushUp)) continue;
+        if (!row || !barredForNew(x, p)) continue;
         var subs = row[1];
         for (var si = 0; si < subs.length; si++) {
           var taken = false;
@@ -2707,7 +2775,10 @@
     l.sessionsAtTarget = 0;
     var changed = undefined;
     switch (e.logType) {
-      case "weightReps": changed = l.weight !== stored.weight || l.reps !== stored.reps; break;
+      case "weightReps":
+        // Round 4: fewer sets (extraSets back to 0) is a change too, as for count moves.
+        changed = l.weight !== stored.weight || l.reps !== stored.reps || targetSets(p, l, role) !== targetSets(p, stored, role);
+        break;
       case "reps": changed = l.reps !== stored.reps || targetSets(p, l, role) !== targetSets(p, stored, role); break;
       case "seconds": changed = l.seconds !== stored.seconds || targetSets(p, l, role) !== targetSets(p, stored, role); break;
       default: changed = false;
@@ -2780,6 +2851,32 @@
   }
 
   function aboutMinutes(est) { return Math.max(5, 5 * roundHalfUp(est, 5)); }
+
+  /**
+   * 12.6: the 6.9 total in seconds (not rounded) of workout w done with the moves xs (one per slot), from the
+   * stored states given, with no comeback adjustment: sets from targetSets, holds and cardio minutes from the
+   * states (a move with no state starts fresh, 8.2).
+   */
+  function storedSeconds(p, plan, w, xs, lifts, cardio) {
+    var total = 300;
+    for (var s = 0; s < w.slots.length; s++) {
+      var slot = w.slots[s];
+      if (s > 0) total += 60;
+      var e = exercise(xs[s]);
+      var t = { sets: 1, minutes: slot.minutes === undefined ? 0 : slot.minutes };
+      if (isCardioEx(e)) {
+        var c = contextOf(w.id);
+        if (slot.role === "cardio" && c !== undefined) {
+          t.minutes = (cardio.get(c + ":" + e.id) || freshCardio(c, p)).minutes;
+        }
+      } else {
+        var l = lifts.get(e.id) || freshLift(e.id, p, plan.workouts, plan.rotation);
+        t = { sets: targetSets(p, l, slot.role), seconds: l.seconds };
+      }
+      total += itemSeconds(e, t, restSeconds(p, slot.role, e));
+    }
+    return total;
+  }
 
   // ---- Projection (9.1) ----
 
@@ -2997,8 +3094,13 @@
           var r = nf[q];
           if (ctx.index.dayNumbers[r] > ctx.today) continue;
           var hist = historyItems(ctx.log[r]);
+          // The record's non-skipped history item of x when there is one (an old record may hold x twice).
           var item = undefined;
-          for (var z = 0; z < hist.length; z++) if (hist[z].exerciseId === x) { item = hist[z]; break; }
+          for (var z = 0; z < hist.length; z++) {
+            if (hist[z].exerciseId !== x) continue;
+            if (item === undefined) item = hist[z];
+            if (!hist[z].skipped) { item = hist[z]; break; }
+          }
           if (!item) continue;
           if (seen < 2) {
             if (!item.skipped) skippedBoth = false;
@@ -3092,20 +3194,33 @@
     }
     cands.push(slot.exerciseId);
     cands.push(base);
-    for (var f = 0; f < fam.length; f++) cands.push(fam[f]);
     var exclude = new Set();
     for (var k = 0; k < xs.length; k++) if (k !== s) exclude.add(xs[k]);
     for (var k2 = 0; k2 < w.slots.length; k2++) if (k2 !== s) exclude.add(w.slots[k2].exerciseId);
-    var out = [];
-    for (var c = 0; c < cands.length; c++) {
-      var id = cands[c];
+    var keep = function (id) {
       var ce = exercise(id);
-      if (!ce || !fitsEq(ce, p.equipment)) continue;
-      if (out.indexOf(id) >= 0 || exclude.has(id) || id === x) continue;
-      out.push(id);
-      if (out.length === 6) break;
-    }
-    return out;
+      if (!ce || !fitsEq(ce, p.equipment)) return false;
+      return !exclude.has(id) && id !== x;
+    };
+    // The family part: no move a new lifter does not get (8.1) and no pull-up for a new lifter; moves of the
+    // base's class by the 5.3 class rule. When that leaves the list empty, the family part is taken again
+    // without the two new-lifter limits, so every slot keeps a swap (invariant 23).
+    var cls = exercise(base).cls;
+    var build = function (famPart) {
+      var all = cands.concat(sameClassFirst(famPart, cls));
+      var out = [];
+      for (var c = 0; c < all.length; c++) {
+        var id = all[c];
+        if (!keep(id) || out.indexOf(id) >= 0) continue;
+        out.push(id);
+        if (out.length === 6) break;
+      }
+      return out;
+    };
+    var out = build(fam.filter(function (m) {
+      return keep(m) && !barredForNew(m, p) && !(m === "pullUp" && p.experience === "new");
+    }));
+    return out.length === 0 ? build(fam.filter(keep)) : out;
   }
 
   // ---- Card and session output (9.2, 9.3) ----
@@ -3365,6 +3480,32 @@
 
   // ---- buildPlan (8) ----
 
+  // 8.3 steps 1 and 2: the first candidate {start, queue} for which isSafe (9.5) holds for `plan` with that start
+  // day and queue, or undefined. Candidates: `keep` when given, then for each start day today + 0..6 and
+  // j = 0..n-1 the rotation rotated left by floorMod(i0 + j, n). Used by buildPlan and (round 5) deleteRecord.
+  function safeStart(plan, log, keep, i0, today) {
+    var rotation = plan.rotation;
+    var n = rotation.length;
+    var candidates = [];
+    if (keep) candidates.push(keep);
+    var rotated = function (off) {
+      var q = [];
+      for (var m = 0; m < n; m++) q.push(rotation[(m + off) % n]);
+      return q;
+    };
+    for (var t = 0; t < 7; t++) {
+      for (var j = 0; j < n; j++) candidates.push({ start: today + t, queue: rotated(floorMod(i0 + j, n)) });
+    }
+    var index = new LogIndex(log);
+    for (var i = 0; i < candidates.length; i++) {
+      var pl = copyObj(plan);
+      pl.startDay = dayKey(candidates[i].start);
+      pl.queue = candidates[i].queue;
+      if (safety(pl, log, index, today).safe) return candidates[i];
+    }
+    return undefined;
+  }
+
   function buildPlan(state, p, today) {
     var built = buildWorkouts(p, state.swaps);
     var s = copyModel(state);
@@ -3395,6 +3536,9 @@
             l.sessionsAtTarget = 0;
             l.graceLeft = 0;
             l.rebuildTo = undefined;
+            l.retryWeight = undefined;
+            l.retryRounds = 0;
+            l.retryReady = 0;
           } else {
             l.reps = clampInt(l.reps, r.lo, r.hi);
           }
@@ -3434,34 +3578,21 @@
     // 8.3 start day and queue.
     var rotation = built.rotation;
     var n = rotation.length;
-    var candidates = [];
+    var keep = undefined;
     if (old && arraysEqual(old.rotation, rotation)) {
       var sd = dayNumber(old.startDay);
-      if (sd !== undefined) candidates.push({ start: sd, queue: old.queue });
+      if (sd !== undefined) keep = { start: sd, queue: old.queue };
     }
     var i0 = 0;
     if (old && old.queue.length > 0) {
       var idx = rotation.indexOf(old.queue[0]);
       if (idx >= 0) i0 = idx;
     }
-    var rotated = function (off) {
-      var q = [];
-      for (var m = 0; m < n; m++) q.push(rotation[(m + off) % n]);
-      return q;
-    };
-    for (var t = 0; t < 7; t++) {
-      for (j = 0; j < n; j++) candidates.push({ start: today + t, queue: rotated(floorMod(i0 + j, n)) });
-    }
-    var index = new LogIndex(s.log);
-    var chosen = { start: today, queue: rotated(i0) };
-    for (i = 0; i < candidates.length; i++) {
-      var plan = copyObj(s.plan);
-      plan.startDay = dayKey(candidates[i].start);
-      plan.queue = candidates[i].queue;
-      if (safety(plan, s.log, index, today).safe) {
-        chosen = candidates[i];
-        break;
-      }
+    var chosen = safeStart(s.plan, s.log, keep, i0, today);
+    if (!chosen) {
+      var q0 = [];
+      for (var m = 0; m < n; m++) q0.push(rotation[(m + i0) % n]);
+      chosen = { start: today, queue: q0 };
     }
     s.plan.startDay = dayKey(chosen.start);
     s.plan.queue = chosen.queue.slice();
@@ -3548,6 +3679,7 @@
     var r = l.rebuildTo;
     var m0 = l.missStreak;
     var k = l.calibrationLeft;
+    var rw = l.retryWeight;
     var f = logged.feel;
     var sets = logged.sets;
     var maxExtra = maxExtraFor(p.sessionMinutes);
@@ -3560,21 +3692,36 @@
     var fromRows = false;
     // Every counted set at the planned weight or heavier with at least Lr reps (normal mode, 12.1 step 7).
     var met = false;
+    // The heaviest weight this session proved: every planned set there with at least lo reps (retry, 12.1).
+    var proved = undefined;
+    // Calibration step 3 set the base below w0 because sets were missing (round 4, NEW_BASE.fewer).
+    var fewerBase = false;
+
+    // Round 5: a row that adds weight matches only when the new weight, limited to maxWeight (step 5), is above
+    // the base. At the heaviest weight the library allows, a top-of-range session goes on to the hold rows
+    // (REPS_UP at hi) instead of "adding 0 lb" with the reps back at lo.
+    function rises(w) { return Math.min(w, e.maxWeight) > base; }
 
     function rowsNormal(nE, minR) {
       var top = nE >= pSets && minR >= hi;
       if (r !== undefined && base < r && nE >= pSets && minR >= lr && f !== "hard" && !bigStep(e, base)) {
         // A top-of-range or easy session closes half the gap (at least easyInc); otherwise one step.
-        // After a top-of-range session the reps go back to lo with the heavier weight, as in UP.
+        // After a top-of-range session the reps go back to lo with the heavier weight, as in UP. Round 3: never
+        // below lo, since this weight is above minWeight (an AT_MIN reps target below lo stays at minWeight).
         var rinc = (top || f === "easy") ? Math.max(easyInc(e, base), div(r - base, 2)) : step;
-        newW = Math.min(r, snapDown(e, base + rinc)); newR = top ? lo : lr; code = "REBUILD";
+        newW = Math.min(r, snapDown(e, base + rinc)); newR = top ? lo : Math.max(lo, lr); code = "REBUILD";
       } else if (top && f === "hard") {
         newW = base; newR = hi; code = "HARD_HOLD";
       } else if (top && bigStep(e, base) && x < maxExtra && pSets + 1 <= 5 && allowGrowth) {
         newW = base; newR = hi; code = "ADD_SET";
-      } else if (top && f === "easy") {
+      } else if (top && rw !== undefined && base < rw && snapDown(e, base + (f === "easy" ? easyInc(e, base) : step)) >= rw &&
+        l.retryReady + 1 < 2 * l.retryRounds) {
+        // The next step goes back to a light weight that was dropped from: prove this one for longer.
+        // Round 3: only while below it (a session at or above the retry weight is the retry itself).
+        newW = base; newR = hi; code = "RETRY_HOLD";
+      } else if (top && f === "easy" && rises(snapDown(e, base + easyInc(e, base)))) {
         newW = snapDown(e, base + easyInc(e, base)); newR = lo; code = "UP_EASY";
-      } else if (top) {
+      } else if (top && rises(snapDown(e, base + step))) {
         newW = snapDown(e, base + step); newR = lo; code = "UP";
       } else if (nE < pSets && minR >= hi) {
         newW = base; newR = hi; code = "FINISH_SETS";
@@ -3593,9 +3740,9 @@
       var top = nE >= pSets && minR >= hi;
       if (top && f === "hard") {
         newW = base; newR = hi; code = "HARD_HOLD";
-      } else if (nE >= pSets && minR >= lr && f === "easy") {
+      } else if (nE >= pSets && minR >= lr && f === "easy" && rises(snapDown(e, base + calInc(e, base)))) {
         newW = snapDown(e, base + calInc(e, base)); newR = lo; code = "CAL_UP";
-      } else if (top) {
+      } else if (top && rises(snapDown(e, base + step))) {
         newW = snapDown(e, base + step); newR = lo; code = "UP";
       } else if (nE < pSets && minR >= hi) {
         newW = base; newR = hi; code = "FINISH_SETS";
@@ -3609,12 +3756,13 @@
     }
 
     // A miss that came close: every planned set done, and the fewest reps at most 2 short of lo or the
-    // total at least 90 percent of P * lo.
-    function close(evs) {
+    // total at least 90 percent of P * lo. Round 4 (closeFirst): on a first try the earlier part's work sets
+    // count toward the planned sets (earlier); the total stays the reps of evs.
+    function close(evs, earlier) {
       var mr = minOf(evs.map(function (s) { return s.reps; }));
       var tot = 0;
       for (var q = 0; q < evs.length; q++) tot += evs[q].reps;
-      return evs.length >= pSets && (mr >= lo - 2 || 10 * tot >= 9 * pSets * lo);
+      return evs.length + (earlier === undefined ? 0 : earlier) >= pSets && (mr >= lo - 2 || 10 * tot >= 9 * pSets * lo);
     }
 
     var ev = undefined, nE = undefined, minR = undefined;
@@ -3627,19 +3775,39 @@
       var hiW = maxOf(ev.map(function (s) { return s.weight; }));
       var loW = minOf(ev.map(function (s) { return s.weight; }));
       met = nE >= pSets && minR >= lr && loW >= lw;
+      if (nE >= pSets && minR >= lo && loW >= lw) proved = lw;
       if (minR < lo) {
         var ref = Math.min(lw, Math.max(minW, hiW));
         base = ref;
         newR = lo;
         var big = e.cls === "compound" && (minR + 3 < lo || 2 * minR < lo);
         if (ref <= minW) {
-          // The lightest weight: the reps target starts from what was done there and builds up
-          // to lo. Reps done only at heavier weights say nothing about the lightest one.
-          var atMin = ev.filter(function (s) { return s.weight <= minW; });
-          code = "AT_MIN"; newW = minW; ms = 0;
-          newR = atMin.length > 0 ? Math.min(lo, minOf(atMin.map(function (s) { return s.reps; })) + 1) : lo;
-        } else if (l.sessions === 0 && !close(ev)) {
+          // The lightest weight: the reps target builds up to lo from what was done there. Reps done
+          // only at heavier weights say nothing about the lightest one. A first miss of the target
+          // holds it; a second sets it from the average done there, at least one rep lower.
+          // Round 3: only a target already at the lightest weight is held, and never above lo; a
+          // heavier planned weight goes down to the lightest at lo reps (MISS_LIGHTER).
+          var atMin = ev.filter(function (s) { return s.weight <= minW; }).map(function (s) { return s.reps; });
+          newW = minW;
+          var mAt = atMin.length > 0 ? minOf(atMin) : undefined;
+          if (mAt !== undefined && mAt < lr) {
+            if (m0 === 0) {
+              if (ref === lw) { code = "MISS_ONCE"; newR = Math.min(lo, lr); } else { code = "MISS_LIGHTER"; newR = lo; }
+              ms = 1;
+            } else {
+              var sumAt = 0;
+              for (var q0 = 0; q0 < atMin.length; q0++) sumAt += atMin[q0];
+              var avgAt = roundHalfUp(sumAt, atMin.length);
+              code = "AT_MIN"; newR = Math.max(1, Math.min(lo, lr - 1, Math.max(mAt + 1, avgAt))); ms = 0;
+            }
+          } else {
+            code = "AT_MIN"; newR = mAt !== undefined ? Math.min(lo, mAt + 1) : Math.min(lo, lr); ms = 0;
+          }
+        } else if (l.sessions === 0 && !close(ev, logged.earlierWork)) {
           code = "CAL_DOWN"; newW = calDown(e, ref); ms = 0;
+        } else if (rw !== undefined && ref === lw && lw >= rw && !close(ev)) {
+          // A clear miss on a retry of a light weight that was dropped from: back down at once.
+          code = "RETRY_DOWN"; newW = deload(e, ref); ms = 0;
         } else if (g === 1 && ref === lw && minR >= lo - 2) {
           code = "GRACE"; newW = lw; ms = 0;
         } else if (big) {
@@ -3673,7 +3841,7 @@
         newR = lo;
         if (ref2 <= minW) {
           code = "AT_MIN"; newW = minW; newR = lightest <= minW ? Math.min(lo, minRl + 1) : lo; ms = 0;
-        } else if (!close(evl)) {
+        } else if (!close(evl, logged.earlierWork)) {
           code = "CAL_DOWN"; newW = calDown(e, ref2); ms = 0;
         } else if (m0 + 1 >= 2) {
           code = "DELOAD"; newW = deload(e, ref2); ms = 0;
@@ -3687,9 +3855,15 @@
         nE = ev.length;
         minR = minOf(ev.map(function (s) { return s.reps; }));
         ms = 0;
-        if (nE >= pSets || f === "easy") base = w0;
+        proved = wStar;
+        // A set heavier than w* (tried and missed) shows w* was not the limit: keep it as the base.
+        var heavier = sets.some(function (s) { return s.weight > wStar; });
+        // Round 3 (L2): work sets of an earlier move in this slot count toward the planned sets here only.
+        if (nE + logged.earlierWork >= pSets || f === "easy" || heavier) base = w0;
         else if (f === "hard") base = deload(e, w0);
         else base = snapDown(e, w0 - step);
+        // Round 4: a base below w0 came from missing sets, not from a lighter set (NEW_BASE.fewer).
+        fewerBase = base < w0;
         fromRows = true;
         rowsCalibration(nE, minR);
       }
@@ -3738,13 +3912,35 @@
     }
     // 8. Rebuild and grace.
     var rebuild = undefined;
-    if (code === "DELOAD" || code === "STALL" || code === "MISS_BIG") {
+    if (code === "DELOAD" || code === "STALL" || code === "MISS_BIG" || code === "RETRY_DOWN") {
       rebuild = r === undefined ? lw : undefined;
     } else {
       rebuild = r;
       if (rebuild !== undefined && newW >= rebuild) rebuild = undefined;
     }
     var grace = (newW > base && bigStep(e, base)) ? 1 : 0;
+    // 8b. Retry: a drop to a light weight remembers the weight dropped from; going back to it waits for
+    // 2 x rounds top-of-range sessions (RETRY_HOLD), and a weight proved at or above it clears it.
+    var retryW = rw;
+    var rounds = l.retryRounds;
+    var ready = l.retryReady;
+    if (code === "DELOAD" || code === "MISS_BIG" || code === "RETRY_DOWN" || code === "STALL") {
+      var from = code === "STALL" ? lw : base;
+      if (newW < from && bigStep(e, newW)) {
+        rounds = retryW === from ? Math.min(3, rounds + 1) : 1;
+        retryW = from;
+        ready = 0;
+      }
+    } else if (code === "RETRY_HOLD") {
+      ready = Math.min(10, ready + 1);
+    } else if (retryW !== undefined && proved !== undefined && proved >= retryW) {
+      retryW = undefined;
+    }
+    if (retryW !== undefined && retryW < newW) retryW = undefined;
+    if (retryW === undefined) {
+      rounds = 0;
+      ready = 0;
+    }
     // 9. Store.
     var nl = copyObj(l);
     nl.weight = newW;
@@ -3754,6 +3950,9 @@
     nl.sessionsAtTarget = Math.min(30, a1);
     nl.graceLeft = grace;
     nl.rebuildTo = rebuild;
+    nl.retryWeight = retryW;
+    nl.retryRounds = rounds;
+    nl.retryReady = ready;
     nl.sessions = Math.min(1000000000, l.sessions + 1);
     nl.calibrationLeft = Math.max(0, k - 1);
     nl.lastDay = dayKey(day);
@@ -3762,6 +3961,8 @@
     var hand = handText(e);
     var side = sideText(e);
     var inc = newW - base;
+    // The sets of the next target, which FINISH_SETS quotes (round 4).
+    var nextSets = targetSets(p, nl, role);
     var reason = undefined;
     switch (code) {
       case "UP": reason = "You hit " + fmt(hi) + " on every set - adding " + fmt(inc) + " lb" + hand + "."; break;
@@ -3772,17 +3973,24 @@
           " " + repWord(newR) + side + ".";
         break;
       case "HARD_HOLD": reason = "You hit " + fmt(hi) + " on every set but it felt hard - same weight next time."; break;
-      case "ADD_SET": reason = "You hit " + fmt(hi) + " on every set - adding a set before more weight."; break;
+      case "ADD_SET": reason = "You hit " + fmt(hi) + " on every set at " + fmt(newW) + " lb" + hand + " - adding a set before more weight."; break;
       case "FINISH_SETS":
-        reason = "Finish all " + fmt(pSets) + " " + setWord(pSets) + " at " + fmt(hi) + " " + repWord(hi) + side + " to move up.";
+        reason = "Finish all " + fmt(nextSets) + " " + setWord(nextSets) + " at " + fmt(hi) + " " + repWord(hi) + side + " to move up.";
         break;
       case "FINISH_AT": reason = "Do all " + fmt(pSets) + " " + setWord(pSets) + " at " + fmt(lw) + " lb" + hand + " to move up."; break;
       case "REPS_UP": reason = "Same weight, aim for " + fmt(newR) + " " + repWord(newR) + side + " on every set next time."; break;
       case "REPS_HARD": reason = "It felt hard - same weight and " + fmt(newR) + " " + repWord(newR) + side + " next time."; break;
       case "REPS_HOLD": reason = "Same weight, aim for " + fmt(newR) + " " + repWord(newR) + side + " on every set again."; break;
       case "NEW_BASE":
-        if (newW < lw) {
+        if (newW < lw && fewerBase) {
+          reason = "Fewer sets than planned - next time " + fmt(newW) + " lb" + hand + " for " + fmt(newR) + " " + repWord(newR) + side +
+            " on every set, then build up from there.";
+        } else if (newW < lw) {
           reason = "Lighter is fine - next time " + fmt(newW) + " lb" + hand + " for " + fmt(newR) + " " + repWord(newR) + side +
+            " on every set, then build up from there.";
+        } else if (f === "hard") {
+          // Round 5 (NEW_BASE.hard): a heavier weight than planned that felt hard is kept, not praised.
+          reason = "It felt hard - next time " + fmt(newW) + " lb" + hand + " for " + fmt(newR) + " " + repWord(newR) + side +
             " on every set, then build up from there.";
         } else {
           reason = "Good work - next time " + fmt(newW) + " lb" + hand + " for " + fmt(newR) + " " + repWord(newR) + side +
@@ -3793,7 +4001,7 @@
         reason = "New weight - stay at " + fmt(newW) + " lb" + hand + " next time and aim for " + fmt(lo) + " " + repWord(lo) +
           side + ".";
         break;
-      case "MISS_ONCE": reason = "Tough day - same weight next time, aim for " + fmt(lo) + " " + repWord(lo) + side + "."; break;
+      case "MISS_ONCE": reason = "Tough day - same weight next time, aim for " + fmt(newR) + " " + repWord(newR) + side + "."; break;
       case "MISS_LIGHTER":
         reason = "Tough day - next time " + fmt(newW) + " lb" + hand + ", aim for " + fmt(lo) + " " + repWord(lo) + side + ".";
         break;
@@ -3801,6 +4009,12 @@
         reason = "That was much harder than planned - dropping to " + fmt(newW) + " lb" + hand + " to build back up.";
         break;
       case "DELOAD": reason = "Two tough sessions in a row - dropping to " + fmt(newW) + " lb" + hand + " to build back up."; break;
+      case "RETRY_HOLD":
+        var left = 2 * l.retryRounds - (l.retryReady + 1);
+        reason = "Strong work - " + fmt(left) + " more " + sessionWord(left) + " like this, then we try " +
+          fmt(rw === undefined ? newW : rw) + " lb" + hand + " again.";
+        break;
+      case "RETRY_DOWN": reason = "Still a big jump - back to " + fmt(newW) + " lb" + hand + " to build more strength first."; break;
       case "STALL":
         reason = "You have been at this weight a while - dropping to " + fmt(newW) + " lb" + hand + " to build back up.";
         break;
@@ -3820,7 +4034,7 @@
         if (l.sessions === 0) reason = "That was heavy for a first try - starting lighter at " + fmt(newW) + " lb" + hand + ".";
         else reason = "That was heavy - next time " + fmt(newW) + " lb" + hand + " while we find your level.";
     }
-    var next = mkTarget(targetSets(p, nl, role), { weight: newW, reps: newR });
+    var next = mkTarget(nextSets, { weight: newW, reps: newR });
     return {
       change: change, code: code, reason: reason, lift: nl, next: next, calibrating: nl.calibrationLeft > 0, base: base,
       warmupSets: warm,
@@ -3899,13 +4113,25 @@
     nl.lastDay = dayKey(day);
     var change = newX > x ? "up" : (newT > t ? "up" : (newT < t ? "down" : "same"));
     var easierLow = (isReps && newT <= 3) ? easierText(e, p) : "";
+    // The sets of the next target, which C_FINISH_SETS quotes (round 4).
+    var sets = targetSets(p, nl, role);
+    // Round 4: when v reached the cap the new target is the cap, at or below what was done (C_UP.cap).
+    var atCap = fmt(newT) + " " + uWord(e, newT) + " is the most this plan asks for on this move, so aim for " + fmt(newT) + " " +
+      uWord(e, newT) + " on every set next time.";
     var reason = undefined;
     switch (code) {
       case "C_UP":
-        reason = "You hit " + fmt(t) + " " + uWord(e, t) + " on every set - aim for " + fmt(newT) + " " + uWord(e, newT) + " next time.";
+        if (newT <= v) reason = "You hit " + fmt(v) + " " + uWord(e, v) + " on every set - " + atCap;
+        else reason = "You hit " + fmt(v) + " " + uWord(e, v) + " on every set - aim for " + fmt(newT) + " " + uWord(e, newT) + " next time.";
         break;
-      case "C_UP_EASY": reason = "That felt easy - aim for " + fmt(newT) + " " + uWord(e, newT) + " next time."; break;
-      case "C_ADD_SET": reason = "You hit " + fmt(cap) + " " + uWord(e, cap) + " on every set - adding a set."; break;
+      case "C_UP_EASY":
+        if (newT <= v) reason = "That felt easy - " + atCap;
+        else reason = "That felt easy - aim for " + fmt(newT) + " " + uWord(e, newT) + " next time.";
+        break;
+      case "C_ADD_SET":
+        reason = "You hit " + fmt(v) + " " + uWord(e, v) + " on every set - adding a set and starting again at " + fmt(newT) + " " +
+          uWord(e, newT) + " on every set.";
+        break;
       case "C_MAXED": {
         var he = e.harder === undefined ? undefined : exercise(e.harder);
         if (he && fitsEq(he, p.equipment)) reason = "You have maxed out this move. Ready for a harder move: try " + he.name + ".";
@@ -3913,7 +4139,7 @@
         break;
       }
       case "C_HARD": reason = "It felt hard - same target next time."; break;
-      case "C_FINISH_SETS": reason = "Finish all " + fmt(pSets) + " " + setWord(pSets) + " to move up."; break;
+      case "C_FINISH_SETS": reason = "Finish all " + fmt(sets) + " " + setWord(sets) + " to move up."; break;
       case "C_HOLD": reason = "Aim for " + fmt(t) + " " + uWord(e, t) + " on every set again."; break;
       case "C_TIME": reason = "That fills the time you set for this session - same target next time."; break;
       case "C_MISS_ONCE": reason = "Tough day - same target next time."; break;
@@ -3926,7 +4152,6 @@
       default:
         reason = "You have been at this target a while - next time aim for " + fmt(newT) + " " + uWord(e, newT) + " to build back up.";
     }
-    var sets = targetSets(p, nl, role);
     var next = isReps ? mkTarget(sets, { reps: newT }) : mkTarget(sets, { seconds: newT });
     return { change: change, code: code, reason: reason, lift: nl, next: next, calibrating: nl.calibrationLeft > 0, warmupSets: 0 };
   }
@@ -4822,8 +5047,33 @@
     var k = -1;
     for (var i = 0; i < s.log.length; i++) if (s.log[i].id === id) { k = i; break; }
     if (k < 0) throw fail("unknownRecord");
-    s.log.splice(k, 1);
+    var removed = s.log.splice(k, 1)[0];
     s.undo = undefined;
+    // Round 5 (11.5): deleting the workout finished today gives today that workout back, so the plan stays safe
+    // (9.5). Only with a plan, no session in progress, and no record left after today.
+    var nd = newestRecordDay(s);
+    if (s.plan && !s.plan.active && (nd === undefined || nd <= t)) {
+      var q = s.plan.queue;
+      var rd = dayNumber(removed.day);
+      // a. The rotation of 11.3 step 4 is taken back: the last queue entry moves to the front.
+      if (removed.kind === "training" && rd !== undefined && rd >= t && removed.workoutId !== undefined && q.length > 0 &&
+        q[q.length - 1] === removed.workoutId) {
+        s.plan.queue = [q[q.length - 1]].concat(q.slice(0, q.length - 1));
+      }
+      // b. Still not safe (Edit my plan rebuilt the queue after that workout): the 8.3 search, with the current
+      // start day and queue first. When no candidate passes, the plan stays as after a.
+      if (!safetyCtx(makeCtx(s, t)).safe) {
+        var i0 = s.plan.queue.length > 0 ? s.plan.rotation.indexOf(s.plan.queue[0]) : -1;
+        var sd = dayNumber(s.plan.startDay);
+        if (sd !== undefined) {
+          var c = safeStart(s.plan, s.log, { start: sd, queue: s.plan.queue }, i0 < 0 ? 0 : i0, t);
+          if (c) {
+            s.plan.startDay = dayKey(c.start);
+            s.plan.queue = c.queue.slice();
+          }
+        }
+      }
+    }
     return done(weekResult(s, t), s);
   }
 
@@ -5167,7 +5417,8 @@
   }
 
   function cleanItem(it, lt) {
-    var l = { sets: [], minutes: undefined, distance: undefined, feel: undefined, skipped: true };
+    // earlierWork (round 3, L2): the work sets of the slot's earlier part, set by completeSession.
+    var l = { sets: [], minutes: undefined, distance: undefined, feel: undefined, skipped: true, earlierWork: 0 };
     if (!it) return l;
     if (lt === "cardio") {
       if (it.minutes !== undefined) l.minutes = clampInt(it.minutes, 0, 600);
@@ -5272,6 +5523,15 @@
             ee0.id === sItems[ii.slot].exerciseId || fam.indexOf(ee0.id) < 0) {
           throw fail("notAnAlternative");
         }
+        // Nor a move that belongs to another slot (its move today or its plan move), nor the earlier move of
+        // another item: one move appears once in a record.
+        var taken = false;
+        for (var k0 = 0; k0 < sItems.length; k0++) {
+          if (k0 !== ii.slot && (ee0.id === sItems[k0].exerciseId || ee0.id === w.slots[k0].exerciseId)) taken = true;
+        }
+        var twice = false;
+        bySlot.forEach(function (o) { if (o.earlier && o.earlier.exerciseId === ee0.id) twice = true; });
+        if (taken || twice) throw fail("notAnAlternative");
       }
       bySlot.set(ii.slot, ii);
     }
@@ -5299,28 +5559,74 @@
     if (logged.every(function (l) { return l.skipped; }) && earlier.every(function (x) { return x === undefined; })) {
       throw fail("nothingLogged");
     }
+    // nEarlier (12.1): the earlier part's sets that count toward the item's planned sets (the calibration step 3
+    // base and the first-try closeFirst test only). Round 5: only its work sets that were done. Warm-ups are
+    // the leading sets of 12.1 step 1 at the earlier move's weight, also while that move calibrates (its stored
+    // warmupSets is 0 then); a weighted set counts with at least lo - 2 reps of that move's range, a count set
+    // with at least its target minus missMargin (6.2). The earlier move's LiftState is only read.
+    for (j = 0; j < sItems.length; j++) {
+      var eh = earlier[j];
+      if (eh === undefined) continue;
+      var ex = exercise(eh.exerciseId);
+      if (!ex) continue;
+      var le = effLift(ctx, ex.id, day, sItems[j].role).lift;
+      var nw = 0, q;
+      if (ex.logType === "weightReps") {
+        var elo = repRange(ex, ctx.profile).lo;
+        for (q = warmups(ex, le.weight, eh.sets); q < eh.sets.length; q++) if (eh.sets[q].reps >= elo - 2) nw++;
+      } else if (ex.logType === "reps") {
+        for (q = 0; q < eh.sets.length; q++) if (eh.sets[q].reps >= le.reps - REPS_CONSTANTS.missMargin) nw++;
+      } else if (ex.logType === "seconds") {
+        for (q = 0; q < eh.sets.length; q++) if (eh.sets[q].seconds >= le.seconds - SECONDS_CONSTANTS.missMargin) nw++;
+      }
+      logged[j].earlierWork = nw;
+    }
 
     var recordId = "r" + String(s.counters.nextRecordNumber);
     var outcomes = [];
     for (j = 0; j < sItems.length; j++) outcomes.push(progressItem(ctx, w, sItems[j], logged[j], day));
-    // 12.6 Time budget: a step that makes the next session longer (a set, a longer hold, more cardio) is
-    // taken, in slot order, only while the 6.9 estimate stays within sessionMinutes + 5.
+    // 12.6 Time budget: a step that makes a session longer (a set, a longer hold, more cardio) is taken, in
+    // slot order, only when no workout it makes longer goes above sessionMinutes + 5: the finished workout
+    // with today's moves and every rotation workout with its plan moves, each estimated from the stored
+    // states as they will stand (other growth steps refused unless already taken).
     if (w.id !== "cardio" && w.id !== "recovery") {
       var budget = ctx.profile.sessionMinutes + 5;
-      var secsOf = function (q, tg) {
-        var ex0 = exercise(sItems[q].exerciseId);
-        return itemSeconds(ex0, tg, restSeconds(ctx.profile, sItems[q].role, ex0));
-      };
-      var growsAt = function (q) { return addsTime(outcomes[q].code, exercise(sItems[q].exerciseId)); };
-      var total = 300 + 60 * Math.max(0, sItems.length - 1);
-      for (j = 0; j < sItems.length; j++) total += secsOf(j, growsAt(j) ? sItems[j].target : outcomes[j].next);
+      var grows = [];
+      var refused = new Map();
       for (j = 0; j < sItems.length; j++) {
-        if (!growsAt(j)) continue;
-        if (roundHalfUp(total + secsOf(j, outcomes[j].next) - secsOf(j, sItems[j].target), 60) > budget) {
-          outcomes[j] = progressItem(ctx, w, sItems[j], logged[j], day, false);
+        if (addsTime(outcomes[j].code, exercise(sItems[j].exerciseId))) {
+          grows.push(j);
+          refused.set(j, progressItem(ctx, w, sItems[j], logged[j], day, false));
         }
-        total += secsOf(j, outcomes[j].next) - secsOf(j, sItems[j].target);
       }
+      var applyTo = function (oc, q, L, C) {
+        if (oc.lift && oc.change !== "skipped") L.set(sItems[q].exerciseId, oc.lift);
+        if (oc.cardioKey !== undefined && oc.cardio) C.set(oc.cardioKey, oc.cardio);
+      };
+      var bLifts = new Map(s.lifts);
+      var bCardio = new Map(s.cardio);
+      for (j = 0; j < sItems.length; j++) applyTo(refused.has(j) ? refused.get(j) : outcomes[j], j, bLifts, bCardio);
+      var checks = [{ w: w, xs: sItems.map(function (it) { return it.exerciseId; }) }];
+      plan.rotation.forEach(function (wid) {
+        var rw = workoutIn(plan, wid);
+        if (rw) checks.push({ w: rw, xs: rw.slots.map(function (sl) { return sl.exerciseId; }) });
+      });
+      grows.forEach(function (q) {
+        var L2 = new Map(bLifts);
+        var C2 = new Map(bCardio);
+        applyTo(outcomes[q], q, L2, C2);
+        var over = checks.some(function (ck) {
+          var now = storedSeconds(ctx.profile, plan, ck.w, ck.xs, bLifts, bCardio);
+          var wth = storedSeconds(ctx.profile, plan, ck.w, ck.xs, L2, C2);
+          return wth > now && roundHalfUp(wth, 60) > budget;
+        });
+        if (over) {
+          outcomes[q] = refused.get(q);
+        } else {
+          bLifts = L2;
+          bCardio = C2;
+        }
+      });
     }
     var items = [];
     for (j = 0; j < sItems.length; j++) {
@@ -5582,10 +5888,13 @@
     secondsCap: secondsCap, cardioContext: cardioContext, cardioCap: cardioCap, layout: layout, fitsEq: fitsEq,
     seedsOfAnchor: seedsOfAnchor, expIndex: expIndex, clampInt: clampInt, isPrintableASCII: isPrintableASCII,
     contextOf: contextOf, text: text, isWeightedEx: isWeightedEx, isCountEx: isCountEx, isCardioEx: isCardioEx,
-    itemSeconds: itemSeconds, restSeconds: restSeconds, addsTime: addsTime, libRepRange: libRepRange,
+    itemSeconds: itemSeconds, restSeconds: restSeconds, addsTime: addsTime, storedSeconds: storedSeconds,
+    targetSets: targetSets, workoutIn: workoutIn, freshLift: freshLift, freshCardio: freshCardio, libRepRange: libRepRange,
     breakLevel: breakLevel, comebackCount: comebackCount, countDropped: countDropped, REPS_CONSTANTS: REPS_CONSTANTS,
     SECONDS_CONSTANTS: SECONDS_CONSTANTS, changeTag: changeTag, warmups: warmups, historyItems: historyItems,
     doneSlots: doneSlots, recordPounds: recordPounds,
+    sameClassFirst: sameClassFirst, libraryAlternatives: libraryAlternatives, barredForNew: barredForNew,
+    decLiftState: decLiftState, clampLift: clampLift,
     runRethrow: function (op, state, input) { return runWith(op, state, input, true); },
   };
 

@@ -108,7 +108,9 @@ function cxLoad() {
   LOAD_ERR = ''; KEPT = false;
   try { text = localStorage.getItem(KEY) || ''; } catch (e) { text = ''; }
   var r = exec('load', { text: text }, null);
-  if (r.result && r.result.ok && r.state) return r.state;
+  /* the iPhone's keptUnreadable: the notice stays while a set-aside copy is kept and there is no plan, even after later
+     saves made the main key readable again; building a plan hides it (home only shows it with no plan) */
+  if (r.result && r.result.ok && r.state) { if (hasKeptCopy()) { LOAD_ERR = 'corrupt'; KEPT = true; } return r.state; }
   if (errCode(r.result) === 'newerVersion') LOAD_ERR = 'newer';
   else if (text) { LOAD_ERR = 'corrupt'; KEPT = keepUnreadable(text); }
   return freshState();
@@ -122,6 +124,10 @@ function keepUnreadable(text) {
       if (v === null) { localStorage.setItem(k, text); return localStorage.getItem(k) === text; }
     }
   } catch (e) {}
+  return false;
+}
+function hasKeptCopy() {
+  try { for (var n = 1; n <= 20; n++) if (localStorage.getItem(n === 1 ? UKEY : UKEY + '_' + n) !== null) return true; } catch (e) {}
   return false;
 }
 function cxSave() {
@@ -595,9 +601,14 @@ function vSetup() {
   return '<div class="scr cover"><div class="scroll"><div class="hdr sub">' + iconBtn('setup-back', '', n ? 'chevL' : 'x', n ? 'Back' : 'Close setup') + '<div class="steps" role="img" aria-label="Question ' + (n + 1) + ' of 6">' + bar + '</div>' +
     '<span class="stepn">' + (n + 1) + ' of 6</span></div>' + previewHTML(d) + body + '</div><div class="foot">' + foot + '</div></div>';
 }
-/* "about {45} min each" on the ready screen is the chosen workout length as the engine stored it (APP_MAPPING row 117: profile.sessionMinutes);
-   the draft's answer is only the fallback */
-function readyMinutes(d) { return 'up to ' + ((WK && WK.profile && WK.profile.sessionMinutes) || d.mins) + ' min'; }
+/* "up to {N} min each" on the ready screen: N is the longest training, cardio or recovery day in the list under it (the engine's
+   aboutMinutes, else its minutes), the same number that row shows, so no row is ever longer than the header says. The chosen
+   length is only the fallback when no day carries minutes (the iPhone's CoachDerived.readyAboutMinutes). */
+function readyMinutes(d) {
+  var n = 0;
+  DAYS.forEach(function (x) { if (x.kind === 'rest') return; var m = x.raw.aboutMinutes != null ? x.raw.aboutMinutes : x.raw.minutes; if (m > n) n = m; });
+  return 'up to ' + (n || (WK && WK.profile && WK.profile.sessionMinutes) || d.mins) + ' min';
+}
 /* the engine's own note (week.planNote, only for a new lifter on 5 or 6 days) as a calm callout under the plan */
 function planNote() { return WK && WK.planNote ? '<div class="callout calm mx" id="cx-plan-note" style="margin-top:12px">' + ic('info', 'i18') + '<span>' + esc(WK.planNote) + '</span></div>' : ''; }
 /* compared as the engine would store them, so a body weight under 50 (never saved) does not count as a change */
