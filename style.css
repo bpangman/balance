@@ -237,7 +237,6 @@ input {
 .tint-indigo-light { color: var(--indigo-light); }
 .tint-amber { color: var(--amber); }
 .tint-coral { color: var(--coral); }
-.tint-text-2 { color: var(--text-2); }
 
 /* App mark: generic glyph or letter on the brand color (never a real logo).
    The glyph is 45% of the tile; the letter is sized per tile below. */
@@ -1581,129 +1580,14 @@ input {
 .partner-response .pr-demo-note { margin-top: 12px; }
 
 /* ===== EARN TAB ===== */
-.earn-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 20px;
-  padding-top: 4px;
-}
-
-.earn-header-title {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-}
-
-.earn-header-sub {
-  font-size: 13px;
-  color: var(--text-3);
-}
-
-.workout-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.workout-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 16px 8px;
-  background: var(--fill);
-  border: 1px solid var(--stroke);
-  border-radius: var(--radius-tile);
-  transition: transform 0.12s, border-color 0.2s, background 0.2s;
-  min-height: 44px;
-}
-
-.workout-tile .tile-label {
-  font-size: 12px;
-  color: var(--text-3);
-}
-
-.workout-tile:active { transform: scale(0.93); }
-
-.workout-tile.selected {
-  border-color: var(--indigo);
-  background: rgba(99,102,241,0.12);
-}
 
 /* item 3b - disabled (not hidden) while a live timer is already running, so
    it reads as "something is in progress" rather than silently doing nothing. */
-.workout-tile:disabled {
-  pointer-events: none;
-  background: transparent;
-  border-color: var(--stroke-soft);
-}
+
 /* W4 (WV-18): the label stays at --text-3 and is never dimmed further; only
    the glyph tile fades, which is enough to read as "paused while one runs". */
-.workout-tile:disabled .symbol-tile { opacity: 0.4; }
 
 /* ===== LIVE WORKOUT TIMER (item 3b) ===== */
-.live-timer-card {
-  margin-bottom: 16px;
-  text-align: center;
-}
-
-.live-timer-workout-name {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  margin-bottom: 10px;
-}
-
-.live-timer-display {
-  font-size: 44px;
-  font-weight: 800;
-  letter-spacing: -1.5px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  background: var(--grad-brand);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 18px;
-}
-
-.live-timer-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.live-timer-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 13px;
-  border-radius: var(--radius-btn);
-  font-size: 15px;
-  font-weight: 700;
-  min-height: 44px;
-  transition: transform 0.12s ease, opacity 0.12s ease;
-}
-
-.live-timer-btn:active {
-  transform: scale(0.96);
-}
-
-.live-timer-pause-btn {
-  background: var(--fill);
-  border: 1px solid var(--stroke);
-  color: var(--text);
-}
-
-.live-timer-end-btn {
-  background: var(--grad-cta);
-  color: white;
-}
 
 /* ===== OTHER WORKOUT LIBRARY SHEET (item 3c) ===== */
 .other-workout-list {
@@ -1737,35 +1621,7 @@ input {
   color: var(--text);
 }
 
-.earned-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.earned-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--fill);
-  border: 1px solid var(--stroke);
-  border-radius: var(--radius-tile);
-  padding: 12px 16px;
-}
-
-.earned-icon { display: inline-flex; }
-.earned-label { flex: 1; font-size: 14px; }
-.earned-mins { font-size: 14px; font-weight: 700; color: var(--mint); }
-
 /* fix 3 - honest empty state instead of a phantom seeded entry */
-.earned-empty {
-  font-size: 13px;
-  color: var(--text-3);
-  text-align: center;
-  padding: 16px 0;
-}
-
 
 /* ===== FRIENDS TAB ===== */
 .partner-card { margin-bottom: 14px; }
@@ -2377,21 +2233,6 @@ body.toast-top #toast-container {
 }
 
 /* ===== EARN ANIMATION ===== */
-@keyframes earnFlyUp {
-  0% { opacity: 1; transform: translateY(0) scale(1); }
-  100% { opacity: 0; transform: translateY(-80px) scale(1.3); }
-}
-
-.earn-fly-label {
-  position: absolute;
-  font-size: 28px;
-  font-weight: 900;
-  color: var(--mint);
-  pointer-events: none;
-  z-index: 900;
-  animation: earnFlyUp 1s ease forwards;
-}
-
 /* ===== MISC ===== */
 a { color: inherit; text-decoration: none; }
 
@@ -2766,146 +2607,6 @@ a { color: inherit; text-decoration: none; }
 
 .tiles-shared-caption { font-size: 12px; color: var(--text-3); text-align: center; margin-bottom: 16px; margin-top: -8px; }
 
-/* ===== EARN ANALYTICS ===== */
-.earn-analytics-section {
-  padding-bottom: 20px;
-}
-
-/* Segmented control */
-.earn-range-seg {
-  position: relative;
-  display: flex;
-  background: var(--stroke-soft);
-  border: 1px solid var(--stroke);
-  border-radius: var(--radius-control);
-  padding: 3px;
-  margin-bottom: 16px;
-  overflow: hidden;
-}
-
-.seg-btn {
-  flex: 1;
-  padding: 8px 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-3);
-  border-radius: calc(var(--radius-control) - 2px);
-  position: relative;
-  z-index: 1;
-  transition: color 0.2s;
-  min-height: 44px; /* W6 (WV-16) - was 36 */
-}
-
-.seg-btn.active {
-  color: var(--text);
-}
-
-.seg-indicator {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  background: rgba(255,255,255,0.12);
-  border-radius: calc(var(--radius-control) - 2px);
-  transition: left 0.22s cubic-bezier(0.4,0,0.2,1), width 0.22s cubic-bezier(0.4,0,0.2,1);
-  z-index: 0;
-}
-
-/* Stat cards */
-.analytics-stat-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 0;
-}
-
-.analytics-stat-row .glass-card {
-  flex: 1;
-  margin-bottom: 10px;
-  padding: 14px 14px;
-}
-
-.analytics-stat-card {
-  text-align: center;
-}
-
-.asc-value {
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -1px;
-  color: var(--mint);
-  margin-bottom: 4px;
-  font-variant-numeric: tabular-nums;
-}
-
-.asc-label {
-  font-size: 11px;
-  color: var(--text-3);
-  line-height: 1.4;
-}
-
-.analytics-support-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 0;
-}
-
-.analytics-mini-card {
-  flex: 1;
-  margin-bottom: 10px;
-  padding: 14px 14px;
-  text-align: center;
-}
-
-.amc-value {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  color: var(--text);
-  margin-bottom: 4px;
-  font-variant-numeric: tabular-nums;
-}
-
-.amc-label {
-  font-size: 11px;
-  color: var(--text-3);
-}
-
-/* Chart cards */
-.analytics-chart-card {
-  margin-bottom: 10px;
-  padding: 16px 16px 12px;
-}
-
-.acc-title {
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.acc-trend {
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.acc-trend.coral { color: var(--coral); }
-.acc-trend.mint { color: var(--mint); }
-
-.analytics-chart-wrap {
-  overflow: hidden;
-  border-radius: 8px;
-  margin-bottom: 8px;
-}
-
-.acc-axis-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-3);
-  padding: 0 2px;
-}
-
 /* ===== OVERHAUL v5 ADDITIONS ===== */
 
 /* Streak chip group + shield chip (B2) */
@@ -2959,21 +2660,7 @@ a { color: inherit; text-decoration: none; }
 
 .section-title-row .section-title { margin-bottom: 0; }
 
-.sample-subtitle {
-  font-size: 11px;
-  color: var(--text-3);
-  margin-bottom: 12px;
-}
-
 /* Streak Shield explainer card (B2) */
-.shield-explainer-card { }
-.shield-explainer-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.shield-explainer-title { font-size: 14px; font-weight: 600; }
-.shield-explainer-sub { font-size: 12px; color: var(--text-3); line-height: 1.4; }
 
 /* Name input - shared by the nickname step (item 5) and reused wherever a
    plain text field is needed in onboarding. */
@@ -3195,19 +2882,7 @@ a { color: inherit; text-decoration: none; }
   line-height: 1.4;
 }
 
-.earn-anticheat-line {
-  font-size: 12px;
-  color: var(--text-3);
-  margin-top: 3px;
-}
-
 /* Earn-rate explainer under the quick-log grid (native parity) */
-.earn-rate-note {
-  font-size: 12px;
-  color: var(--text-3);
-  line-height: 1.4;
-  margin: -6px 0 16px;
-}
 
 /* Paywall: honest "nothing is charged" caption under the CTA */
 .paywall-demo-caption {
@@ -3242,31 +2917,6 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* fix 8 - y-axis subtitle + all-time tag on the earn-tab headline stat cards */
-.acc-subtitle {
-  font-size: 11px;
-  color: var(--text-3);
-  margin: -8px 0 12px;
-}
-
-.analytics-stat-row .analytics-stat-card {
-  position: relative;
-  padding-top: 26px;
-}
-
-.asc-alltime-tag {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  background: var(--fill-raised);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 999px;
-  padding: 2px 8px;
-}
 
 /* fix 10 - Live Activity dims once the workout is actually done */
 .la-badge.la-badge-done {

@@ -151,13 +151,11 @@ let screenTimeAnswered = false;
 // shell is ready.
 let pendingToastMessages = [];
 
-// Earn-tab live workout timer (item 3b - replaces the old retroactive
-// duration-picker quick log). One workout runs at a time; module-scope
-// interval only drives the visible 1s tick, the source of truth is always
-// state.activeWorkout's real timestamps (see computeActiveWorkoutElapsedMs).
+// Lock-screen widget and Live Activity ticks. The free timer itself runs on
+// the Coach tab (coach.js); the source of truth is always state.activeWorkout's
+// real timestamps (see computeActiveWorkoutElapsedMs).
 let widgetInterval = null;
 let laElapsedInterval = null;
-let liveTimerTickInterval = null;
 
 // ===== RING DEPLETION COLOR (item 2d) =====
 // One shared gradient (defined once in the hero ring's <defs>, referenced by
@@ -206,9 +204,6 @@ function updateRingDisplay() {
 
   applyRingDepletionColor(pct);
 
-  // Earn mini ring
-  updateEarnMiniRing(pct);
-
   // Lock screen ring
   updateLockScreenWidgets();
 }
@@ -243,14 +238,6 @@ function fitRingCountdown() {
     size -= 1;
     el.style.fontSize = `${size}px`;
   }
-}
-
-function updateEarnMiniRing(pct) {
-  const arc = document.getElementById('earn-mini-arc');
-  if (!arc) return;
-  const circumference = 150;
-  const offset = circumference - (pct * circumference);
-  arc.setAttribute('stroke-dashoffset', offset.toFixed(2));
 }
 
 // ===== LOCK SCREEN WIDGETS =====
@@ -448,6 +435,7 @@ function hideOverlay(id) {
 
 // ===== TABS =====
 function switchTab(tabName) {
+  if (tabName === 'earn') tabName = 'coach'; // the Earn tab became Coach; old links still land there
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
@@ -457,10 +445,11 @@ function switchTab(tabName) {
   if (btn) btn.classList.add('active');
 
   state.currentTab = tabName;
+  const shell = document.getElementById('app-shell');
+  if (shell) shell.classList.toggle('on-coach', tabName === 'coach');
+  if (typeof coachOnTab === 'function') coachOnTab(); // the Coach tab, its timer bar and pinned button
 
-  if (tabName === 'earn') {
-    requestAnimationFrame(() => renderEarnAnalytics(currentEarnRange));
-  } else if (tabName === 'today') {
+  if (tabName === 'today') {
     updateRingDisplay(); // item 2b - explicit repaint, not just tiles/chart
     refreshTodayNumbers();
   } else if (tabName === 'friends') {
@@ -773,7 +762,7 @@ function proceedToApp() {
   showScreen('app-shell');
   state.remainingSeconds = state.dailyAllowanceMinutes * 60;
   state.totalSeconds = dayTotalMinutes() * 60;
-  paintAppShell(); // WF-01 - the Earn UI always mirrors state (timer card hidden, tiles enabled)
+  paintAppShell(); // WF-01 - the Coach UI always mirrors state (no timer left running)
   saveState();
 }
 
@@ -782,10 +771,8 @@ function proceedToApp() {
 // by the live day rollover (WF-03), so no entry point can leave a stale timer
 // card, a dimmed tile or an unflushed toast behind.
 function paintAppShell() {
-  renderEarnedList();
   renderAppTiles();
   buildWeekChart();
-  renderEarnAnalytics(currentEarnRange);
   updateRingDisplay();
   updateDateLabel();
   updateGreeting();
@@ -796,8 +783,7 @@ function paintAppShell() {
   updateRingCaption();
   updateEarnRateNote();
   setTextContent('earned-display', state.earnedMinutes);
-  setTextContent('earn-today-display', state.earnedMinutes);
-  restoreActiveWorkoutIfAny(); // item 3b - an in-progress workout stays evident across a reload
+  if (typeof coachRestore === 'function') coachRestore(); // item 3b - a running timer or workout stays evident across a reload
   resolvePendingSession();     // WF-09 - a session left mid-transition is charged now, not out of the blue later
   flushPendingToasts();
 }
@@ -1333,25 +1319,7 @@ function buildWeekChart() {
 // appended DOM-only) so a page reload always reflects reality, and an empty
 // day shows an honest empty state instead of a phantom seeded entry.
 function renderEarnedList() {
-  const list = document.getElementById('earned-list');
-  if (!list) return;
-  list.innerHTML = '';
-
-  if (state.worktimeLoggedToday.length === 0) {
-    list.innerHTML = `<div class="earned-empty" id="earned-empty">Nothing yet today - log a workout to earn time.</div>`;
-    return;
-  }
-
-  state.worktimeLoggedToday.forEach(entry => {
-    const item = document.createElement('div');
-    item.className = 'earned-item';
-    item.innerHTML = `
-      <span class="earned-icon tint-${workoutTint(entry.label)}" aria-hidden="true">${iconHTML(workoutGlyphId(entry.label), 'icon-20')}</span>
-      <span class="earned-label">${entry.label}</span>
-      <span class="earned-mins">+${entry.earned} min</span>
-    `;
-    list.appendChild(item);
-  });
+  if (typeof coachRefresh === 'function') coachRefresh(); // the list lives in Coach's Earned today sheet
 }
 
 // Cheap, event-driven refresh of everything derived from "used minutes today" (A8).
@@ -1616,7 +1584,6 @@ function addEarnedMinutes(mins) {
   state.remainingSeconds += mins * 60;
   state.totalSeconds += mins * 60;
   setTextContent('earned-display', state.earnedMinutes);
-  setTextContent('earn-today-display', state.earnedMinutes);
   updateRingDisplay();
   refreshTodayNumbers(); // A8 - chart/tiles stay consistent
   saveState(); // A7
@@ -1640,142 +1607,10 @@ function grantPartnerMinutes(mins) {
 }
 
 // ===== LIVE WORKOUT TIMER (item 3b) =====
-// One workout runs at a time. The visible tick is a setInterval, but the
-// SOURCE OF TRUTH is always real timestamps (startedAt + pausedTotalMs), so
-// a reload mid-workout recovers the correct elapsed time instead of
-// resetting to 0 or freezing.
-function startWorkoutTimer(workoutName) {
-  if (state.activeWorkout) return; // one at a time
-  state.activeWorkout = { name: workoutName, startedAt: Date.now(), pausedTotalMs: 0, pausedAt: null };
-  saveState();
-  showWorkoutTimerUI();
-  revealLiveTimerCard();
-}
-
-// W6 (WV-09, ND-27 parity) - the card already sits above the quick-log grid;
-// this scrolls the Earn tab's own scroll container (never scrollIntoView, which
-// would also walk up to #phone-frame) so the whole card is in view above the
-// tab bar, e.g. when the workout was picked from the Other sheet further down.
-function revealLiveTimerCard() {
-  const card = document.getElementById('live-timer-card');
-  const scroller = document.querySelector('#tab-earn .tab-scroll');
-  if (!card || !scroller || card.style.display === 'none') return;
-  const tabBar = document.querySelector('.tab-bar');
-  const sRect = scroller.getBoundingClientRect();
-  const cRect = card.getBoundingClientRect();
-  const visibleTop = sRect.top + 12;
-  const visibleBottom = Math.min(sRect.bottom, tabBar ? tabBar.getBoundingClientRect().top : sRect.bottom) - 12;
-  let delta = 0;
-  if (cRect.top < visibleTop) delta = cRect.top - visibleTop;
-  else if (cRect.bottom > visibleBottom) delta = Math.min(cRect.bottom - visibleBottom, cRect.top - visibleTop);
-  if (delta !== 0) {
-    scroller.scrollTo({ top: scroller.scrollTop + delta, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
-  }
-}
-
-function showWorkoutTimerUI() {
-  const aw = state.activeWorkout;
-  if (!aw) { hideWorkoutTimerUI(); return; }
-  const card = document.getElementById('live-timer-card');
-  if (card) card.style.display = 'block';
-  const earnTab = document.getElementById('tab-earn');
-  if (earnTab) earnTab.classList.add('timer-active');
-  setTextContent('live-timer-workout-name', aw.name);
-  updatePauseResumeBtn();
-  tickLiveTimer();
-  clearInterval(liveTimerTickInterval);
-  liveTimerTickInterval = setInterval(tickLiveTimer, 1000);
-  // Disabling (not hiding) the quick-log tiles makes it visually obvious a
-  // workout is already running rather than silently ignoring a second tap.
-  document.querySelectorAll('.workout-tile').forEach(t => { t.disabled = true; });
-}
-
-function hideWorkoutTimerUI() {
-  const card = document.getElementById('live-timer-card');
-  if (card) card.style.display = 'none';
-  const earnTab = document.getElementById('tab-earn');
-  if (earnTab) earnTab.classList.remove('timer-active');
-  clearInterval(liveTimerTickInterval);
-  liveTimerTickInterval = null;
-  document.querySelectorAll('.workout-tile').forEach(t => { t.disabled = false; });
-}
-
-// Evident-on-return (item 3b): call once at app-shell entry so a workout
-// left running survives a reload instead of silently vanishing.
-function restoreActiveWorkoutIfAny() {
-  if (state.activeWorkout) showWorkoutTimerUI();
-  else hideWorkoutTimerUI();
-}
-
-function tickLiveTimer() {
-  if (!state.activeWorkout) return;
-  const elapsedMs = computeActiveWorkoutElapsedMs();
-  setTextContent('live-timer-display', formatTimerMMSS(elapsedMs));
-  updateLiveActivityCard(); // keeps the lock-screen mock in sync with the real timer
-}
-
-function updatePauseResumeBtn() {
-  const btn = document.getElementById('live-timer-pause-btn');
-  if (!btn) return;
-  const paused = !!(state.activeWorkout && state.activeWorkout.pausedAt);
-  btn.innerHTML = paused ? `${iconHTML('i-play', 'icon-16')}Resume` : `${iconHTML('i-pause', 'icon-16')}Pause`;
-}
-
-function toggleWorkoutPause() {
-  const aw = state.activeWorkout;
-  if (!aw) return;
-  if (aw.pausedAt) {
-    aw.pausedTotalMs += (Date.now() - aw.pausedAt);
-    aw.pausedAt = null;
-  } else {
-    aw.pausedAt = Date.now();
-  }
-  saveState();
-  updatePauseResumeBtn();
-  tickLiveTimer();
-}
-
-// Small fly-up "+N min" animation, reused from the old duration-picker flow
-// but anchored to whatever element is passed in (the live-timer card here).
-function flyEarnedMinsLabel(anchorEl, text) {
-  if (!anchorEl) return;
-  const frame = document.getElementById('phone-frame');
-  if (!frame) return;
-  const rect = anchorEl.getBoundingClientRect();
-  const frameRect = frame.getBoundingClientRect();
-  const fly = document.createElement('div');
-  fly.className = 'earn-fly-label';
-  fly.textContent = text;
-  fly.style.left = `${rect.left - frameRect.left + 80}px`;
-  fly.style.top = `${rect.top - frameRect.top - 20}px`;
-  frame.appendChild(fly);
-  setTimeout(() => fly.remove(), 1000);
-}
-
-function endWorkoutTimer() {
-  const aw = state.activeWorkout;
-  if (!aw) return;
-  const elapsedMs = computeActiveWorkoutElapsedMs();
-  const elapsedMinutes = Math.max(0, Math.round(elapsedMs / 60000));
-  const earnedPreview = Math.round(elapsedMinutes * state.earnRateMultiplier);
-
-  // WF-08 / WV-08 - under half a minute rounds to nothing: no credit, no
-  // confetti, no "+0 min" row. Same wording as the native app.
-  if (earnedPreview === 0) {
-    state.activeWorkout = null;
-    hideWorkoutTimerUI();
-    saveState();
-    showToast('Too short to count - nothing logged');
-    return;
-  }
-
-  flyEarnedMinsLabel(document.getElementById('live-timer-card'), `+${earnedPreview} min`);
-
-  state.activeWorkout = null;
-  hideWorkoutTimerUI();
-  saveState();
-  creditWorkout(aw.name, elapsedMinutes);
-}
+// The free timer now lives on the Coach tab (coach.js): a full-screen cover
+// and, minimized, a resume bar on every tab. It keeps using
+// state.activeWorkout and computeActiveWorkoutElapsedMs, so a reload
+// recovers the real elapsed time, and it credits through creditWorkout.
 
 // ===== SHARED WORKOUT CREDIT (drives Earned Today, Streak Shield) =====
 // Every workout-completion path (Quick log's live timer, the "Other"
@@ -1783,27 +1618,37 @@ function endWorkoutTimer() {
 // diverge. duration is always REAL minutes, never a picked/retroactive value.
 // opts.quiet (WF-26, a workout credited during the day rollover) skips the
 // confetti and the live toast; any toast goes through the pending queue.
+// opts.silent skips both toasts because the caller (the Coach tab) shows its
+// own; opts.kind ('timed' or 'coach') is kept on the earned row for its sub line.
+// Returns what was credited, so that caller can word its toast.
 function creditWorkout(workoutName, duration, opts = {}) {
   const quiet = !!opts.quiet;
+  const silent = !!opts.silent;
+  let shieldBanked = false;
   const earnedMins = Math.round(duration * state.earnRateMultiplier);
   addEarnedMinutes(earnedMins);
   state.lastWorkout = { name: workoutName, mins: earnedMins, at: Date.now(), done: true }; // B6, WC-18
   if (!quiet) launchConfetti();
 
-  state.worktimeLoggedToday.push({ label: workoutName, mins: duration, earned: earnedMins });
-  renderEarnedList();
+  const entry = { label: workoutName, mins: duration, earned: earnedMins };
+  if (opts.kind) { entry.kind = opts.kind; entry.at = Date.now(); }
+  state.worktimeLoggedToday.push(entry);
 
-  if (!quiet) showToast(`Logged! +${earnedMins} min earned 🎉`);
+  if (!quiet && !silent) showToast(`Logged! +${earnedMins} min earned 🎉`);
 
   // B2 - a 30-min-plus workout banks a Streak Shield (max 2).
   if (duration >= 30 && state.streakShields < 2) {
     state.streakShields++;
+    shieldBanked = true;
     updateShieldChip();
-    if (quiet) pendingToastMessages.push('Streak Shield earned! 🛡️');
-    else setTimeout(() => showToast('Streak Shield earned! 🛡️'), 400);
+    if (silent) { /* the caller words its own toast (see opts.silent above) */ }
+    else if (quiet) pendingToastMessages.push('Streak Shield earned!'); // no emoji: a Coach timer that crosses midnight lands here
+    else setTimeout(() => showToast('Streak Shield earned!'), 400);
   }
 
   saveState();
+  renderEarnedList();
+  return { earned: earnedMins, shieldBanked };
 }
 
 // ===== CONFETTI =====
@@ -1897,14 +1742,17 @@ function updateRingCaption() {
   caption.innerHTML = `${state.dailyAllowanceMinutes} min allowance + <span id="earned-display">${state.earnedMinutes}</span> min earned${partnerPart} · ${expiryText}`;
 }
 
-// Earn-rate explainer on the Earn tab (same strings as the real app).
-// Refreshed whenever the rate changes, in onboarding or in Settings.
-function updateEarnRateNote() {
+// Earn-rate line (same strings as the real app), shared by every Coach screen
+// that states the rate. Refreshed whenever the rate changes, in onboarding or
+// in Settings.
+function earnRateLine() {
   const rate = state.earnRateMultiplier;
-  const text = rate === 1
+  return rate === 1
     ? 'Every minute you move earns 1 minute of scroll time.'
     : `Every minute you move earns ${rate} min of scroll time - change it in Settings.`;
-  setTextContent('earn-rate-note', text);
+}
+function updateEarnRateNote() {
+  if (typeof coachRefresh === 'function') coachRefresh();
 }
 
 // item 5 - shared nickname validation: onboarding's nickname step and the
@@ -2324,6 +2172,7 @@ function ensureCurrentDay() {
 
 // Single storage key (A11) - everything lives in balance_state.
 function saveState() {
+  if (typeof coachHoldsSaves === 'function' && coachHoldsSaves()) return; // a Coach test address (?coach= or ?coachSeed=) only reads; it never writes the saved demo
   ensureCurrentDay(); // WF-03 - never stamp a new date on yesterday's numbers
   localStorage.setItem('balance_state', JSON.stringify({
     earnedMinutes: state.earnedMinutes,
@@ -2407,6 +2256,7 @@ function applyDailyReset(prevDateStr, curDateStr) {
 
   if (crossingWorkout && crossingMinutes > 0) {
     creditWorkout(crossingWorkout.name, crossingMinutes, { quiet: true });
+    if (typeof coachLogCrossing === 'function') coachLogCrossing(crossingWorkout.name, crossingMinutes); // the coach's history counts it too
     pendingToastMessages.push('Your workout from last night was logged today.');
   }
 }
@@ -2578,7 +2428,7 @@ function signOutAccount() {
   // A running workout or an unresolved session does not follow the account.
   state.activeWorkout = null;
   state.pendingSession = null;
-  hideWorkoutTimerUI(); // stops the tick and re-enables the quick-log tiles
+  if (typeof coachSignOutCleanup === 'function') coachSignOutCleanup(); // stops the timer, closes Coach's cover and sheet, cancels a planned workout
   saveState();
 
   // Paywall leftovers from an earlier pass through onboarding.
@@ -2599,376 +2449,6 @@ function signOutAccount() {
 function deleteAccount() {
   closeSettings();
   replayDemo();
-}
-
-// ===== EARN ANALYTICS DATA =====
-// 56 days of historical data (deterministic, no random)
-// Screen time: starts ~240 min/day, trends down to ~105 min/day
-// Workout: starts ~3 min/day, trends up to ~45 min/day
-const SCREEN_TIME_SERIES = [
-  238, 252, 231, 245, 260, 248, 255, // week 1 (high baseline)
-  242, 228, 244, 230, 235, 218, 229, // week 2
-  226, 215, 232, 218, 210, 224, 216, // week 3
-  205, 195, 212, 198, 207, 188, 202, // week 4 (start of big drop)
-  180, 192, 175, 185, 170, 195, 178, // week 5
-  162, 175, 158, 168, 155, 178, 160, // week 6
-  148, 162, 140, 152, 145, 168, 150, // week 7
-  128, 142, 115, 135, 122, 145, 118, // week 8 (most recent)
-];
-
-const WORKOUT_SERIES = [
-   3,  0,  5,  0,  8,  0,  4, // week 1
-   6,  0, 10,  5,  0, 12,  8, // week 2
-   8, 15,  0, 12, 10,  0, 18, // week 3
-  12,  0, 20, 15,  5, 22, 10, // week 4
-  18, 25,  0, 20, 28,  0, 22, // week 5
-  25, 30, 10, 28, 32,  0, 30, // week 6
-  30, 35, 15, 38, 30, 20, 42, // week 7
-  35, 45,  0, 40, 48, 30, 45, // week 8
-];
-
-let currentEarnRange = 'month';
-
-function getEarnRangeSlice(range) {
-  if (range === 'week') {
-    return {
-      screen: SCREEN_TIME_SERIES.slice(-7),
-      workout: WORKOUT_SERIES.slice(-7),
-    };
-  } else if (range === 'month') {
-    return {
-      screen: SCREEN_TIME_SERIES.slice(-30),
-      workout: WORKOUT_SERIES.slice(-30),
-    };
-  } else {
-    // All time - downsample to 8 weekly averages
-    const screenWeekly = [];
-    const workoutWeekly = [];
-    for (let w = 0; w < 8; w++) {
-      const slice = SCREEN_TIME_SERIES.slice(w * 7, w * 7 + 7);
-      const wSlice = WORKOUT_SERIES.slice(w * 7, w * 7 + 7);
-      screenWeekly.push(Math.round(slice.reduce((a, b) => a + b, 0) / slice.length));
-      workoutWeekly.push(Math.round(wSlice.reduce((a, b) => a + b, 0) / wSlice.length));
-    }
-    return { screen: screenWeekly, workout: workoutWeekly };
-  }
-}
-
-function countUpTo(el, target, suffix, duration) {
-  if (!el) return;
-  if (prefersReducedMotion()) { el.textContent = target + suffix; return; } // W6 (WV-19) - values appear final
-  const start = performance.now();
-  function step(now) {
-    const elapsed = now - start;
-    const progress = Math.min(elapsed / duration, 1);
-    // ease out cubic
-    const eased = 1 - Math.pow(1 - progress, 3);
-    const current = Math.round(eased * target);
-    el.textContent = current + suffix;
-    if (progress < 1) requestAnimationFrame(step);
-    else el.textContent = target + suffix;
-  }
-  requestAnimationFrame(step);
-}
-
-function buildAnalyticsSVG(svgId, data, color, isScreenTime, range) {
-  const svg = document.getElementById(svgId);
-  if (!svg) return;
-  svg.innerHTML = '';
-
-  const W = 320, H = 120;
-  const padL = 42, padR = 4, padT = 16, padB = 20; // fix 8 - left gutter fits the widest 11px label ("247m") plus its 6px gap, nothing clips (W4-r1)
-
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range_ = max - min || 1;
-  const mid = (min + max) / 2;
-
-  function xPos(i) {
-    return padL + (i / (data.length - 1)) * (W - padL - padR);
-  }
-  function yPos(val) {
-    return padT + (1 - (val - min) / range_) * (H - padT - padB);
-  }
-
-  const gridNS = 'http://www.w3.org/2000/svg';
-
-  // fix 8 - 3 left-side gridline labels (bottom/mid/top, in minutes) with
-  // matching horizontal gridlines, replacing the old two tiny right-side hints.
-  [min, mid, max].forEach(val => {
-    const y = yPos(val);
-    const gridLine = document.createElementNS(gridNS, 'line');
-    gridLine.setAttribute('x1', padL); gridLine.setAttribute('x2', W - padR);
-    gridLine.setAttribute('y1', y.toFixed(1)); gridLine.setAttribute('y2', y.toFixed(1));
-    gridLine.setAttribute('stroke', 'rgba(255,255,255,0.07)');
-    gridLine.setAttribute('stroke-width', '1');
-    svg.appendChild(gridLine);
-
-    const label = document.createElementNS(gridNS, 'text');
-    label.setAttribute('x', padL - 6);
-    label.setAttribute('y', (y + 3).toFixed(1));
-    label.setAttribute('text-anchor', 'end');
-    label.setAttribute('font-size', '11');
-    label.setAttribute('font-weight', '600');
-    label.setAttribute('fill', 'rgba(240,244,255,0.55)');
-    label.textContent = `${Math.round(val)}m`;
-    svg.appendChild(label);
-  });
-
-  // Build path points
-  const points = data.map((val, i) => `${xPos(i).toFixed(1)},${yPos(val).toFixed(1)}`);
-
-  // Area fill path (closed)
-  const areaPoints = [
-    `${padL},${H - padB}`,
-    ...data.map((val, i) => `${xPos(i).toFixed(1)},${yPos(val).toFixed(1)}`),
-    `${xPos(data.length - 1).toFixed(1)},${H - padB}`,
-  ];
-
-  // Area gradient
-  const defs = document.createElementNS(gridNS, 'defs');
-  const gradId = `grad-${svgId}`;
-  const linearGrad = document.createElementNS(gridNS, 'linearGradient');
-  linearGrad.setAttribute('id', gradId);
-  linearGrad.setAttribute('x1', '0'); linearGrad.setAttribute('y1', '0');
-  linearGrad.setAttribute('x2', '0'); linearGrad.setAttribute('y2', '1');
-  const stop1 = document.createElementNS(gridNS, 'stop');
-  stop1.setAttribute('offset', '0%');
-  stop1.setAttribute('stop-color', color);
-  stop1.setAttribute('stop-opacity', '0.25');
-  const stop2 = document.createElementNS(gridNS, 'stop');
-  stop2.setAttribute('offset', '100%');
-  stop2.setAttribute('stop-color', color);
-  stop2.setAttribute('stop-opacity', '0.0');
-  linearGrad.appendChild(stop1);
-  linearGrad.appendChild(stop2);
-  defs.appendChild(linearGrad);
-  svg.appendChild(defs);
-
-  // Area
-  const area = document.createElementNS(gridNS, 'polygon');
-  area.setAttribute('points', areaPoints.join(' '));
-  area.setAttribute('fill', `url(#${gradId})`);
-  svg.appendChild(area);
-
-  // Line path
-  const totalLen = data.reduce((acc, val, i) => {
-    if (i === 0) return 0;
-    const dx = xPos(i) - xPos(i - 1);
-    const dy = yPos(val) - yPos(data[i - 1]);
-    return acc + Math.sqrt(dx * dx + dy * dy);
-  }, 0);
-
-  const polyline = document.createElementNS(gridNS, 'polyline');
-  polyline.setAttribute('points', points.join(' '));
-  polyline.setAttribute('fill', 'none');
-  polyline.setAttribute('stroke', color);
-  polyline.setAttribute('stroke-width', '2.5');
-  polyline.setAttribute('stroke-linecap', 'round');
-  polyline.setAttribute('stroke-linejoin', 'round');
-  // Animate stroke-dashoffset
-  polyline.setAttribute('stroke-dasharray', totalLen.toFixed(1));
-  polyline.setAttribute('stroke-dashoffset', totalLen.toFixed(1));
-  polyline.style.transition = 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)';
-  svg.appendChild(polyline);
-
-  // fix 8 - week range gets a dot on every data point (not just the last one);
-  // month/all-time keep a single "latest point" dot to avoid clutter.
-  const dotIndices = range === 'week' ? data.map((_, i) => i) : [data.length - 1];
-  dotIndices.forEach(i => {
-    const isLast = i === data.length - 1;
-    const dot = document.createElementNS(gridNS, 'circle');
-    dot.setAttribute('cx', xPos(i).toFixed(1));
-    dot.setAttribute('cy', yPos(data[i]).toFixed(1));
-    dot.setAttribute('r', isLast ? '5' : '3.5');
-    dot.setAttribute('fill', isLast ? '#34D399' : color);
-    dot.setAttribute('stroke', '#0B0F1A');
-    dot.setAttribute('stroke-width', '2');
-    dot.style.opacity = '0';
-    dot.style.transition = 'opacity 0.3s ease 0.7s';
-    svg.appendChild(dot);
-  });
-
-  // Animate on next frame
-  requestAnimationFrame(() => {
-    polyline.setAttribute('stroke-dashoffset', '0');
-    svg.querySelectorAll('circle').forEach(dot => { dot.style.opacity = '1'; });
-  });
-}
-
-function buildAxisLabels(containerId, data, range) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  el.innerHTML = '';
-
-  if (range === 'week') {
-    const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-    dayLabels.forEach(d => {
-      const span = document.createElement('span');
-      span.textContent = d;
-      el.appendChild(span);
-    });
-  } else if (range === 'month') {
-    const labels = ['30d ago', '23d', '16d', '9d', '3d', 'Today'];
-    labels.forEach(d => {
-      const span = document.createElement('span');
-      span.textContent = d;
-      el.appendChild(span);
-    });
-  } else {
-    const labels = ['Wk 1','Wk 2','Wk 3','Wk 4','Wk 5','Wk 6','Wk 7','Wk 8'];
-    labels.forEach(d => {
-      const span = document.createElement('span');
-      span.textContent = d;
-      el.appendChild(span);
-    });
-  }
-}
-
-function renderEarnAnalytics(range) {
-  currentEarnRange = range;
-  const { screen, workout } = getEarnRangeSlice(range);
-
-  // Compute stats (all-time references for headline stats)
-  const allScreen = SCREEN_TIME_SERIES;
-  const allWorkout = WORKOUT_SERIES;
-
-  // Headline: screen time % drop from week 1 average to week 8 average (all-time)
-  const w1Screen = allScreen.slice(0, 7).reduce((a, b) => a + b, 0) / 7;
-  const w8Screen = allScreen.slice(-7).reduce((a, b) => a + b, 0) / 7;
-  const screenPctDrop = Math.round(((w1Screen - w8Screen) / w1Screen) * 100);
-
-  // Headline: workout mult from week 1 avg to week 8 avg
-  const w1Workout = Math.max(1, allWorkout.slice(0, 7).reduce((a, b) => a + b, 0) / 7);
-  const w8Workout = allWorkout.slice(-7).reduce((a, b) => a + b, 0) / 7;
-  const workoutMult = Math.round(w8Workout / w1Workout);
-
-  // Supporting: total earned this period (workout minutes summed)
-  const totalEarned = workout.reduce((a, b) => a + b, 0);
-
-  // Update stat values with count-up animation
-  const screenPctEl = document.getElementById('stat-screen-pct');
-  const workoutMultEl = document.getElementById('stat-workout-mult');
-  const earnedTotalEl = document.getElementById('stat-earned-total');
-  const streakEl = document.getElementById('stat-streak');
-  const earnedLabelEl = document.getElementById('stat-earned-label');
-
-  if (screenPctEl) {
-    screenPctEl.textContent = '-';
-    countUpTo(screenPctEl, screenPctDrop, '%', 700);
-    screenPctEl.style.color = 'var(--mint)';
-    setTimeout(() => {
-      if (screenPctEl) screenPctEl.textContent = `↓ ${screenPctDrop}%`;
-    }, 720);
-  }
-
-  if (workoutMultEl) {
-    workoutMultEl.textContent = '-';
-    countUpTo(workoutMultEl, workoutMult, '×', 700);
-    workoutMultEl.style.color = 'var(--mint)';
-    setTimeout(() => {
-      if (workoutMultEl) workoutMultEl.textContent = `↑ ${workoutMult}×`;
-    }, 720);
-  }
-
-  if (earnedTotalEl) {
-    earnedTotalEl.textContent = '-';
-    countUpTo(earnedTotalEl, totalEarned, 'm', 600);
-  }
-
-  if (earnedLabelEl) {
-    earnedLabelEl.textContent = range === 'week' ? 'Minutes earned this week' :
-      range === 'month' ? 'Minutes earned this month' : 'Minutes earned total';
-  }
-
-  if (streakEl) {
-    streakEl.textContent = '-';
-    countUpTo(streakEl, state.streakDays, '', 500);
-    setTimeout(() => {
-      if (streakEl) streakEl.textContent = formatStreakText(state.streakDays);
-    }, 520);
-  }
-
-  // fix 8 - subtitle reflects what the chart is actually showing
-  const subtitleText = range === 'all' ? 'weekly average' : 'minutes per day';
-  setTextContent('screen-chart-subtitle', subtitleText);
-  setTextContent('workout-chart-subtitle', subtitleText);
-
-  // Build charts
-  buildAnalyticsSVG('chart-screen', screen, '#F87171', true, range);
-  buildAnalyticsSVG('chart-workout', workout, '#34D399', false, range);
-
-  // Axis labels
-  buildAxisLabels('acc-screen-axis', screen, range);
-  buildAxisLabels('acc-workout-axis', workout, range);
-
-  // fix 8 - trend badges computed from the VISIBLE range (not all-time)
-  applyTrendBadge('trend-screen', computeTrendBadge(screen, range, 'screen'));
-  applyTrendBadge('trend-workout', computeTrendBadge(workout, range, 'workout'));
-
-  // Update segmented control indicator
-  positionSegIndicator(range);
-}
-
-// fix 8 - compares the first third vs last third of the currently displayed
-// series so the badge always describes what's actually on screen, not a
-// fixed all-time stat. Hidden entirely when the change is under 5%.
-function computeTrendBadge(data, range, kind) {
-  const n = data.length;
-  const thirdLen = Math.max(1, Math.floor(n / 3));
-  const firstAvg = data.slice(0, thirdLen).reduce((a, b) => a + b, 0) / thirdLen;
-  const lastAvg = data.slice(-thirdLen).reduce((a, b) => a + b, 0) / thirdLen;
-  const rangeLabel = range === 'week' ? 'this week' : range === 'month' ? 'this month' : 'all-time';
-  const safeFirst = Math.max(1, firstAvg);
-  const pctChange = ((lastAvg - firstAvg) / safeFirst) * 100;
-
-  if (Math.abs(pctChange) < 5) return null;
-
-  if (kind === 'screen') {
-    const pct = Math.round(Math.abs(pctChange));
-    return pctChange < 0
-      ? { text: `↓ ${pct}% ${rangeLabel}`, cls: 'mint' }
-      : { text: `↑ ${pct}% ${rangeLabel}`, cls: 'coral' };
-  }
-
-  // workout minutes - express growth as a multiplier, drop as a percent
-  const ratio = lastAvg / safeFirst;
-  if (ratio >= 1) {
-    return { text: `↑ ${Math.max(1, Math.round(ratio))}× ${rangeLabel}`, cls: 'mint' };
-  }
-  const pct = Math.round(Math.abs(pctChange));
-  return { text: `↓ ${pct}% ${rangeLabel}`, cls: 'coral' };
-}
-
-function applyTrendBadge(elId, trend) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  if (!trend) {
-    el.style.display = 'none';
-    el.textContent = ''; // fix 15 - don't leave stale text on a hidden node
-    return;
-  }
-  el.style.display = '';
-  el.textContent = trend.text;
-  el.className = `acc-trend ${trend.cls}`;
-}
-
-function positionSegIndicator(range) {
-  const seg = document.getElementById('earn-range-seg');
-  const indicator = document.getElementById('seg-indicator');
-  if (!seg || !indicator) return;
-
-  const btns = seg.querySelectorAll('.seg-btn');
-  btns.forEach(b => b.classList.remove('active'));
-
-  const activeBtn = seg.querySelector(`[data-range="${range}"]`);
-  if (!activeBtn) return;
-  activeBtn.classList.add('active');
-
-  const segRect = seg.getBoundingClientRect();
-  const btnRect = activeBtn.getBoundingClientRect();
-  indicator.style.left = (btnRect.left - segRect.left) + 'px';
-  indicator.style.width = btnRect.width + 'px';
 }
 
 // ===== INIT =====
@@ -3527,8 +3007,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Gear / settings
   document.getElementById('gear-btn').addEventListener('click', openSettings);
 
-  // Earn more time button → go to Earn tab
-  document.getElementById('earn-more-btn').addEventListener('click', () => switchTab('earn'));
+  // Earn more time button: go to the Coach tab
+  document.getElementById('earn-more-btn').addEventListener('click', () => switchTab('coach'));
 
   // Widget link in Today tab
   document.getElementById('widget-link-today').addEventListener('click', showLockScreen);
@@ -3560,47 +3040,19 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('ask-partner-btn').addEventListener('click', askSarah);
   document.getElementById('ask-again-btn').addEventListener('click', askSarah);
 
-  // ── EARN TAB ──
+  // ── COACH TAB ── (coach.js wires its own taps)
 
-  // Earn analytics range control
-  document.querySelectorAll('.seg-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const range = btn.dataset.range;
-      renderEarnAnalytics(range);
-    });
-  });
-
-  // A12 - keep the segmented-control indicator aligned across viewport resizes.
-  // W6 repair - the hero number is re-fitted too (the ring is 176px on a short phone).
+  // W6 repair - the hero number is re-fitted on resize (the ring is 176px on a short phone).
   window.addEventListener('resize', () => {
-    if (state.currentTab === 'earn') positionSegIndicator(currentEarnRange);
     fitRingCountdown();
   });
-
-  // item 3b - tap a workout tile to start its live timer immediately
-  // (one clear tap-and-go). "Other" opens the workout-type library instead.
-  document.querySelectorAll('.workout-tile').forEach(tile => {
-    tile.addEventListener('click', () => {
-      if (state.activeWorkout) return; // one workout at a time
-      const workout = tile.dataset.workout;
-      if (workout === 'Other') {
-        openOtherLibrary();
-        return;
-      }
-      startWorkoutTimer(workout);
-    });
-  });
-
-  document.getElementById('live-timer-pause-btn').addEventListener('click', toggleWorkoutPause);
-  document.getElementById('live-timer-end-btn').addEventListener('click', endWorkoutTimer);
 
   // item 3c - "Other" workout-type library sheet.
   document.getElementById('other-overlay').addEventListener('click', closeOtherLibrary);
   document.querySelectorAll('.other-workout-row').forEach(row => {
     row.addEventListener('click', () => {
       closeOtherLibrary();
-      if (state.activeWorkout) return;
-      startWorkoutTimer(row.dataset.workout);
+      coachStartFree(row.dataset.workout);
     });
   });
 
