@@ -687,16 +687,16 @@
     "mobilityFlow": "Gentle stretches for your hips, back and shoulders.",
   };
   var EXERCISES = [
-    ex("benchPress", "Bench Press", "horizontalPush", "chest", "barbell", "compound", "weightReps", "F", {step: 5, min: 45, start: [45, 65, 95]}),
+    ex("benchPress", "Bench Press", "horizontalPush", "chest", "barbell", "compound", "weightReps", "F", {step: 5, min: 45, start: [45, 65, 95], easier: "dumbbellBenchPress"}),
     ex("inclineDumbbellPress", "Incline Dumbbell Press", "horizontalPush", "chest", "dumbbell", "compound", "weightReps", "F", {hand: true, step: 5, min: 5, start: [10, 20, 30]}),
     ex("dumbbellBenchPress", "Dumbbell Bench Press", "horizontalPush", "chest", "dumbbell", "compound", "weightReps", "F", {hand: true, step: 5, min: 5, start: [15, 25, 35]}),
     ex("dumbbellFloorPress", "Dumbbell Floor Press", "horizontalPush", "chest", "dumbbell", "compound", "weightReps", "FD", {hand: true, step: 5, min: 5, start: [15, 25, 35]}),
     ex("machineChestPress", "Machine Chest Press", "horizontalPush", "chest", "machine", "compound", "weightReps", "F", {step: 5, min: 5, start: [40, 60, 90]}),
     ex("pushUp", "Push-Up", "horizontalPush", "chest", "bodyweight", "compound", "reps", "FDB", {start: [5, 10, 15], easier: "kneePushUp"}),
-    ex("inclinePushUp", "Incline Push-Up", "horizontalPush", "chest", "bodyweight", "compound", "reps", "FDB", {start: [8, 12, 15], harder: "kneePushUp"}),
+    ex("inclinePushUp", "Incline Push-Up", "horizontalPush", "chest", "bodyweight", "compound", "reps", "FDB", {start: [8, 12, 15], harder: "pushUp"}),
     ex("kneePushUp", "Knee Push-Up", "horizontalPush", "chest", "bodyweight", "compound", "reps", "FDB", {start: [6, 10, 15], harder: "pushUp", easier: "inclinePushUp"}),
     ex("dumbbellFly", "Dumbbell Fly", "chestFly", "chest", "dumbbell", "isolation", "weightReps", "FD", {hand: true, step: 5, min: 5, start: [5, 10, 15]}),
-    ex("overheadPress", "Overhead Press", "verticalPush", "shoulders", "barbell", "compound", "weightReps", "F", {step: 5, min: 45, start: [45, 55, 75]}),
+    ex("overheadPress", "Overhead Press", "verticalPush", "shoulders", "barbell", "compound", "weightReps", "F", {step: 5, min: 45, start: [45, 55, 75], easier: "dumbbellShoulderPress"}),
     ex("dumbbellShoulderPress", "Dumbbell Shoulder Press", "verticalPush", "shoulders", "dumbbell", "compound", "weightReps", "FD", {hand: true, step: 5, min: 5, start: [10, 15, 25]}),
     ex("pikePushUp", "Pike Push-Up", "verticalPush", "shoulders", "bodyweight", "compound", "reps", "FDB", {start: [4, 8, 12], easier: "inclinePikePushUp"}),
     ex("inclinePikePushUp", "Incline Pike Push-Up", "verticalPush", "shoulders", "bodyweight", "compound", "reps", "FDB", {start: [5, 8, 10], harder: "pikePushUp"}),
@@ -705,7 +705,7 @@
     ex("overheadTricepsExtension", "Overhead Triceps Extension", "triceps", "triceps", "dumbbell", "isolation", "weightReps", "FD", {step: 5, min: 5, start: [10, 15, 25]}),
     ex("chairDip", "Chair Dip", "triceps", "triceps", "bodyweight", "isolation", "reps", "FDB", {start: [6, 10, 15], easier: "closeGripInclinePushUp"}),
     ex("closeGripInclinePushUp", "Close-Grip Incline Push-Up", "triceps", "triceps", "bodyweight", "isolation", "reps", "FDB", {start: [6, 10, 12]}),
-    ex("barbellRow", "Barbell Row", "horizontalPull", "back", "barbell", "compound", "weightReps", "F", {step: 5, min: 45, start: [45, 65, 95]}),
+    ex("barbellRow", "Barbell Row", "horizontalPull", "back", "barbell", "compound", "weightReps", "F", {step: 5, min: 45, start: [45, 65, 95], easier: "dumbbellRow"}),
     ex("seatedCableRow", "Seated Cable Row", "horizontalPull", "back", "cable", "compound", "weightReps", "F", {step: 5, min: 5, start: [40, 60, 90]}),
     ex("dumbbellRow", "One-Arm Dumbbell Row", "horizontalPull", "back", "dumbbell", "compound", "weightReps", "FD", {side: true, step: 5, min: 5, start: [15, 25, 40]}),
     ex("doorwayRow", "Doorway Row", "horizontalPull", "back", "bodyweight", "compound", "reps", "FDB", {start: [8, 12, 15]}),
@@ -719,13 +719,13 @@
     ex("supermanHold", "Superman Hold", "backExtension", "back", "bodyweight", "isolation", "seconds", "FDB", {start: [15, 20, 30]}),
     ex("dumbbellCurl", "Dumbbell Curl", "biceps", "biceps", "dumbbell", "isolation", "weightReps", "FD", {hand: true, step: 5, min: 5, start: [10, 15, 20]}),
     ex("hammerCurl", "Hammer Curl", "biceps", "biceps", "dumbbell", "isolation", "weightReps", "FD", {hand: true, step: 5, min: 5, start: [10, 15, 20]}),
-    ex("backSquat", "Back Squat", "squat", "quads", "barbell", "compound", "weightReps", "F", {step: 10, min: 45, start: [45, 65, 95]}),
+    ex("backSquat", "Back Squat", "squat", "quads", "barbell", "compound", "weightReps", "F", {step: 10, min: 45, start: [45, 65, 95], easier: "gobletSquat"}),
     ex("legPress", "Leg Press", "squat", "quads", "machine", "compound", "weightReps", "F", {step: 10, min: 10, start: [50, 90, 140]}),
     ex("gobletSquat", "Goblet Squat", "squat", "quads", "dumbbell", "compound", "weightReps", "FD", {step: 5, min: 5, start: [15, 25, 40]}),
     ex("bodyweightSquat", "Bodyweight Squat", "squat", "quads", "bodyweight", "compound", "reps", "FDB", {start: [10, 15, 20], harder: "splitSquat"}),
     ex("wallSit", "Wall Sit", "squat", "quads", "bodyweight", "isolation", "seconds", "FDB", {start: [20, 30, 40]}),
-    ex("deadlift", "Deadlift", "hinge", "hamstrings", "barbell", "compound", "weightReps", "F", {step: 10, min: 45, start: [65, 95, 135]}),
-    ex("romanianDeadlift", "Romanian Deadlift", "hinge", "hamstrings", "barbell", "compound", "weightReps", "F", {step: 10, min: 45, start: [45, 65, 95]}),
+    ex("deadlift", "Deadlift", "hinge", "back", "barbell", "compound", "weightReps", "F", {step: 10, min: 45, start: [65, 95, 135], easier: "dumbbellRomanianDeadlift"}),
+    ex("romanianDeadlift", "Romanian Deadlift", "hinge", "hamstrings", "barbell", "compound", "weightReps", "F", {step: 10, min: 45, start: [45, 65, 95], easier: "dumbbellRomanianDeadlift"}),
     ex("dumbbellRomanianDeadlift", "Dumbbell Romanian Deadlift", "hinge", "hamstrings", "dumbbell", "compound", "weightReps", "FD", {hand: true, step: 5, min: 5, start: [15, 25, 35]}),
     ex("bodyweightGoodMorning", "Bodyweight Good Morning", "hinge", "hamstrings", "bodyweight", "compound", "reps", "FDB", {start: [10, 12, 15]}),
     ex("gluteBridge", "Glute Bridge", "glute", "glutes", "bodyweight", "isolation", "reps", "FDB", {start: [10, 15, 20], harder: "singleLegGluteBridge"}),
@@ -872,15 +872,19 @@
     ["REPS_HARD", "It felt hard - same weight and {newR} {repWord(newR)}{side} next time."],
     ["REPS_HOLD", "Same weight, aim for {newR} {repWord(newR)}{side} on every set again."],
     ["NEW_BASE", "Good work - next time {newW} lb{hand} for {newR} {repWord(newR)}{side} on every set."],
+    ["NEW_BASE.lighter", "Lighter is fine - next time {newW} lb{hand} for {newR} {repWord(newR)}{side} on every set, then build up from there."],
     ["GRACE", "New weight - stay at {newW} lb{hand} next time and aim for {lo} {repWord(lo)}{side}."],
     ["MISS_ONCE", "Tough day - same weight next time, aim for {lo} {repWord(lo)}{side}."],
     ["MISS_LIGHTER", "Tough day - next time {newW} lb{hand}, aim for {lo} {repWord(lo)}{side}."],
     ["DELOAD", "Two tough sessions in a row - dropping to {newW} lb{hand} to build back up."],
     ["STALL", "You have been at this weight a while - dropping to {newW} lb{hand} to build back up."],
+    ["STALL_REPS", "You have been at this weight a while - same weight, aim for {lo} {repWord(lo)}{side} to build back up."],
+    ["MISS_BIG", "That was much harder than planned - dropping to {newW} lb{hand} to build back up."],
     ["REBUILD", "Building back up - adding {inc} lb{hand}."],
     ["CAPPED", "Nice work - we will build up to that step by step: {newW} lb{hand} next time."],
-    ["AT_MIN", "This is the lightest weight - aim for {lo} {repWord(lo)}{side}.{easier}"],
+    ["AT_MIN", "This is the lightest weight - aim for {newR} {repWord(newR)}{side} on every set next time.{easier}"],
     ["CAL_DOWN", "That was heavy for a first try - starting lighter at {newW} lb{hand}."],
+    ["CAL_DOWN.later", "That was heavy - next time {newW} lb{hand} while we find your level."],
     ["C_UP", "You hit {T} {u(T)} on every set - aim for {newT} {u(newT)} next time."],
     ["C_UP_EASY", "That felt easy - aim for {newT} {u(newT)} next time."],
     ["C_ADD_SET", "You hit {cap} {u(cap)} on every set - adding a set."],
@@ -889,6 +893,7 @@
     ["C_HARD", "It felt hard - same target next time."],
     ["C_FINISH_SETS", "Finish all {P} {setWord(P)} to move up."],
     ["C_HOLD", "Aim for {T} {u(T)} on every set again."],
+    ["C_TIME", "That fills the time you set for this session - same target next time."],
     ["C_MISS_ONCE", "Tough day - same target next time."],
     ["C_DOWN", "Two tough sessions in a row - next time aim for {newT} {u(newT)}.{easierLow}"],
     ["C_CAL_DOWN", "Starting a little easier - next time aim for {newT} {u(newT)}.{easierLow}"],
@@ -897,6 +902,7 @@
     ["CA_HARD", "It felt hard - same time next time."],
     ["CA_CAP", "You are at the top goal of {cap} {minWord(cap)} - keep it up."],
     ["CA_WEEK_HOLD", "Nice work - more time comes next week."],
+    ["CA_TIME", "That fills the time you set for this session - same time next time."],
     ["CA_HOLD", "Same goal next time: {T} {minWord(T)}."],
     ["CA_MISS_ONCE", "A shorter day is fine - same goal next time: {T} {minWord(T)}."],
     ["CA_DOWN", "Two short sessions in a row - next goal {newT} {minWord(newT)}."],
@@ -914,13 +920,16 @@
     ["lift.mostReps", "Most in one set: {r} {repWord(r)}{side}"],
     ["lift.longestHold", "Longest hold: {s} {secWord(s)}{side}"],
   ];
+  // The separator of every 14.3 summary: a middle dot (U+00B7) with a space on each side. It is the only
+  // character outside printable ASCII the engine ever writes (1.4). Reasons (14.4) keep " - ".
+  var SUMMARY_SEP = " \u00B7 ";
   var SUMMARY_TEMPLATES = [
-    ["done", "Done - {d} min"],
-    ["doneLifted", "Done - {d} min - {p} lb lifted"],
-    ["active", "In progress - {n} {exWord(n)}"],
-    ["training", "{n} {exWord(n)} - about {aboutMinutes} min"],
-    ["cardio", "{exercise name} - {M} min"],
-    ["recovery", "Easy walk and stretching - {sum of slot minutes} min"],
+    ["done", "Done" + SUMMARY_SEP + "{d} min"],
+    ["doneLifted", "Done" + SUMMARY_SEP + "{d} min" + SUMMARY_SEP + "{p} lb lifted"],
+    ["active", "In progress" + SUMMARY_SEP + "{n} {exWord(n)}"],
+    ["training", "{n} {exWord(n)}" + SUMMARY_SEP + "about {aboutMinutes} min"],
+    ["cardio", "{exercise name}" + SUMMARY_SEP + "{M} min"],
+    ["recovery", "Easy walk and stretching" + SUMMARY_SEP + "{sum of slot minutes} min"],
     ["restMoved", "{title} moves to your next training day"],
     ["rest", "Optional: a 10-minute easy walk"],
   ];
@@ -1054,10 +1063,12 @@
   }
 
   // Goal tables (6).
-  function libRepRange(goal, experience, cls) {
+  /** `barbell` matters only for getStronger: heavy barbell compounds use the low reps, every other move 8 to 10. */
+  function libRepRange(goal, experience, cls, barbell) {
     var compound = cls === "compound";
     switch (goal) {
-      case "getStronger": return compound ? (experience === "new" ? { lo: 6, hi: 8 } : { lo: 4, hi: 6 }) : { lo: 8, hi: 10 };
+      case "getStronger":
+        return compound && barbell ? (experience === "new" ? { lo: 6, hi: 8 } : { lo: 4, hi: 6 }) : { lo: 8, hi: 10 };
       case "buildMuscle": return compound ? { lo: 8, hi: 12 } : { lo: 10, hi: 15 };
       case "loseFat": return compound ? { lo: 8, hi: 12 } : { lo: 12, hi: 15 };
       case "stayFit": return compound ? { lo: 6, hi: 10 } : { lo: 10, hi: 15 };
@@ -1083,8 +1094,15 @@
     }
   }
 
-  var REPS_CONSTANTS = { unit: 1, easyUnit: 2, missMargin: 2, drop: 2, minValue: 1, resetDrop: 4, stallSessions: 4 };
-  var SECONDS_CONSTANTS = { unit: 5, easyUnit: 10, missMargin: 10, drop: 10, minValue: 10, resetDrop: 15, stallSessions: 4 };
+  var REPS_CONSTANTS = { unit: 1, easyUnit: 2, missMargin: 2, minValue: 1, resetDrop: 4, stallSessions: 4, comebackFloor: 3 };
+  var SECONDS_CONSTANTS = {
+    unit: 5, easyUnit: 10, missMargin: 10, minValue: 10, resetDrop: 15, stallSessions: 4, comebackFloor: 10,
+  };
+
+  /** `percent` of t rounded down to whole units, at least one unit (6.2). */
+  function countCut(c, t, percent) { return Math.max(c.unit, div(div(t * percent, 100), c.unit) * c.unit); }
+  /** The target after two misses or a stall: about 20 percent lower, at least one unit, never below minValue. */
+  function countDropped(c, t) { return Math.max(c.minValue, t - countCut(c, t, 20)); }
 
   function restTable(g) {
     switch (g) {
@@ -1182,6 +1200,8 @@
     ["barbellRow", ["seatedCableRow", "dumbbellRow"]],
     ["pushUp", ["inclinePushUp", "kneePushUp"]],
     ["pikePushUp", ["inclinePikePushUp"]],
+    ["overheadPress", ["dumbbellShoulderPress"]],
+    ["chairDip", ["closeGripInclinePushUp"]],
   ];
 
   // Descriptions (7.5).
@@ -1320,6 +1340,52 @@
     return total;
   }
 
+  function earlierPounds(e) {
+    if (e.logType !== "weightReps") return 0;
+    var f = e.loadFactor === undefined ? 1 : e.loadFactor;
+    var total = 0;
+    for (var i = 0; i < e.sets.length; i++) {
+      var s = e.sets[i];
+      total += (s.weight === undefined ? 0 : s.weight) * (s.reps === undefined ? 0 : s.reps) * f;
+    }
+    return total;
+  }
+
+  /** Record pounds (13.1): item pounds plus the pounds of every earlier part. */
+  function recordPounds(items) {
+    var total = 0;
+    for (var i = 0; i < items.length; i++) total += items[i].pounds + (items[i].earlier ? items[i].earlier.pounds : 0);
+    return total;
+  }
+
+  /**
+   * The record's history items (13): for each item in order, its earlier part (B3) as a non-skipped item of
+   * the earlier move, then the item itself. Without earlier parts this is just the items.
+   */
+  function historyItems(r) {
+    var out = [];
+    for (var i = 0; i < r.items.length; i++) {
+      var it = r.items[i];
+      var e = it.earlier;
+      if (e) {
+        out.push({
+          slot: it.slot, exerciseId: e.exerciseId, name: e.name, logType: e.logType, role: it.role, target: it.target,
+          sets: e.sets, warmupSets: e.warmupSets, loadFactor: e.loadFactor, minutes: undefined, distanceHundredths: undefined,
+          feel: undefined, skipped: false, pounds: e.pounds, earlier: undefined,
+        });
+      }
+      out.push(it);
+    }
+    return out;
+  }
+
+  /** Slots with something logged: the item is not skipped or it has an earlier part (B3). */
+  function doneSlots(r) {
+    var n = 0;
+    for (var i = 0; i < r.items.length; i++) if (!r.items[i].skipped || r.items[i].earlier) n += 1;
+    return n;
+  }
+
   function cardioContext(key) {
     if (typeof key !== "string" || !isASCII(key)) return undefined;
     var i = key.indexOf(":");
@@ -1341,7 +1407,7 @@
   /** Rep range of a weighted move for a profile (6.1); without a profile [1, 30]. */
   function repRange(e, p) {
     if (!p) return { lo: 1, hi: 30 };
-    return libRepRange(p.goal, p.experience, e.cls);
+    return libRepRange(p.goal, p.experience, e.cls, e.equipment === "barbell");
   }
 
   /** The profile-dependent clamps of 4.4. */
@@ -1353,7 +1419,8 @@
       case "weightReps": {
         var r = repRange(e, p);
         s.weight = clampInt(s.weight === undefined ? e.minWeight : s.weight, e.minWeight, e.maxWeight);
-        s.reps = clampInt(s.reps === undefined ? r.lo : s.reps, r.lo, r.hi);
+        // At the lightest weight the reps target may sit below lo while the person builds up to it (12.1).
+        s.reps = clampInt(s.reps === undefined ? r.lo : s.reps, s.weight === e.minWeight ? 1 : r.lo, r.hi);
         s.seconds = undefined;
         if (s.graceLeft === undefined) s.graceLeft = 0;
         if (s.rebuildTo !== undefined && s.rebuildTo <= s.weight) s.rebuildTo = undefined;
@@ -1501,6 +1568,14 @@
     put(o, "minutes", i.minutes);
     put(o, "distanceHundredths", i.distanceHundredths);
     put(o, "feel", i.feel);
+    if (i.earlier) o.earlier = encEarlier(i.earlier);
+    return o;
+  }
+
+  function encEarlier(e) {
+    var o = { exerciseId: e.exerciseId, name: e.name, logType: e.logType, sets: e.sets.map(encSet), pounds: e.pounds };
+    put(o, "warmupSets", e.warmupSets);
+    put(o, "loadFactor", e.loadFactor);
     return o;
   }
 
@@ -1548,6 +1623,7 @@
       }),
     };
     if (u.queue) o.queue = u.queue.slice();
+    if (u.day !== undefined) o.day = u.day;
     return o;
   }
 
@@ -1704,6 +1780,11 @@
         var fitsNow = ce ? fitsEq(ce, p.equipment) : false;
         var be0 = exercise(s.baseExerciseId);
         if (!fitsNow && be0 && fitsEq(be0, p.equipment)) s.exerciseId = s.baseExerciseId;
+        // A move outside the slot's family (a hand-edited file) falls back to the base instead of dropping
+        // the whole plan (SPEC_GAPS 10).
+        if (s.exerciseId !== s.baseExerciseId && family(s.baseExerciseId).indexOf(s.exerciseId) < 0) {
+          s.exerciseId = s.baseExerciseId;
+        }
         // 2b.
         var e = exercise(s.exerciseId);
         var be = exercise(s.baseExerciseId);
@@ -1719,7 +1800,6 @@
           default: wantCardio = false;
         }
         if (isCardioEx(e) !== wantCardio) return undefined;
-        if (!(s.exerciseId === s.baseExerciseId || family(s.baseExerciseId).indexOf(s.exerciseId) >= 0)) return undefined;
         // 2c.
         s.minutes = bw.slots[sj].minutes;
       }
@@ -2074,9 +2154,7 @@
       if (pr) prs.push(pr);
     }
     r.records = prs;
-    var pounds = 0;
-    for (var z = 0; z < r.items.length; z++) pounds += r.items[z].pounds;
-    r.pounds = pounds;
+    r.pounds = recordPounds(r.items);
     return r;
   }
 
@@ -2094,36 +2172,11 @@
     var role = mEnum(v, "role", ROLES);
     if (role === undefined) role = "accessory";
     var target = decTarget(mValue(v, "target"), lt, false, lib) || { sets: 0, weight: undefined, reps: undefined, seconds: undefined, minutes: undefined };
-    var sets = [];
-    if (lt !== "cardio") {
-      var setsRaw = mArray(v, "sets") || [];
-      for (var i = 0; i < setsRaw.length; i++) {
-        var sm = setsRaw[i];
-        if (!isObject(sm)) continue;
-        var s = { weight: undefined, reps: undefined, seconds: undefined };
-        if (lt === "weightReps") {
-          var w = mInt(sm, "weight", 1, 1500);
-          var r = mInt(sm, "reps", 1, 100);
-          if (w === undefined || r === undefined) continue;
-          s.weight = w;
-          s.reps = r;
-        } else if (lt === "reps") {
-          var r2 = mInt(sm, "reps", 1, 200);
-          if (r2 === undefined) continue;
-          s.reps = r2;
-        } else {
-          var sec = mInt(sm, "seconds", 1, 3600);
-          if (sec === undefined) continue;
-          s.seconds = sec;
-        }
-        sets.push(s);
-        if (sets.length === 10) break;
-      }
-    }
+    var sets = decSetLogs(mArray(v, "sets") || [], lt);
     var it = {
       slot: slot, exerciseId: x, name: name, logType: lt, role: role, target: target, sets: sets,
       warmupSets: undefined, loadFactor: undefined, minutes: undefined, distanceHundredths: undefined, feel: undefined,
-      skipped: false, pounds: 0,
+      skipped: false, pounds: 0, earlier: undefined,
     };
     if (lt === "cardio") {
       it.minutes = mInt(v, "minutes", 0, 600);
@@ -2146,7 +2199,64 @@
       it.warmupSets = clampInt(wu === undefined ? 0 : wu, 0, Math.max(0, it.sets.length - 1));
     }
     it.pounds = itemPounds(it);
+    var ev = mValue(v, "earlier");
+    if (ev !== undefined) it.earlier = decEarlier(ev);
     return it;
+  }
+
+  /** The stored sets of one item (4.7): only the members of its logType, in range; at most 10. */
+  function decSetLogs(setsRaw, lt) {
+    var sets = [];
+    if (lt === "cardio") return sets;
+    for (var i = 0; i < setsRaw.length; i++) {
+      var sm = setsRaw[i];
+      if (!isObject(sm)) continue;
+      var s = { weight: undefined, reps: undefined, seconds: undefined };
+      if (lt === "weightReps") {
+        var w = mInt(sm, "weight", 1, 1500);
+        var r = mInt(sm, "reps", 1, 100);
+        if (w === undefined || r === undefined) continue;
+        s.weight = w;
+        s.reps = r;
+      } else if (lt === "reps") {
+        var r2 = mInt(sm, "reps", 1, 200);
+        if (r2 === undefined) continue;
+        s.reps = r2;
+      } else {
+        var sec = mInt(sm, "seconds", 1, 3600);
+        if (sec === undefined) continue;
+        s.seconds = sec;
+      }
+      sets.push(s);
+      if (sets.length === 10) break;
+    }
+    return sets;
+  }
+
+  /** An earlier part (B3, 4.7): dropped when it has no exerciseId, its logType is cardio or unknown, or no set is left. */
+  function decEarlier(v) {
+    if (!isObject(v)) return undefined;
+    var x = mString(v, "exerciseId");
+    if (x === undefined) return undefined;
+    var lib = exercise(x);
+    var lt = mEnum(v, "logType", LOG_TYPES);
+    if (lt === undefined) lt = lib ? lib.logType : undefined;
+    if (lt === undefined || lt === "cardio") return undefined;
+    var sets = decSetLogs(mArray(v, "sets") || [], lt);
+    if (sets.length === 0) return undefined;
+    var name = mString(v, "name");
+    var e = {
+      exerciseId: x, name: name === undefined ? (lib ? lib.name : "Exercise") : name, logType: lt, sets: sets,
+      warmupSets: undefined, loadFactor: undefined, pounds: 0,
+    };
+    if (lt === "weightReps") {
+      var lf = mInt(v, "loadFactor");
+      e.loadFactor = (lf === 1 || lf === 2 || lf === 4) ? lf : (lib ? loadFactor(lib) : 1);
+      var wu = mInt(v, "warmupSets");
+      e.warmupSets = clampInt(wu === undefined ? 0 : wu, 0, Math.max(0, sets.length - 1));
+    }
+    e.pounds = earlierPounds(e);
+    return e;
   }
 
   function decPR(v) {
@@ -2269,7 +2379,11 @@
     }
     lifts.sort(function (a, b) { return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0); });
     cardio.sort(function (a, b) { return a.key < b.key ? -1 : (a.key > b.key ? 1 : 0); });
-    return { recordId: rid, lifts: lifts, cardio: cardio, queue: queue };
+    // The day the session was finished (11.4). A day before the record's own day cannot be right; it is
+    // dropped (the record day is used).
+    var uday = mDay(m, "day");
+    if (uday !== undefined && dayNumber(uday) < dayNumber(newest.day)) uday = undefined;
+    return { recordId: rid, lifts: lifts, cardio: cardio, queue: queue, day: uday };
   }
 
   // ---------------------------------------------------------------------------------------------------
@@ -2407,15 +2521,31 @@
   }
 
   function applyPreferences(bases, roles, minutes, p, prefs) {
+    // Pass 1: every slot takes its preference when the move fits. Pass 2: a swapped slot that now holds
+    // the same move as another slot goes back to its base when the other slot is at its base or comes
+    // earlier; repeat until nothing changes. Chained swaps (A to B while B's slot goes to C) survive.
     var ids = bases.slice();
-    for (var j = 0; j < bases.length; j++) {
+    var j = 0;
+    for (j = 0; j < bases.length; j++) {
       var pref = prefs.get(bases[j]);
       if (pref === undefined) continue;
       var e = exercise(pref);
-      if (!e || !fitsEq(e, p.equipment)) continue;
-      var clash = false;
-      for (var k = 0; k < ids.length; k++) if (k !== j && ids[k] === pref) clash = true;
-      if (!clash) ids[j] = pref;
+      if (e && fitsEq(e, p.equipment)) ids[j] = pref;
+    }
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (j = 0; j < ids.length; j++) {
+        if (ids[j] === bases[j]) continue;
+        var clash = false;
+        for (var k = 0; k < ids.length; k++) {
+          if (k !== j && ids[k] === ids[j] && (ids[k] === bases[k] || k < j)) clash = true;
+        }
+        if (clash) {
+          ids[j] = bases[j];
+          changed = true;
+        }
+      }
     }
     var out = [];
     for (var i = 0; i < bases.length; i++) out.push({ role: roles[i], exerciseId: ids[i], baseExerciseId: bases[i], minutes: minutes[i] });
@@ -2455,17 +2585,21 @@
     var start = e.start.length === 0 ? 0 : e.start[expIndex(experience)];
     switch (e.logType) {
       case "weightReps": {
-        var lo = libRepRange(goal, experience, e.cls).lo;
+        var lo = libRepRange(goal, experience, e.cls, e.equipment === "barbell").lo;
         l.graceLeft = 0;
         l.reps = lo;
         if (seed) {
-          var wp = div(seed.weight * seed.percent, 100);
+          var raw = div(seed.weight * seed.percent, 100);
+          // A typed anchor above 4 times the experienced start (a bench over 380 lb) is treated as a likely
+          // typo: it starts from that cap and calibrates instead.
+          var plausible = 4 * (e.start.length === 3 ? e.start[2] : e.maxWeight);
+          var wp = Math.min(raw, plausible);
           if (wp < e.minWeight) {
             l.weight = e.minWeight;
             l.calibrationLeft = cal;
           } else {
             l.weight = scaledWeight(e, wp, seed.reps, lo);
-            l.calibrationLeft = 0;
+            l.calibrationLeft = raw > plausible ? cal : 0;
           }
         } else {
           l.weight = start;
@@ -2525,6 +2659,16 @@
 
   // ---- Effective states (12.5) ----
 
+  /** 1 for a break of 21 to 34 days, 2 for 35 days or more, undefined for a shorter gap. Missing one
+   * session of a once-a-week workout (a 14-day gap) is not a break. */
+  function breakLevel(gap) { return gap < 21 ? undefined : (gap < 35 ? 1 : 2); }
+
+  /** A count target after a break: about 10 percent lower (level 1) or 20 percent (level 2), at least one
+   * unit, never below the smaller of the old target and the comeback floor. */
+  function comebackCount(t, c, n) {
+    return Math.max(Math.max(c.minValue, Math.min(t, c.comebackFloor)), t - countCut(c, t, n === 1 ? 10 : 20));
+  }
+
   function effLift(ctx, x, d, role) {
     var p = ctx.profile;
     var plan = ctx.plan;
@@ -2533,25 +2677,27 @@
     var ldn = stored.lastDay === undefined ? undefined : dayNumber(stored.lastDay);
     if (!(stored.sessions > 0) || ldn === undefined) return { lift: stored, changed: false };
     var gap = d - ldn;
-    if (gap < 14) return { lift: stored, changed: false };
-    var n = gap < 28 ? 1 : 2;
+    var n = breakLevel(gap);
+    if (n === undefined) return { lift: stored, changed: false };
     var l = copyObj(stored);
     switch (e.logType) {
       case "weightReps": {
         var w = stored.weight;
-        var nw = n === 1 ? deload(e, w) : calDown(e, w);
+        // On a light weight where one step is more than 10 percent, a shorter break keeps the weight and
+        // resets the reps; a longer one goes down one step (deload). Otherwise about 10 or 20 percent.
+        var nw = bigStep(e, w) ? (n === 1 ? w : deload(e, w)) : (n === 1 ? deload(e, w) : calDown(e, w));
         l.weight = nw;
-        l.reps = repRange(e, p).lo;
+        l.reps = Math.min(repRange(e, p).lo, stored.reps);
         var rb = Math.max(stored.rebuildTo === undefined ? 0 : stored.rebuildTo, w);
         l.rebuildTo = rb > nw ? rb : undefined;
         l.graceLeft = 0;
         break;
       }
       case "reps":
-        l.reps = Math.max(1, stored.reps - n * 2);
+        l.reps = comebackCount(stored.reps, REPS_CONSTANTS, n);
         break;
       case "seconds":
-        l.seconds = Math.max(10, stored.seconds - n * 10);
+        l.seconds = comebackCount(stored.seconds, SECONDS_CONSTANTS, n);
         break;
       default:
         break;
@@ -2574,8 +2720,8 @@
     var ldn = stored.lastDay === undefined ? undefined : dayNumber(stored.lastDay);
     if (ldn === undefined) return { cardio: stored, changed: false };
     var gap = d - ldn;
-    if (gap < 14) return { cardio: stored, changed: false };
-    var n = gap < 28 ? 1 : 2;
+    var n = breakLevel(gap);
+    if (n === undefined) return { cardio: stored, changed: false };
     var c = copyObj(stored);
     c.minutes = Math.max(10, stored.minutes - n * cardioStep(stored.minutes));
     c.missStreak = 0;
@@ -2605,6 +2751,8 @@
       if (p.sessionMinutes === 30) v = Math.min(v, 60);
     }
     if (isCountEx(e)) v = Math.min(v, 60);
+    // A heavy barbell hinge (deadlift, Romanian deadlift) always gets at least 2 minutes to reset form.
+    if (e.pattern === "hinge" && e.equipment === "barbell") v = Math.max(v, 120);
     return v;
   }
 
@@ -2617,22 +2765,18 @@
     }
     var total = 300;
     for (i = 0; i < items.length; i++) {
-      var it = items[i];
       if (i > 0) total += 60;
-      if (isCardioEx(it.ex)) {
-        total += 60 * (it.target.minutes === undefined ? 0 : it.target.minutes);
-      } else {
-        var sets = it.target.sets;
-        var work = undefined;
-        if (it.ex.logType === "seconds") {
-          work = (it.target.seconds === undefined ? 0 : it.target.seconds) * (it.ex.perSide ? 2 : 1) + 15;
-        } else {
-          work = it.ex.perSide ? 70 : 40;
-        }
-        total += sets * work + Math.max(0, sets - 1) * it.restSeconds;
-      }
+      total += itemSeconds(items[i].ex, items[i].target, items[i].restSeconds);
     }
     return roundHalfUp(total, 60);
+  }
+
+  /** Seconds one item adds to the 6.9 estimate (without the 60 s change-over before it). */
+  function itemSeconds(e, t, rest) {
+    if (isCardioEx(e)) return 60 * (t.minutes === undefined ? 0 : t.minutes);
+    var sets = t.sets;
+    var work = e.logType === "seconds" ? (t.seconds === undefined ? 0 : t.seconds) * (e.perSide ? 2 : 1) + 15 : (e.perSide ? 70 : 40);
+    return sets * work + Math.max(0, sets - 1) * rest;
   }
 
   function aboutMinutes(est) { return Math.max(5, 5 * roundHalfUp(est, 5)); }
@@ -2839,7 +2983,7 @@
       var it = {
         slot: s, exerciseId: x, ex: e, role: slot.role, target: target, restSeconds: restSeconds(p, slot.role, e),
         calibrating: (pt.lift ? pt.lift.calibrationLeft : 0) > 0, range: isWeightedEx(e) ? repRange(e, p) : undefined,
-        notes: [], last: undefined, alternatives: [],
+        notes: [], last: undefined, alternatives: [], change: undefined, fromNumbers: false,
       };
       if (full) {
         it.alternatives = slotOptions(ctx, w, s, xs, pt.lift);
@@ -2852,23 +2996,81 @@
         for (var q = 0; q < nf.length; q++) {
           var r = nf[q];
           if (ctx.index.dayNumbers[r] > ctx.today) continue;
-          var rec = ctx.log[r];
+          var hist = historyItems(ctx.log[r]);
           var item = undefined;
-          for (var z = 0; z < rec.items.length; z++) if (rec.items[z].exerciseId === x) { item = rec.items[z]; break; }
+          for (var z = 0; z < hist.length; z++) if (hist[z].exerciseId === x) { item = hist[z]; break; }
           if (!item) continue;
           if (seen < 2) {
             if (!item.skipped) skippedBoth = false;
             seen += 1;
           }
-          if (last === undefined && !item.skipped && !isCardioEx(e)) last = { day: rec.day, sets: item.sets };
+          if (last === undefined && !item.skipped && !isCardioEx(e)) last = { day: ctx.log[r].day, sets: item.sets };
           if (seen >= 2 && (last !== undefined || isCardioEx(e))) break;
         }
         if (seen === 2 && skippedBoth && it.alternatives.length > 0) it.notes.push(text("skippedTwiceNote"));
         if (last !== undefined) it.last = last;
+        it.change = plannedChange(ctx, w, s, e, target);
+        var pl = pt.lift;
+        if (pl && (e.logType === "weightReps" || e.logType === "reps") && pl.sessions === 0 && pl.calibrationLeft === 0 &&
+            seedFor(x, p) !== undefined) {
+          it.fromNumbers = true;
+        }
       }
       out.push(it);
     }
     return out;
+  }
+
+  /**
+   * B2 (9.4 change): the newest counted record with a non-skipped item of this move (same logType; for a
+   * cardio move also the same role, and for the main cardio block the same context) gives the target
+   * planned that time; it is compared with today's target. Undefined when no such record exists.
+   */
+  function plannedChange(ctx, w, s, e, target) {
+    var role = w.slots[s].role;
+    var here = contextOf(w.id);
+    var nf = ctx.index.newestFirst;
+    for (var q = 0; q < nf.length; q++) {
+      var r = nf[q];
+      if (ctx.index.dayNumbers[r] > ctx.today) continue;
+      var rec = ctx.log[r];
+      var item = undefined;
+      for (var z = 0; z < rec.items.length; z++) {
+        var it = rec.items[z];
+        if (it.exerciseId !== e.id || it.skipped || it.logType !== e.logType) continue;
+        if (isCardioEx(e)) {
+          if (it.role !== role) continue;
+          if (role === "cardio" && contextOf(rec.workoutId === undefined ? "" : rec.workoutId) !== here) continue;
+        }
+        item = it;
+        break;
+      }
+      if (!item) continue;
+      var ct = changeTag(target, item.target, e.logType, item.role === role);
+      return { direction: ct.direction, tag: ct.tag, previous: item.target };
+    }
+    return undefined;
+  }
+
+  /**
+   * Compares two targets of one move: weight, then sets (only when compareSets), then reps, seconds or
+   * minutes. The first that differs gives the direction and the tag ("5 lb", "1 set", "2 reps", "10 sec",
+   * "3 min"); when none differs the direction is same and the tag "Same".
+   */
+  function changeTag(now, was, lt, compareSets) {
+    var parts = [];
+    if (lt === "weightReps") parts.push([now.weight, was.weight, function (n) { return fmt(n) + " lb"; }]);
+    if (lt !== "cardio" && compareSets) parts.push([now.sets, was.sets, function (n) { return fmt(n) + " " + setWord(n); }]);
+    if (lt === "weightReps" || lt === "reps") parts.push([now.reps, was.reps, function (n) { return fmt(n) + " " + repWord(n); }]);
+    else if (lt === "seconds") parts.push([now.seconds, was.seconds, function (n) { return fmt(n) + " sec"; }]);
+    else parts.push([now.minutes, was.minutes, function (n) { return fmt(n) + " min"; }]);
+    for (var i = 0; i < parts.length; i++) {
+      var a = parts[i][0];
+      var b = parts[i][1];
+      if (a === undefined || b === undefined || a === b) continue;
+      return { direction: a > b ? "up" : "down", tag: parts[i][2](a > b ? a - b : b - a) };
+    }
+    return { direction: "same", tag: "Same" };
   }
 
   /** The slot options (swap list) of 9.4. */
@@ -2957,25 +3159,22 @@
     o.minutes = minutes;
     var summary = undefined;
     if (c.done && c.recordIndex !== undefined) {
-      var rec = ctx.log[c.recordIndex];
-      summary = rec.pounds > 0
-        ? "Done - " + fmt(rec.durationMinutes) + " min - " + fmt(rec.pounds) + " lb lifted"
-        : "Done - " + fmt(rec.durationMinutes) + " min";
+      summary = "Done" + SUMMARY_SEP + doneText(ctx.log[c.recordIndex]);
     } else if (c.active) {
-      summary = "In progress - " + fmt(count) + " " + exWord(count);
+      summary = "In progress" + SUMMARY_SEP + fmt(count) + " " + exWord(count);
     } else {
       switch (c.kind) {
         case "training":
-          summary = fmt(count) + " " + exWord(count) + " - about " + fmt(about === undefined ? 5 : about) + " min";
+          summary = fmt(count) + " " + exWord(count) + SUMMARY_SEP + "about " + fmt(about === undefined ? 5 : about) + " min";
           break;
         case "cardio":
-          summary = (items.length > 0 ? items[0].ex.name : "Cardio") + " - " + fmt(minutes) + " min";
+          summary = (items.length > 0 ? items[0].ex.name : "Cardio") + SUMMARY_SEP + fmt(minutes) + " min";
           break;
         case "recovery": {
           var rw = workoutIn(ctx.plan, "recovery");
           var sum = 0;
           for (var z = 0; z < rw.slots.length; z++) sum += rw.slots[z].minutes === undefined ? 0 : rw.slots[z].minutes;
-          summary = "Easy walk and stretching - " + fmt(sum) + " min";
+          summary = "Easy walk and stretching" + SUMMARY_SEP + fmt(sum) + " min";
           break;
         }
         default: {
@@ -3006,6 +3205,10 @@
       o.maxWeight = e.maxWeight;
     }
     if (it.last !== undefined) o.last = { day: it.last.day, sets: it.last.sets.map(encSet) };
+    if (it.change !== undefined) {
+      o.change = { direction: it.change.direction, tag: it.change.tag, previous: encTarget(it.change.previous) };
+    }
+    o.fromNumbers = it.fromNumbers;
     return o;
   }
 
@@ -3097,7 +3300,7 @@
     var newest = 0;
     for (var i = 1; i < ctx.log.length; i++) if (ctx.index.numbers[newest] < ctx.index.numbers[i]) newest = i;
     if (ctx.log[newest].id !== u.recordId) return false;
-    var d = ctx.index.dayNumbers[newest];
+    var d = u.day !== undefined ? dayNumber(u.day) : ctx.index.dayNumbers[newest];
     return d === ctx.today || d === ctx.today - 1;
   }
 
@@ -3182,7 +3385,10 @@
       switch (e.logType) {
         case "weightReps": {
           var r = repRange(e, p);
-          if (l.reps < r.lo) {
+          if (l.weight <= e.minWeight) {
+            // Already at the lightest weight: keep building the reps up toward lo.
+            l.reps = clampInt(l.reps, 1, r.hi);
+          } else if (l.reps < r.lo) {
             l.weight = scaledWeight(e, l.weight, l.reps, r.lo);
             l.reps = r.lo;
             l.missStreak = 0;
@@ -3278,7 +3484,8 @@
   }
 
   /** What progression decides for one item of a finished session. */
-  function progressItem(ctx, w, item, logged, day) {
+  function progressItem(ctx, w, item, logged, day, allowGrowth) {
+    if (allowGrowth === undefined) allowGrowth = true;
     var p = ctx.profile;
     var e = exercise(item.exerciseId);
     var slot = w.slots[item.slot];
@@ -3295,7 +3502,7 @@
     }
     if (isCardioEx(e)) {
       var c = contextOf(w.id);
-      if (slot.role === "cardio" && c !== undefined) return cardioRule(ctx, e, c, logged, day);
+      if (slot.role === "cardio" && c !== undefined) return cardioRule(ctx, e, c, logged, day, allowGrowth);
       return {
         change: "fixed", code: "FIXED", reason: "Nice work - same plan next time.",
         next: mkTarget(1, { minutes: slot.minutes !== undefined ? slot.minutes : item.target.minutes }), calibrating: false,
@@ -3303,8 +3510,15 @@
       };
     }
     var l = effLift(ctx, e.id, day, slot.role).lift;
-    if (isWeightedEx(e)) return weightedRule(ctx, e, slot.role, l, item.target.sets, logged, day);
-    return countRule(ctx, e, slot.role, l, item.target.sets, logged, day);
+    if (isWeightedEx(e)) return weightedRule(ctx, e, slot.role, l, item.target.sets, logged, day, allowGrowth);
+    return countRule(ctx, e, slot.role, l, item.target.sets, logged, day, allowGrowth);
+  }
+
+  /** Codes that make the next session longer and that the time budget may refuse (12.6). */
+  function addsTime(code, e) {
+    if (code === "ADD_SET" || code === "C_ADD_SET" || code === "CA_UP") return true;
+    if (code === "C_UP" || code === "C_UP_EASY") return e.logType === "seconds";
+    return false;
   }
 
   function tupleCompare(a, b) {
@@ -3318,7 +3532,8 @@
   function minOf(a) { var m = a[0]; for (var i = 1; i < a.length; i++) if (a[i] < m) m = a[i]; return m; }
   function maxOf(a) { var m = a[0]; for (var i = 1; i < a.length; i++) if (a[i] > m) m = a[i]; return m; }
 
-  function weightedRule(ctx, e, role, l, pSets, logged, day) {
+  function weightedRule(ctx, e, role, l, pSets, logged, day, allowGrowth) {
+    if (allowGrowth === undefined) allowGrowth = true;
     var p = ctx.profile;
     var rr = repRange(e, p);
     var lo = rr.lo;
@@ -3343,14 +3558,19 @@
     var ms = 0;
     var warm = 0;
     var fromRows = false;
+    // Every counted set at the planned weight or heavier with at least Lr reps (normal mode, 12.1 step 7).
+    var met = false;
 
     function rowsNormal(nE, minR) {
       var top = nE >= pSets && minR >= hi;
-      if (r !== undefined && base < r && nE >= pSets && minR >= lr && f !== "hard") {
-        newW = Math.min(r, snapDown(e, base + step)); newR = lr; code = "REBUILD";
+      if (r !== undefined && base < r && nE >= pSets && minR >= lr && f !== "hard" && !bigStep(e, base)) {
+        // A top-of-range or easy session closes half the gap (at least easyInc); otherwise one step.
+        // After a top-of-range session the reps go back to lo with the heavier weight, as in UP.
+        var rinc = (top || f === "easy") ? Math.max(easyInc(e, base), div(r - base, 2)) : step;
+        newW = Math.min(r, snapDown(e, base + rinc)); newR = top ? lo : lr; code = "REBUILD";
       } else if (top && f === "hard") {
         newW = base; newR = hi; code = "HARD_HOLD";
-      } else if (top && bigStep(e, base) && x < maxExtra && pSets + 1 <= 5) {
+      } else if (top && bigStep(e, base) && x < maxExtra && pSets + 1 <= 5 && allowGrowth) {
         newW = base; newR = hi; code = "ADD_SET";
       } else if (top && f === "easy") {
         newW = snapDown(e, base + easyInc(e, base)); newR = lo; code = "UP_EASY";
@@ -3388,30 +3608,44 @@
       }
     }
 
+    // A miss that came close: every planned set done, and the fewest reps at most 2 short of lo or the
+    // total at least 90 percent of P * lo.
+    function close(evs) {
+      var mr = minOf(evs.map(function (s) { return s.reps; }));
+      var tot = 0;
+      for (var q = 0; q < evs.length; q++) tot += evs[q].reps;
+      return evs.length >= pSets && (mr >= lo - 2 || 10 * tot >= 9 * pSets * lo);
+    }
+
     var ev = undefined, nE = undefined, minR = undefined;
     if (k === 0) {
-      var wu = snapDown(e, div(lw * 8, 10));
-      var lead = 0;
-      while (lead < sets.length && sets[lead].weight < wu) lead += 1;
-      warm = lead === sets.length ? 0 : lead;
+      warm = warmups(e, lw, sets);
       var counted = sets.slice(warm);
       ev = counted.slice(0, pSets);
       nE = ev.length;
       minR = minOf(ev.map(function (s) { return s.reps; }));
       var hiW = maxOf(ev.map(function (s) { return s.weight; }));
       var loW = minOf(ev.map(function (s) { return s.weight; }));
+      met = nE >= pSets && minR >= lr && loW >= lw;
       if (minR < lo) {
         var ref = Math.min(lw, Math.max(minW, hiW));
         base = ref;
         newR = lo;
-        if (l.sessions === 0) {
-          if (ref <= minW) { code = "AT_MIN"; newW = minW; } else { code = "CAL_DOWN"; newW = calDown(e, ref); }
-          ms = 0;
+        var big = e.cls === "compound" && (minR + 3 < lo || 2 * minR < lo);
+        if (ref <= minW) {
+          // The lightest weight: the reps target starts from what was done there and builds up
+          // to lo. Reps done only at heavier weights say nothing about the lightest one.
+          var atMin = ev.filter(function (s) { return s.weight <= minW; });
+          code = "AT_MIN"; newW = minW; ms = 0;
+          newR = atMin.length > 0 ? Math.min(lo, minOf(atMin.map(function (s) { return s.reps; })) + 1) : lo;
+        } else if (l.sessions === 0 && !close(ev)) {
+          code = "CAL_DOWN"; newW = calDown(e, ref); ms = 0;
         } else if (g === 1 && ref === lw && minR >= lo - 2) {
           code = "GRACE"; newW = lw; ms = 0;
+        } else if (big) {
+          code = "MISS_BIG"; newW = deload(e, ref); ms = 0;
         } else if (m0 + 1 >= 2) {
-          if (ref <= minW) { code = "AT_MIN"; newW = minW; } else { code = "DELOAD"; newW = deload(e, ref); }
-          ms = 0;
+          code = "DELOAD"; newW = deload(e, ref); ms = 0;
         } else {
           newW = ref; ms = 1; code = ref === lw ? "MISS_ONCE" : "MISS_LIGHTER";
         }
@@ -3433,10 +3667,19 @@
       if (ok.length === 0) {
         var lightest = minOf(sets.map(function (s) { return s.weight; }));
         var ref2 = Math.min(lw, Math.max(minW, lightest));
+        var evl = sets.filter(function (s) { return s.weight === lightest; }).slice(0, pSets);
+        var minRl = minOf(evl.map(function (s) { return s.reps; }));
         base = ref2;
-        if (ref2 <= minW) { code = "AT_MIN"; newW = minW; } else { code = "CAL_DOWN"; newW = calDown(e, ref2); }
         newR = lo;
-        ms = 0;
+        if (ref2 <= minW) {
+          code = "AT_MIN"; newW = minW; newR = lightest <= minW ? Math.min(lo, minRl + 1) : lo; ms = 0;
+        } else if (!close(evl)) {
+          code = "CAL_DOWN"; newW = calDown(e, ref2); ms = 0;
+        } else if (m0 + 1 >= 2) {
+          code = "DELOAD"; newW = deload(e, ref2); ms = 0;
+        } else {
+          newW = ref2; ms = 1; code = ref2 === lw ? "MISS_ONCE" : "MISS_LIGHTER";
+        }
       } else {
         var wStar = maxOf(ok);
         var w0 = Math.max(minW, wStar);
@@ -3455,8 +3698,16 @@
       if (code === "UP" || code === "UP_EASY" || code === "CAL_UP") code = "UP_NEW_BASE";
       else if (["HARD_HOLD", "FINISH_SETS", "REPS_HARD", "REPS_UP", "REPS_HOLD"].indexOf(code) >= 0) code = "NEW_BASE";
     }
-    // 5. Cap.
-    var capW = k === 0 ? lw + easyInc(e, lw) : Math.max(lw + calInc(e, lw), 2 * lw);
+    // 5. Cap. A rebuild may go back up to rebuildTo; calibration doubles only after a set at the planned
+    // weight or lighter reached lo reps (the person worked up), so a typed 315 cannot double the start.
+    var capW;
+    if (k === 0) {
+      capW = lw + easyInc(e, lw);
+      if (code === "REBUILD" && r !== undefined) capW = Math.max(capW, r);
+    } else {
+      var rampUp = sets.some(function (s) { return s.weight <= lw && s.reps >= lo; });
+      capW = rampUp ? Math.max(lw + calInc(e, lw), 2 * lw) : lw + calInc(e, lw);
+    }
     if (newW > capW) {
       newW = snapDown(e, capW);
       newR = lo;
@@ -3465,19 +3716,29 @@
     newW = Math.min(newW, e.maxWeight);
     // 6. Extra sets.
     var newX = code === "ADD_SET" ? x + 1 : (newW === lw ? x : 0);
-    // 7. Stall.
-    var a1 = (newW === lw && newX === x) ? a + 1 : 0;
-    if (k === 0 && a1 >= (hi - lo) + 4 && deload(e, lw) < lw) {
-      newW = deload(e, lw);
-      newR = lo;
-      newX = 0;
-      ms = 0;
-      a1 = 0;
-      code = "STALL";
+    // 7. Stall: only sessions that missed the target, did not raise it and were not rated easy count.
+    var stalled = k === 0 && newW === lw && newX === x && newR <= lr && f !== "easy" && !met;
+    var a1 = stalled ? a + 1 : 0;
+    if (a1 >= (hi - lo) + 4) {
+      if (bigStep(e, lw) && lr > lo) {
+        newR = lo;
+        newX = 0;
+        ms = 0;
+        a1 = 0;
+        code = "STALL_REPS";
+      } else if (!bigStep(e, lw) && deload(e, lw) < lw) {
+        // One step on a light weight is more than 10 percent, so a stall never drops it.
+        newW = deload(e, lw);
+        newR = lo;
+        newX = 0;
+        ms = 0;
+        a1 = 0;
+        code = "STALL";
+      }
     }
     // 8. Rebuild and grace.
     var rebuild = undefined;
-    if (code === "DELOAD" || code === "STALL") {
+    if (code === "DELOAD" || code === "STALL" || code === "MISS_BIG") {
       rebuild = r === undefined ? lw : undefined;
     } else {
       rebuild = r;
@@ -3520,8 +3781,13 @@
       case "REPS_HARD": reason = "It felt hard - same weight and " + fmt(newR) + " " + repWord(newR) + side + " next time."; break;
       case "REPS_HOLD": reason = "Same weight, aim for " + fmt(newR) + " " + repWord(newR) + side + " on every set again."; break;
       case "NEW_BASE":
-        reason = "Good work - next time " + fmt(newW) + " lb" + hand + " for " + fmt(newR) + " " + repWord(newR) + side +
-          " on every set.";
+        if (newW < lw) {
+          reason = "Lighter is fine - next time " + fmt(newW) + " lb" + hand + " for " + fmt(newR) + " " + repWord(newR) + side +
+            " on every set, then build up from there.";
+        } else {
+          reason = "Good work - next time " + fmt(newW) + " lb" + hand + " for " + fmt(newR) + " " + repWord(newR) + side +
+            " on every set.";
+        }
         break;
       case "GRACE":
         reason = "New weight - stay at " + fmt(newW) + " lb" + hand + " next time and aim for " + fmt(lo) + " " + repWord(lo) +
@@ -3531,18 +3797,28 @@
       case "MISS_LIGHTER":
         reason = "Tough day - next time " + fmt(newW) + " lb" + hand + ", aim for " + fmt(lo) + " " + repWord(lo) + side + ".";
         break;
+      case "MISS_BIG":
+        reason = "That was much harder than planned - dropping to " + fmt(newW) + " lb" + hand + " to build back up.";
+        break;
       case "DELOAD": reason = "Two tough sessions in a row - dropping to " + fmt(newW) + " lb" + hand + " to build back up."; break;
       case "STALL":
         reason = "You have been at this weight a while - dropping to " + fmt(newW) + " lb" + hand + " to build back up.";
+        break;
+      case "STALL_REPS":
+        reason = "You have been at this weight a while - same weight, aim for " + fmt(lo) + " " + repWord(lo) + side +
+          " to build back up.";
         break;
       case "REBUILD": reason = "Building back up - adding " + fmt(inc) + " lb" + hand + "."; break;
       case "CAPPED":
         reason = "Nice work - we will build up to that step by step: " + fmt(newW) + " lb" + hand + " next time.";
         break;
       case "AT_MIN":
-        reason = "This is the lightest weight - aim for " + fmt(lo) + " " + repWord(lo) + side + "." + easierText(e, p);
+        reason = "This is the lightest weight - aim for " + fmt(newR) + " " + repWord(newR) + side + " on every set next time." +
+          easierText(e, p);
         break;
-      default: reason = "That was heavy for a first try - starting lighter at " + fmt(newW) + " lb" + hand + ".";
+      default:
+        if (l.sessions === 0) reason = "That was heavy for a first try - starting lighter at " + fmt(newW) + " lb" + hand + ".";
+        else reason = "That was heavy - next time " + fmt(newW) + " lb" + hand + " while we find your level.";
     }
     var next = mkTarget(targetSets(p, nl, role), { weight: newW, reps: newR });
     return {
@@ -3551,7 +3827,8 @@
     };
   }
 
-  function countRule(ctx, e, role, l, pSets, logged, day) {
+  function countRule(ctx, e, role, l, pSets, logged, day, allowGrowth) {
+    if (allowGrowth === undefined) allowGrowth = true;
     var p = ctx.profile;
     var isReps = e.logType === "reps";
     var c = isReps ? REPS_CONSTANTS : SECONDS_CONSTANTS;
@@ -3571,17 +3848,21 @@
     var newX = x;
     var ms = 0;
     var code = undefined;
-    if (n >= pSets && v >= t) {
+    var success = n >= pSets && v >= t;
+    if (success) {
       if (f === "hard") {
         code = "C_HARD";
       } else if (t >= cap) {
-        if (x < maxExtra && pSets + 1 <= 5) {
+        if (x < maxExtra && pSets + 1 <= 5 && allowGrowth) {
           newX = x + 1;
           newT = Math.max(c.minValue, cap - c.resetDrop);
           code = "C_ADD_SET";
         } else {
           code = "C_MAXED";
         }
+      } else if (!isReps && !allowGrowth) {
+        // A longer hold would push the session past the time the person chose (12.6).
+        code = "C_TIME";
       } else {
         newT = Math.min(cap, v + (f === "easy" ? c.easyUnit : c.unit));
         code = f === "easy" ? "C_UP_EASY" : "C_UP";
@@ -3591,7 +3872,7 @@
         newT = Math.max(c.minValue, v);
         code = "C_CAL_DOWN";
       } else if (m0 + 1 >= 2) {
-        newT = Math.max(c.minValue, t - c.drop);
+        newT = countDropped(c, t);
         code = "C_DOWN";
       } else {
         ms = 1;
@@ -3600,9 +3881,10 @@
     } else {
       code = (n < pSets && v >= t) ? "C_FINISH_SETS" : "C_HOLD";
     }
-    var a1 = (newT === t && newX === x && code !== "C_MAXED") ? a + 1 : 0;
-    if (a1 >= c.stallSessions && Math.max(c.minValue, newT - c.drop) < newT) {
-      newT = Math.max(c.minValue, newT - c.drop);
+    // Stall: only sessions that missed the target, did not change it and were not rated easy count.
+    var a1 = (!success && f !== "easy" && newT === t && newX === x) ? a + 1 : 0;
+    if (a1 >= c.stallSessions && countDropped(c, newT) < newT) {
+      newT = countDropped(c, newT);
       ms = 0;
       a1 = 0;
       code = "C_STALL";
@@ -3633,6 +3915,7 @@
       case "C_HARD": reason = "It felt hard - same target next time."; break;
       case "C_FINISH_SETS": reason = "Finish all " + fmt(pSets) + " " + setWord(pSets) + " to move up."; break;
       case "C_HOLD": reason = "Aim for " + fmt(t) + " " + uWord(e, t) + " on every set again."; break;
+      case "C_TIME": reason = "That fills the time you set for this session - same target next time."; break;
       case "C_MISS_ONCE": reason = "Tough day - same target next time."; break;
       case "C_DOWN":
         reason = "Two tough sessions in a row - next time aim for " + fmt(newT) + " " + uWord(e, newT) + "." + easierLow;
@@ -3648,7 +3931,8 @@
     return { change: change, code: code, reason: reason, lift: nl, next: next, calibrating: nl.calibrationLeft > 0, warmupSets: 0 };
   }
 
-  function cardioRule(ctx, e, context, logged, day) {
+  function cardioRule(ctx, e, context, logged, day, allowGrowth) {
+    if (allowGrowth === undefined) allowGrowth = true;
     var key = context + ":" + e.id;
     var c = effCardio(ctx, key, context, day).cardio;
     var t = c.minutes;
@@ -3670,6 +3954,9 @@
       } else if (c.lastIncreaseWeek !== undefined && dayNumber(c.lastIncreaseWeek) === week) {
         code = "CA_WEEK_HOLD";
         reason = "Nice work - more time comes next week.";
+      } else if (!allowGrowth) {
+        code = "CA_TIME";
+        reason = "That fills the time you set for this session - same time next time.";
       } else {
         newT = Math.min(cap, t + cardioStep(t));
         liw = dayKey(week);
@@ -3702,6 +3989,14 @@
     };
   }
 
+  /** 12.1 step 1: the leading sets below snapDown(div(Lw * 8, 10)) are warm-ups, unless every set is. */
+  function warmups(e, lw, sets) {
+    var wu = snapDown(e, div(lw * 8, 10));
+    var lead = 0;
+    while (lead < sets.length && sets[lead].weight < wu) lead += 1;
+    return lead === sets.length ? 0 : lead;
+  }
+
   // ---- Work sets and personal records (13.3, 13.4) ----
 
   function workSets(item) {
@@ -3722,7 +4017,7 @@
     if (item.skipped || item.logType === "cardio") return [];
     var prior = [];
     for (var i = 0; i < log.length; i++) {
-      var its = log[i].items;
+      var its = historyItems(log[i]);
       for (var j = 0; j < its.length; j++) {
         var it = its[j];
         if (it.exerciseId === item.exerciseId && !it.skipped && it.logType === item.logType) {
@@ -3819,6 +4114,8 @@
     for (var dd = Math.max(m, built); dd <= m + 6; dd++) {
       if (plan.cycle[floorMod(dd - start, 7)] === "training") target += 1;
     }
+    // An extra workout on a free day raises the target with it, so the text never reads "5 of 4".
+    target = Math.max(target, done);
     return { done: done, target: target, text: fmt(done) + " of " + fmt(target) + " this week" };
   }
 
@@ -3832,6 +4129,10 @@
     var last30 = 0;
     var thisWeek = 0;
     var weekly = [0, 0, 0, 0, 0, 0, 0, 0];
+    // B1: plan workouts per week and the split by the record's focus (free workouts are not counted).
+    var weeklyWorkouts = [0, 0, 0, 0, 0, 0, 0, 0];
+    var weeklyByFocus = [];
+    for (var b0 = 0; b0 < 8; b0++) weeklyByFocus.push(new Map());
     var completed = 0;
     var free = 0;
     for (var i = 0; i < counted.length; i++) {
@@ -3843,12 +4144,23 @@
       if (d >= m) thisWeek += r.pounds;
       for (var j = 0; j < 8; j++) {
         var ws = m - 7 * (7 - j);
-        if (d >= ws && d <= ws + 6) weekly[j] += r.pounds;
+        if (d >= ws && d <= ws + 6) {
+          weekly[j] += r.pounds;
+          if (r.kind !== "free") {
+            weeklyWorkouts[j] += 1;
+            var bf = weeklyByFocus[j].get(r.focus) || { pounds: 0, workouts: 0 };
+            weeklyByFocus[j].set(r.focus, { pounds: bf.pounds + r.pounds, workouts: bf.workouts + 1 });
+          }
+        }
       }
       if (r.kind === "free") free += 1; else completed += 1;
     }
     var weeklyOut = [];
-    for (var j2 = 0; j2 < 8; j2++) weeklyOut.push({ weekStart: dayKey(m - 7 * (7 - j2)), pounds: weekly[j2] });
+    for (var j2 = 0; j2 < 8; j2++) {
+      var byFocus = {};
+      weeklyByFocus[j2].forEach(function (v, f) { byFocus[f] = { pounds: v.pounds, workouts: v.workouts }; });
+      weeklyOut.push({ weekStart: dayKey(m - 7 * (7 - j2)), pounds: weekly[j2], workouts: weeklyWorkouts[j2], byFocus: byFocus });
+    }
     var recent = [];
     for (var q = counted.length - 1; q >= 0 && recent.length < 10; q--) recent.push(recentJSON(ctx.log[counted[q]]));
     var o = {
@@ -3864,11 +4176,15 @@
     return o;
   }
 
+  /** The "done" summary of 14.3 without its "Done" start: "{d} min" or "{d} min \u00B7 {p} lb lifted". */
+  function doneText(r) {
+    return r.pounds > 0
+      ? fmt(r.durationMinutes) + " min" + SUMMARY_SEP + fmt(r.pounds) + " lb lifted" : fmt(r.durationMinutes) + " min";
+  }
+
   function recentJSON(r) {
-    var doneCount = 0;
-    for (var i = 0; i < r.items.length; i++) if (!r.items[i].skipped) doneCount += 1;
-    var summary = r.pounds > 0
-      ? fmt(r.durationMinutes) + " min - " + fmt(r.pounds) + " lb lifted" : fmt(r.durationMinutes) + " min";
+    var doneCount = doneSlots(r);
+    var summary = doneText(r);
     return {
       id: r.id, day: r.day, kind: r.kind, title: r.title, focus: r.focus, durationMinutes: r.durationMinutes, pounds: r.pounds,
       exercisesDone: doneCount, recordsSet: r.records.length, summary: summary,
@@ -3880,7 +4196,7 @@
     var newestName = new Map();
     var i = undefined, j = undefined, it = undefined;
     for (i = counted.length - 1; i >= 0; i--) {
-      var items = ctx.log[counted[i]].items;
+      var items = historyItems(ctx.log[counted[i]]);
       for (j = 0; j < items.length; j++) {
         it = items[j];
         if (it.skipped || it.logType === "cardio" || newestType.has(it.exerciseId)) continue;
@@ -3892,10 +4208,11 @@
     for (i = 0; i < counted.length; i++) {
       var r = ctx.log[counted[i]];
       // 13.3: sessions counts records, so a record that holds the same move twice (only possible in a
-      // hand-edited file) counts once. The Swift engine counts items here; see SWIFT_BUGS.md.
+      // hand-edited file) counts once. Swift does the same since the 11/22 repair.
       var seen = new Set();
-      for (j = 0; j < r.items.length; j++) {
-        it = r.items[j];
+      var hist = historyItems(r);
+      for (j = 0; j < hist.length; j++) {
+        it = hist[j];
         if (it.skipped) continue;
         var lt = newestType.get(it.exerciseId);
         if (lt === undefined || lt !== it.logType) continue;
@@ -3968,8 +4285,9 @@
     for (var i = 0; i < counted.length; i++) {
       var r = ctx.log[counted[i]];
       var it = undefined;
-      for (var j = 0; j < r.items.length; j++) {
-        var c = r.items[j];
+      var hist = historyItems(r);
+      for (var j = 0; j < hist.length; j++) {
+        var c = hist[j];
         if (c.exerciseId === e.id && !c.skipped && c.logType === e.logType) { it = c; break; }
       }
       if (!it) continue;
@@ -4414,7 +4732,7 @@
     };
     s.log.push(r);
     s.counters.nextRecordNumber += 1;
-    s.undo = { recordId: id, lifts: [], cardio: [], queue: undefined };
+    s.undo = { recordId: id, lifts: [], cardio: [], queue: undefined, day: dayKey(t) };
     return done(okResult({ record: encRecord(r) }), s);
   }
 
@@ -4782,6 +5100,22 @@
 
   // ---- completeSession (11.3) ----
 
+  /** A sets array of the 11.3 input: at most 10 objects whose weight, reps and seconds are integers. */
+  function parseSets(sv) {
+    if (!Array.isArray(sv) || sv.length > 10) throw fail("invalidInput");
+    var out = [];
+    for (var j = 0; j < sv.length; j++) {
+      var sm = sv[j];
+      if (!isObject(sm)) throw fail("invalidInput");
+      var ks = ["weight", "reps", "seconds"];
+      for (var q = 0; q < ks.length; q++) {
+        if (mValue(sm, ks[q]) !== undefined && mInt(sm, ks[q]) === undefined) throw fail("invalidInput");
+      }
+      out.push(sm);
+    }
+    return out;
+  }
+
   function parseItems(inp) {
     var arr = mArray(inp.m, "items");
     if (!arr) throw fail("invalidInput");
@@ -4792,24 +5126,25 @@
       var slot = mInt(im, "slot");
       var x = mStr(im, "exerciseId");
       if (slot === undefined || x === undefined) throw fail("invalidInput");
-      var it = { slot: slot, exerciseId: x, skipped: false, sets: [], minutes: undefined, distance: undefined, feel: undefined };
+      var it = {
+        slot: slot, exerciseId: x, skipped: false, sets: [], minutes: undefined, distance: undefined, feel: undefined,
+        earlier: undefined,
+      };
       if (mValue(im, "skipped") !== undefined) {
         var b = mBool(im, "skipped");
         if (b === undefined) throw fail("invalidInput");
         it.skipped = b;
       }
       var sv = mValue(im, "sets");
-      if (sv !== undefined) {
-        if (!Array.isArray(sv) || sv.length > 10) throw fail("invalidInput");
-        for (var j = 0; j < sv.length; j++) {
-          var sm = sv[j];
-          if (!isObject(sm)) throw fail("invalidInput");
-          var ks = ["weight", "reps", "seconds"];
-          for (var q = 0; q < ks.length; q++) {
-            if (mValue(sm, ks[q]) !== undefined && mInt(sm, ks[q]) === undefined) throw fail("invalidInput");
-          }
-          it.sets.push(sm);
-        }
+      if (sv !== undefined) it.sets = parseSets(sv);
+      var ev = mValue(im, "earlierSets");
+      if (ev !== undefined) {
+        // B3: sets logged for an earlier move before a swap in this slot.
+        if (!isObject(ev)) throw fail("invalidInput");
+        var ex = mStr(ev, "exerciseId");
+        var esv = mValue(ev, "sets");
+        if (ex === undefined || esv === undefined) throw fail("invalidInput");
+        it.earlier = { exerciseId: ex, sets: parseSets(esv) };
       }
       if (mValue(im, "minutes") !== undefined) {
         var mn = mInt(im, "minutes");
@@ -4838,26 +5173,7 @@
       if (it.minutes !== undefined) l.minutes = clampInt(it.minutes, 0, 600);
       if (it.distance !== undefined) l.distance = clampInt(it.distance, 0, 100000);
     } else {
-      for (var i = 0; i < it.sets.length; i++) {
-        var sm = it.sets[i];
-        var s = { weight: undefined, reps: undefined, seconds: undefined };
-        if (lt === "weightReps") {
-          var w = mInt(sm, "weight");
-          var r = mInt(sm, "reps");
-          if (w === undefined || r === undefined || !(w > 0) || !(r > 0)) continue;
-          s.weight = Math.min(w, 1500);
-          s.reps = Math.min(r, 100);
-        } else if (lt === "reps") {
-          var r2 = mInt(sm, "reps");
-          if (r2 === undefined || !(r2 > 0)) continue;
-          s.reps = Math.min(r2, 200);
-        } else {
-          var sec = mInt(sm, "seconds");
-          if (sec === undefined || !(sec > 0)) continue;
-          s.seconds = Math.min(sec, 3600);
-        }
-        l.sets.push(s);
-      }
+      l.sets = cleanSets(it.sets, lt);
     }
     l.feel = it.feel;
     l.skipped = it.skipped || (lt === "cardio" ? (l.minutes === undefined ? 0 : l.minutes) === 0 : l.sets.length === 0);
@@ -4868,6 +5184,32 @@
       l.feel = undefined;
     }
     return l;
+  }
+
+  /** Cleaning of the sets of one move (11.3 step 4): sets without a positive value of the logType are dropped, the others clamped. */
+  function cleanSets(sets, lt) {
+    var out = [];
+    for (var i = 0; i < sets.length; i++) {
+      var sm = sets[i];
+      var s = { weight: undefined, reps: undefined, seconds: undefined };
+      if (lt === "weightReps") {
+        var w = mInt(sm, "weight");
+        var r = mInt(sm, "reps");
+        if (w === undefined || r === undefined || !(w > 0) || !(r > 0)) continue;
+        s.weight = Math.min(w, 1500);
+        s.reps = Math.min(r, 100);
+      } else if (lt === "reps") {
+        var r2 = mInt(sm, "reps");
+        if (r2 === undefined || !(r2 > 0)) continue;
+        s.reps = Math.min(r2, 200);
+      } else {
+        var sec = mInt(sm, "seconds");
+        if (sec === undefined || !(sec > 0)) continue;
+        s.seconds = Math.min(sec, 3600);
+      }
+      out.push(s);
+    }
+    return out;
   }
 
   function completeRun(s0, inp) {
@@ -4919,14 +5261,67 @@
       if (ii.slot < 0 || ii.slot >= sItems.length) throw fail("unknownSlot");
       if (bySlot.has(ii.slot)) throw fail("duplicateSlot");
       if (ii.exerciseId !== sItems[ii.slot].exerciseId) throw fail("itemMismatch");
+      if (ii.earlier) {
+        // B3: the earlier move is a library move of the slot's family (its plan move, its base or the base's
+        // family), not cardio and not the move logged now; the slot is not a cardio slot.
+        var ee0 = exercise(ii.earlier.exerciseId);
+        if (!ee0) throw fail("unknownExercise");
+        var sl = w.slots[ii.slot];
+        var fam = [sl.exerciseId, sl.baseExerciseId].concat(family(sl.baseExerciseId));
+        if (isCardioEx(ee0) || sItems[ii.slot].logType === "cardio" || sl.role === "recovery" ||
+            ee0.id === sItems[ii.slot].exerciseId || fam.indexOf(ee0.id) < 0) {
+          throw fail("notAnAlternative");
+        }
+      }
       bySlot.set(ii.slot, ii);
     }
     var logged = sItems.map(function (it) { return cleanItem(bySlot.get(it.slot), it.logType); });
-    if (logged.every(function (l) { return l.skipped; })) throw fail("nothingLogged");
+    // B3: the cleaned earlier parts; one with no set left is dropped.
+    var earlier = [];
+    for (i = 0; i < sItems.length; i++) {
+      var bi = bySlot.get(sItems[i].slot);
+      if (!bi || !bi.earlier) { earlier.push(undefined); continue; }
+      var ee = exercise(bi.earlier.exerciseId);
+      var esets = cleanSets(bi.earlier.sets, ee.logType);
+      if (esets.length === 0) { earlier.push(undefined); continue; }
+      var el = {
+        exerciseId: ee.id, name: ee.name, logType: ee.logType, sets: esets, warmupSets: undefined, loadFactor: undefined,
+        pounds: 0,
+      };
+      if (ee.logType === "weightReps") {
+        var elift = effLift(ctx, ee.id, day, sItems[i].role).lift;
+        el.loadFactor = loadFactor(ee);
+        el.warmupSets = elift.calibrationLeft > 0 ? 0 : warmups(ee, elift.weight, esets);
+      }
+      el.pounds = earlierPounds(el);
+      earlier.push(el);
+    }
+    if (logged.every(function (l) { return l.skipped; }) && earlier.every(function (x) { return x === undefined; })) {
+      throw fail("nothingLogged");
+    }
 
     var recordId = "r" + String(s.counters.nextRecordNumber);
     var outcomes = [];
     for (j = 0; j < sItems.length; j++) outcomes.push(progressItem(ctx, w, sItems[j], logged[j], day));
+    // 12.6 Time budget: a step that makes the next session longer (a set, a longer hold, more cardio) is
+    // taken, in slot order, only while the 6.9 estimate stays within sessionMinutes + 5.
+    if (w.id !== "cardio" && w.id !== "recovery") {
+      var budget = ctx.profile.sessionMinutes + 5;
+      var secsOf = function (q, tg) {
+        var ex0 = exercise(sItems[q].exerciseId);
+        return itemSeconds(ex0, tg, restSeconds(ctx.profile, sItems[q].role, ex0));
+      };
+      var growsAt = function (q) { return addsTime(outcomes[q].code, exercise(sItems[q].exerciseId)); };
+      var total = 300 + 60 * Math.max(0, sItems.length - 1);
+      for (j = 0; j < sItems.length; j++) total += secsOf(j, growsAt(j) ? sItems[j].target : outcomes[j].next);
+      for (j = 0; j < sItems.length; j++) {
+        if (!growsAt(j)) continue;
+        if (roundHalfUp(total + secsOf(j, outcomes[j].next) - secsOf(j, sItems[j].target), 60) > budget) {
+          outcomes[j] = progressItem(ctx, w, sItems[j], logged[j], day, false);
+        }
+        total += secsOf(j, outcomes[j].next) - secsOf(j, sItems[j].target);
+      }
+    }
     var items = [];
     for (j = 0; j < sItems.length; j++) {
       var item = sItems[j];
@@ -4935,7 +5330,7 @@
       var il = {
         slot: item.slot, exerciseId: item.exerciseId, name: e.name, logType: item.logType, role: item.role,
         target: item.target, sets: l.sets, warmupSets: undefined, loadFactor: undefined, minutes: undefined,
-        distanceHundredths: undefined, feel: l.feel, skipped: l.skipped, pounds: 0,
+        distanceHundredths: undefined, feel: l.feel, skipped: l.skipped, pounds: 0, earlier: undefined,
       };
       if (item.logType === "cardio" && !l.skipped) {
         il.minutes = l.minutes;
@@ -4946,11 +5341,14 @@
         il.warmupSets = l.skipped ? 0 : outcomes[j].warmupSets;
       }
       il.pounds = itemPounds(il);
+      il.earlier = earlier[j];
       items.push(il);
     }
+    // 13.4: each history item of the new record (an earlier part before its item) against the log before.
     var prs = [];
-    for (j = 0; j < items.length; j++) {
-      var found = newRecords(s.log, items[j]);
+    var newHistory = historyItems({ items: items });
+    for (j = 0; j < newHistory.length; j++) {
+      var found = newRecords(s.log, newHistory[j]);
       for (var q = 0; q < found.length; q++) prs.push(found[q]);
     }
     var next = sItems.map(function (it, k) {
@@ -4960,11 +5358,9 @@
         text: targetText(o.next, it.logType, exercise(it.exerciseId)),
       };
     });
-    var pounds = 0;
-    for (j = 0; j < items.length; j++) pounds += items[j].pounds;
     var record = {
       id: recordId, day: dayKey(day), kind: kind, workoutId: w.id, title: title, focus: focus, durationMinutes: duration,
-      distanceHundredths: undefined, pounds: pounds, items: items, records: prs, next: next,
+      distanceHundredths: undefined, pounds: recordPounds(items), items: items, records: prs, next: next,
     };
     // 1. Undo.
     var undoLifts = [];
@@ -4983,7 +5379,10 @@
     }
     undoLifts.sort(function (x, y) { return x.id < y.id ? -1 : (x.id > y.id ? 1 : 0); });
     undoCardio.sort(function (x, y) { return x.key < y.key ? -1 : (x.key > y.key ? 1 : 0); });
-    var undo = { recordId: recordId, lifts: undoLifts, cardio: undoCardio, queue: kind === "training" ? plan.queue.slice() : undefined };
+    var undo = {
+      recordId: recordId, lifts: undoLifts, cardio: undoCardio, queue: kind === "training" ? plan.queue.slice() : undefined,
+      day: dayKey(t),
+    };
     // 2. Progression results.
     for (j = 0; j < sItems.length; j++) {
       var oc = outcomes[j];
@@ -5002,14 +5401,14 @@
     s.undo = undo;
 
     var setsDone = 0;
-    var exDone = 0;
-    var exSkipped = 0;
     for (j = 0; j < items.length; j++) {
       var x = items[j];
-      if (x.skipped) { exSkipped += 1; continue; }
-      exDone += 1;
+      if (x.earlier) setsDone += x.earlier.sets.length;
+      if (x.skipped) continue;
       setsDone += x.logType === "cardio" ? ((x.minutes === undefined ? 0 : x.minutes) > 0 ? 1 : 0) : x.sets.length;
     }
+    var exDone = doneSlots(record);
+    var exSkipped = items.length - exDone;
     var nextTargets = sItems.map(function (it, k) {
       var o = outcomes[k];
       var ex2 = exercise(it.exerciseId);
@@ -5019,6 +5418,11 @@
         calibrating: o.calibrating,
       };
       if (it.logType === "weightReps" && o.change !== "skipped" && o.base !== undefined) n.base = o.base;
+      if (o.change !== "skipped") {
+        var ct = changeTag(o.next, it.target, it.logType, true);
+        n.direction = ct.direction;
+        n.tag = ct.tag;
+      }
       return n;
     });
     var summary = {
@@ -5072,12 +5476,14 @@
     var cardioCaps = {};
     GOALS.forEach(function (g) {
       cycleXs[g] = cycleX(g);
-      var c = libRepRange(g, "some", "compound");
-      var iso = libRepRange(g, "some", "isolation");
+      var c = libRepRange(g, "some", "compound", true);
+      var iso = libRepRange(g, "some", "isolation", false);
       var rr = { compound: [c.lo, c.hi], isolation: [iso.lo, iso.hi] };
       if (g === "getStronger") {
-        var nw = libRepRange(g, "new", "compound");
+        var nw = libRepRange(g, "new", "compound", true);
+        var ot = libRepRange(g, "some", "compound", false);
         rr.compoundNew = [nw.lo, nw.hi];
+        rr.compoundOther = [ot.lo, ot.hi];
       }
       repRanges[g] = rr;
       countCaps[g] = { reps: repsCap(g), seconds: secondsCap(g) };
@@ -5087,8 +5493,8 @@
     });
     var constants = function (c) {
       return {
-        unit: c.unit, easyUnit: c.easyUnit, missMargin: c.missMargin, drop: c.drop, minValue: c.minValue,
-        resetDrop: c.resetDrop, stallSessions: c.stallSessions,
+        unit: c.unit, easyUnit: c.easyUnit, missMargin: c.missMargin, dropPercent: 20, minValue: c.minValue,
+        resetDrop: c.resetDrop, stallSessions: c.stallSessions, comebackPercent: [10, 20], comebackFloor: c.comebackFloor,
       };
     };
     var sets = {};
@@ -5176,6 +5582,10 @@
     secondsCap: secondsCap, cardioContext: cardioContext, cardioCap: cardioCap, layout: layout, fitsEq: fitsEq,
     seedsOfAnchor: seedsOfAnchor, expIndex: expIndex, clampInt: clampInt, isPrintableASCII: isPrintableASCII,
     contextOf: contextOf, text: text, isWeightedEx: isWeightedEx, isCountEx: isCountEx, isCardioEx: isCardioEx,
+    itemSeconds: itemSeconds, restSeconds: restSeconds, addsTime: addsTime, libRepRange: libRepRange,
+    breakLevel: breakLevel, comebackCount: comebackCount, countDropped: countDropped, REPS_CONSTANTS: REPS_CONSTANTS,
+    SECONDS_CONSTANTS: SECONDS_CONSTANTS, changeTag: changeTag, warmups: warmups, historyItems: historyItems,
+    doneSlots: doneSlots, recordPounds: recordPounds,
     runRethrow: function (op, state, input) { return runWith(op, state, input, true); },
   };
 

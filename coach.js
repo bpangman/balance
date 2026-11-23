@@ -1,5 +1,6 @@
-/* Balance - the Coach tab (web demo), part 1: home, setup, Change today,
-   Day detail, Earned today and the free timer.
+/* Balance - the Coach tab (web demo): home, setup, Change today, Day detail,
+   Earned today, the free timer, the planned workout and its summary, Your week
+   and Your progress.
    It runs on the real coach engine (coach-engine.js, loaded just before this
    file and never edited). Earning still goes through app.js creditWorkout,
    so the earned list, minutes, Shields and Today's numbers stay one system.
@@ -51,7 +52,8 @@ var IC = {
   sound: '<path d="M4 9.500v5h3.500l5 4v-13l-5 4H4zM16 9a4.500 4.500 0 0 1 0 6M18.500 6.500a8 8 0 0 1 0 11"/>',
   chart: '<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',
   home: '<path d="M4 11l8-7 8 7v8.500a1 1 0 0 1-1 1h-4.500v-6h-5v6H5a1 1 0 0 1-1-1V11z"/>',
-  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>'
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  warn: '<path d="M12 3.800L2.700 19.800h18.600L12 3.800z"/><path d="M12 10v4.600"/><circle cx="12" cy="17.200" r=".9" fill="currentColor"/>'
 };
 function ic(n, c) {
   var cls = 'ci' + (c ? ' ' + c : '');
@@ -86,10 +88,11 @@ function fmtS(k) { var d = dateOf(k); return MON[d.getMonth()] + ' ' + d.getDate
 var ST = null;          /* the engine state */
 var MEM = false;        /* true for the test addresses: nothing is written to storage */
 var SAMPLE = false;     /* true when seeded history is on screen: the SAMPLE caption shows */
-var ACT = null;         /* the running planned workout { workoutId, title, tone, day, startedAt } */
+var ACT = null;         /* the running planned workout's draft (newDraft): its items, logged sets, rest and pause */
 var WK = null, ACTIVE = null, READY = false, COMPACT = false, PIN = '', WL = null;
-var UI = { view: 'home', sheet: null, cover: null, setup: null, edit: null, swapBase: null, swapDay: '', sheetOpener: null, coverOpener: null };
+var UI = { view: 'home', sheet: null, cover: null, setup: null, edit: null, swapBase: null, swapDay: '', sheetOpener: null, coverOpener: null, wedit: null, guardUntil: 0, pv: {} };
 var sheetKeyOpen = '', coverKeyOpen = '';
+var REV = 0;            /* counts engine state changes, so a cached Next time preview is never read against an older state */
 
 function exec(op, input, st) {
   try { return E.run(op, st === undefined ? ST : st, input || {}); }
@@ -97,21 +100,38 @@ function exec(op, input, st) {
 }
 function q(op, input, st) { var r = exec(op, input, st); return (r && r.result) || { ok: false }; }
 function freshState() { return E.run('newState', null, {}).state; }
+/* saved data the engine cannot read (APP_MAPPING errors): corruptData keeps the text under a second key before anything is saved
+   and starts from a new state, with "Your coach data could not be read." and Set up again on home; newerVersion is never saved over */
+var LOAD_ERR = '', KEPT = false, UKEY = 'balance_coach_state_unreadable';
 function cxLoad() {
   var text = '';
+  LOAD_ERR = ''; KEPT = false;
   try { text = localStorage.getItem(KEY) || ''; } catch (e) { text = ''; }
   var r = exec('load', { text: text }, null);
   if (r.result && r.result.ok && r.state) return r.state;
+  if (errCode(r.result) === 'newerVersion') LOAD_ERR = 'newer';
+  else if (text) { LOAD_ERR = 'corrupt'; KEPT = keepUnreadable(text); }
   return freshState();
 }
+function keepUnreadable(text) {
+  if (coachHoldsSaves()) return false;
+  try {
+    for (var n = 1; n <= 20; n++) {
+      var k = n === 1 ? UKEY : UKEY + '_' + n, v = localStorage.getItem(k);
+      if (v === text) return true;
+      if (v === null) { localStorage.setItem(k, text); return localStorage.getItem(k) === text; }
+    }
+  } catch (e) {}
+  return false;
+}
 function cxSave() {
-  if (MEM) return;
+  if (MEM || LOAD_ERR === 'newer' || (LOAD_ERR === 'corrupt' && !KEPT)) return;
   try { var r = E.run('save', ST, {}); if (r.result && r.result.ok) localStorage.setItem(KEY, r.result.text); } catch (e) {}
 }
 /* every change goes through here: it keeps the new state only when the engine says ok, then saves it */
 function cxRun(op, input) {
   var r = exec(op, input);
-  if (r.result && r.result.ok && E.isMutating(op)) { ST = r.state; cxSave(); }
+  if (r.result && r.result.ok && E.isMutating(op)) { ST = r.state; REV++; cxSave(); }
   return (r && r.result) || { ok: false };
 }
 function readActive() {
@@ -194,22 +214,12 @@ function lastText(it) {
   return l.sets.map(function (x) { return x.reps; }).join(', ') + ' reps';
 }
 
-/* ---------- the places that wait on engine additions (CONTRACT_CHANGES part B). Each is one helper so the next part switches it in one spot. ---------- */
-/* B2: "raised since last time". The engine has no PlannedItem.change yet, so this returns null and every place that reads it stays hidden:
-   the raised tags on home, the "Your coach raised N targets" line, the tags in Day detail, and on a cardio day the "Up from N min last time" line and its tag. */
-function coachRaisedChange(it) { return it && it.change && it.change.direction ? { dir: it.change.direction, tag: it.change.tag, previous: it.change.previous || null } : null; }
-/* the minutes a raised cardio goal came up from: B2's change.previous.minutes, else the last logged time */
-function raisedFromMinutes(it, c) {
-  var p = c && c.previous && c.previous.minutes, l = it && it.last && it.last.sets && it.last.sets[0];
-  return +(p || (l && l.minutes) || 0);
-}
-/* the raised ChangeTag (COACH_SPEC 4): mint, arrow up, then "5 lb" / "1 rep" / "3 min" */
-function upTag(c) { return '<span class="tag up" aria-label="raised">' + ic('up', 'i12') + esc(String(c.tag).replace(/^\+/, '')) + '</span>'; }
-/* "From your numbers": the engine has no flag for it yet (APP_MAPPING names items[k].fromNumbers), so without the field it is read as a first-time lift the engine is not calibrating. */
-function coachFromNumbers(it) {
-  if (it && typeof it.fromNumbers === 'boolean') return it.fromNumbers && it.logType !== 'cardio';
-  return !it.last && it.calibrating === false && it.logType !== 'cardio';
-}
+/* ---------- what changed since last time (engine B2: items[k].change) ---------- */
+function upChange(it) { return !!(it && it.change && it.change.direction === 'up'); }
+/* the raised ChangeTag on home (COACH_SPEC 4): mint, arrow up, then the engine's bare size "5 lb" / "1 rep" / "3 min" */
+function raisedTag(it) { return '<span class="tag up" aria-label="raised">' + ic('up', 'i12') + esc(it.change.tag) + '</span>'; }
+/* a target from the person's setup numbers (CoachDerived.startedFromNumbers): no history, not calibrating, engine fromNumbers */
+function fromNums(it) { return !!it && !it.last && it.calibrating !== true && it.fromNumbers === true; }
 
 /* ---------- the week preview in setup and Edit my plan, from the engine's own layouts ---------- */
 function previewIds(p) {
@@ -323,10 +333,10 @@ function nextUpLine() {
 function pinned(btn) { if (!COMPACT) return btn; PIN = btn; return ''; }
 /* the day's start button shows only when the engine says today can start (APP_MAPPING: week.todayActions.canStart) */
 function startBtn(label) { return ACTS.canStart ? pinned('<button class="btn btn-cta xl" data-a="start">' + ic('play') + label + '</button>') : ''; }
-function raisedCount(items) { var n = 0; items.forEach(function (it) { var c = coachRaisedChange(it); if (c && c.dir === 'up') n++; }); return n; }
+function raisedCount(items) { var n = 0; items.forEach(function (it) { if (upChange(it)) n++; }); return n; }
 function firstWeekLine(items) {
   if ((WK.weeksOnPlan || 0) > 1) return '';
-  var fr = items.filter(function (x) { return !x.last && x.logType !== 'cardio'; }), seed = fr.filter(coachFromNumbers).length, cal = fr.length - seed;
+  var fr = items.filter(function (x) { return !x.last && x.logType !== 'cardio'; }), seed = fr.filter(fromNums).length, cal = fr.length - seed;
   if (!fr.length) return '';
   var t = !cal ? 'First week: targets start from your numbers.' : seed ? 'First week: some targets start from your numbers. Start light on the rest.' : 'First week: start light and find your level.';
   return '<p class="raised" style="color:var(--text-2)">' + ic('info', 'i14') + t + '</p>';
@@ -348,8 +358,7 @@ function hero(t) {
   }
   if (t.kind === 'training') {
     var up = raisedCount(items), rows = items.slice(0, 3).map(function (it, i) {
-      var c = coachRaisedChange(it);
-      return '<div class="xrow"><span class="n">' + (i + 1) + '</span><span class="nm">' + esc(it.name) + '</span><span class="tg">' + tShort(it) + (c && c.dir === 'up' ? upTag(c) : '') + '</span></div>';
+      return '<div class="xrow"><span class="n">' + (i + 1) + '</span><span class="nm">' + esc(it.name) + '</span><span class="tg">' + tShort(it) + (upChange(it) ? raisedTag(it) : '') + '</span></div>';
     }).join('');
     h = '<section class="hero" data-tone="' + t.tone + '">' + ic(t.g, 'mark') + heroTop(!run && anyChange()) +
       '<div class="hero-title">' + gem(t.tone, t.g, 'lg lit') + '<h2>' + esc(t.title) + '</h2></div>' +
@@ -361,11 +370,11 @@ function hero(t) {
     return h;
   }
   if (t.kind === 'cardio') {
-    var it = items[0] || { name: 'Cardio', target: { minutes: t.raw.aboutMinutes } }, cc = coachRaisedChange(it), cup = !!(cc && cc.dir === 'up'), from = cup ? raisedFromMinutes(it, cc) : 0;
+    var it = items[0] || { name: 'Cardio', target: { minutes: t.raw.aboutMinutes } }, cup = upChange(it), from = cup ? +((it.change.previous && it.change.previous.minutes) || 0) : 0;
     return '<section class="hero" data-tone="cardio">' + ic('heart', 'mark') + heroTop(!run && anyChange()) +
       '<div class="hero-title">' + gem('cardio', 'heart', 'lg lit') + '<h2>' + esc(t.title) + '</h2></div><p class="hero-sub">' + esc(t.desc) + '</p>' +
       (cup && from ? '<p class="raised">' + ic('up', 'i14') + 'Up from ' + from + ' min last time</p>' : '') +
-      '<div class="lines"><div class="ln two">' + ic('timer', 'i18') + '<span><b>' + esc(it.name) + '</b><small>Goal ' + ((it.target && it.target.minutes) || 0) + ' min</small></span>' + (cup ? upTag(cc) : '') + '</div>' +
+      '<div class="lines"><div class="ln two">' + ic('timer', 'i18') + '<span><b>' + esc(it.name) + '</b><small>Goal ' + ((it.target && it.target.minutes) || 0) + ' min</small></span>' + (cup ? raisedTag(it) : '') + '</div>' +
       '<div class="ln">' + ic('info', 'i18') + '<span>Logged by time. Distance is optional.</span></div></div>' +
       (resume || startBtn('Start cardio')) + fine + '</section>';
   }
@@ -395,9 +404,21 @@ function heroFirst() {
   return '<section class="hero" data-tone="brand">' + ic('lift', 'mark') +
     '<div class="hero-title" style="margin-top:8px">' + gem('brand', 'lift', 'lg lit') + '<h2 class="sm">Meet your coach</h2></div>' +
     '<p class="hero-sub">Answer 6 quick questions and get a week of workouts built for you. It sets your next targets from what you log.</p>' +
-    '<button class="btn btn-cta xl" id="cx-build-btn" data-a="open-setup">Build my plan</button><p class="fine">Takes about a minute.</p></section>' +
-    '<div class="secrow"><span class="label">Or just time a workout</span></div><div class="mx">' + quickGrid(true) + '</div>' +
+    '<button class="btn btn-cta xl" id="cx-build-btn" data-a="open-setup">Build my plan</button><p class="fine">Takes about a minute.</p></section>' + firstGrid();
+}
+function firstGrid() {
+  return '<div class="secrow"><span class="label">Or just time a workout</span></div><div class="mx">' + quickGrid(true) + '</div>' +
     '<p class="note mx" style="margin-top:12px;text-align:center">' + esc(rateLine()) + '</p>';
+}
+/* the iPhone's wording and layout (Home/CoachView.swift): unreadable data takes the hero's place until a new plan is built;
+   data from a newer version gets a callout above the hero on every visit, and nothing done here is saved */
+function loadNotice() {
+  if (LOAD_ERR === 'corrupt') return '<section class="hero" data-tone="brand">' + ic('warn', 'mark') +
+    '<div class="hero-title" style="margin-top:8px">' + gem('brand', 'warn', 'lg lit') + '<h2 class="sm" id="cx-load-note" style="font-size:22px;letter-spacing:-.4px;line-height:1.2">Your coach data could not be read.</h2></div>' +
+    '<p class="hero-sub" style="margin-top:12px">' + (KEPT ? 'A copy is kept on this phone. ' : '') + 'Answer the 6 questions again to get a new plan.</p>' +
+    '<button class="btn btn-cta xl" style="margin:16px 0 0" data-a="open-setup">Set up again</button></section>';
+  if (LOAD_ERR === 'newer') return '<div class="callout calm mx" id="cx-load-note" role="alert" style="margin-top:10px">' + ic('down', 'i18') + '<span>Your coach data was saved by a newer version of Balance. Update the app to keep using it. Changes made here are not saved.</span></div>';
+  return '';
 }
 function dayBub(d) {
   return '<button class="day' + (d.i === 0 ? ' now' : '') + (d.done ? ' done' : '') + '" data-tone="' + d.tone + '" data-a="day" data-v="' + d.i + '" aria-label="' + dayName(d.key, d.i) + ', ' + fmtS(d.key) + ': ' + esc(d.title) + (d.done ? ', done' : '') + '">' +
@@ -406,7 +427,8 @@ function dayBub(d) {
 function platesFrom(list) { return list.filter(function (r) { return r.kind !== 'free'; }).map(function (r) { return { tone: r.kind === 'recovery' ? 'recover' : toneOf(r.focus), min: r.durationMinutes, kind: r.kind }; }); }
 function vHome() {
   var h = strip();
-  if (!hasPlan()) return h + heroFirst();
+  if (LOAD_ERR === 'newer') h += loadNotice();
+  if (!hasPlan()) return h + (LOAD_ERR === 'corrupt' ? loadNotice() + firstGrid() : heroFirst());
   var P = PROG && PROG.ok ? PROG : { recent: [], hasData: false, pounds: {} }, wtext = (WK.thisWeek && WK.thisWeek.text) || '';
   h += hero(DAYS[0]);
   h += '<div class="secrow"><span class="label">Next 7 days</span><button class="link" data-a="nav" data-v="week">Full plan' + ic('chevR', 'i16') + '</button></div>';
@@ -487,9 +509,9 @@ function dayItems(d, isToday) {
 function dayBody(d, isToday) {
   var items = dayItems(d, isToday), h = '<div class="dayhead">' + gem(d.done ? 'done' : d.tone, d.done ? 'check' : d.g, 'lg lit') + '<div><h3>' + esc(d.title) + '</h3><p>' + esc(d.desc) + '</p></div></div>';
   if (items.length) h += '<div class="card" style="padding:4px 14px;margin-top:14px">' + items.map(function (it, i) {
-    var c = coachRaisedChange(it);
-    return '<div class="lrow"><span class="n">' + (i + 1) + '</span><span><h3>' + esc(it.name) + '</h3><p>' + (it.last ? 'Last time ' + lastText(it) : it.logType === 'cardio' ? 'Logged by time' : coachFromNumbers(it) ? 'From your numbers' : it.calibrating ? 'First time - start light' : 'First time') + '</p></span>' +
-      '<span class="tg">' + tShort(it) + (c && c.dir !== 'same' ? '<br><span class="tag ' + c.dir + '">' + esc(c.tag) + '</span>' : '') + '</span></div>'; }).join('') + '</div>';
+    var c = it.change && (it.change.direction === 'up' || it.change.direction === 'down') ? it.change : null;
+    return '<div class="lrow"><span class="n">' + (i + 1) + '</span><span><h3>' + esc(it.name) + '</h3><p>' + (it.last ? 'Last time ' + lastText(it) : it.logType === 'cardio' ? 'Logged by time' : fromNums(it) ? 'From your numbers' : it.calibrating ? 'First time - start light' : 'First time') + '</p></span>' +
+      '<span class="tg">' + tShort(it) + (c ? '<br><span class="tag ' + c.direction + '">' + (c.direction === 'up' ? '+' : '-') + esc(c.tag) + '</span>' : '') + '</span></div>'; }).join('') + '</div>';
   else h += '<div class="callout calm" style="margin-top:14px">' + ic('walk', 'i18') + '<span>Rest is part of the plan. Optional: a 10-minute easy walk.</span></div>';
   if (!isToday && d.kind === 'training') h += '<p class="note" style="margin-top:12px;text-align:center">Targets come from your last workout and can change before this day.</p>';
   if (isToday && d.kind === 'training' && !d.done && TODAY_S && TODAY_S.tips && TODAY_S.tips.length) h += '<div class="callout calm" style="margin-top:12px">' + ic('info', 'i18') + '<span>' + esc(TODAY_S.tips.join(' ')) + '</span></div>';
@@ -575,7 +597,7 @@ function vSetup() {
 }
 /* "about {45} min each" on the ready screen is the chosen workout length as the engine stored it (APP_MAPPING row 117: profile.sessionMinutes);
    the draft's answer is only the fallback */
-function readyMinutes(d) { return 'about ' + ((WK && WK.profile && WK.profile.sessionMinutes) || d.mins) + ' min'; }
+function readyMinutes(d) { return 'up to ' + ((WK && WK.profile && WK.profile.sessionMinutes) || d.mins) + ' min'; }
 /* the engine's own note (week.planNote, only for a new lifter on 5 or 6 days) as a calm callout under the plan */
 function planNote() { return WK && WK.planNote ? '<div class="callout calm mx" id="cx-plan-note" style="margin-top:12px">' + ic('info', 'i18') + '<span>' + esc(WK.planNote) + '</span></div>' : ''; }
 /* compared as the engine would store them, so a body weight under 50 (never saved) does not count as a change */
@@ -601,7 +623,7 @@ function shNumbers() {
 }
 
 /* ---------- the free timer cover ---------- */
-function soFar(ms) { return '+' + Math.round(Math.floor(ms / 60000) * rate()) + ' min earned so far'; }
+function soFar(ms) { return '+' + Math.round(Math.round(ms / 60000) * rate()) + ' min earned so far'; }
 function vFree() {
   var f = freeRun(); if (!f) return '';
   var paused = !!f.pausedAt, el = freeElapsed();
@@ -614,32 +636,762 @@ function vFree() {
     '<div class="sfoot"><div class="two"><button class="btn btn-secondary" style="min-height:64px" data-a="free-pause">' + ic(paused ? 'play' : 'pause') + (paused ? 'Resume' : 'Pause') + '</button>' +
     '<button class="btn btn-end" style="min-height:64px" data-a="free-end">' + ic('check') + 'End and log</button></div></div></div>';
 }
-/* ---------- a planned workout: the full screen arrives in part 2; until then a plain cover whose Close cancels it ---------- */
-function vSession() {
-  var s = ACTIVE || {}, tone = s.kind === 'recovery' ? 'recover' : toneOf(s.focus), title = dispTitle(s.title || (ACT && ACT.title) || 'Workout');
-  return '<div class="sess" data-tone="' + tone + '"><div class="ph">' + gem(tone, GLYPH[tone], 'xl lit') + '<h2 tabindex="-1" data-focus>' + esc(title) + '</h2>' +
-    '<button class="btn btn-secondary" data-a="sess-close">Close</button></div></div>';
+/* ---------- a planned workout (COACH_SPEC 5.18 to 5.24, 6, 7, APP_MAPPING "Workout") ----------
+   ACT is the running workout's draft: the engine's items with what was logged, the rest, the pause and the
+   choices made. It is saved under its own key after every tap and every timer is a timestamp, so minimize,
+   another tab, a reload or a closed browser all come back to the same set, rest and clock. */
+var TEXTS = null;
+function ctext(k, d) { if (!TEXTS) TEXTS = catalog().texts || {}; return TEXTS[k] || d; }
+function lt(x) { return x.item.logType; }
+function isMinItem(x) { return x.item.logType !== 'weightReps' && x.item.logType !== 'reps' && x.item.logType !== 'seconds'; }
+function tval(it) { var t = it.target || {}; return it.logType === 'weightReps' || it.logType === 'reps' ? (t.reps || 8) : it.logType === 'seconds' ? (t.seconds || 30) : (t.minutes || 10); }
+function tsets(it) { return Math.max(1, (it.target && it.target.sets) || 1); }
+function freshEx(it, slot) { return { slot: slot, item: it, n: tsets(it), logs: [], cw: (it.target && it.target.weight) || 0, cr: tval(it), feel: null, skipped: false, earlier: false, pb: null }; }
+function isDone(x) { return x.skipped || x.logs.length >= x.n; }
+function allDone() { return ACT.items.every(isDone); }
+function setsDone() { var n = 0; ACT.items.forEach(function (x) { n += x.logs.length; }); return n; }
+function setsTotal() { var n = 0; ACT.items.forEach(function (x) { n += x.skipped ? x.logs.length : Math.max(x.n, x.logs.length); }); return n; }
+function setsLeftCount() { var n = 0; ACT.items.forEach(function (x) { n += x.skipped ? 0 : Math.max(0, x.n - x.logs.length); }); return n; }
+function nextOpen(i) { var n = ACT.items.length, k; for (k = 1; k <= n; k++) if (!isDone(ACT.items[(i + k) % n])) return (i + k) % n; return -1; }
+function btnState() { var x = ACT.items[ACT.xi]; return UI.wedit ? 'edit' : ACT.rest ? 'rest' : isDone(x) ? (allDone() ? 'finish' : 'next') : 'log'; }
+function sessEl() { if (!ACT) return 0; return Math.max(0, (ACT.pausedAt || Date.now()) - ACT.startedAt - (ACT.pausedTotalMs || 0)); }
+function restLeft() { var r = ACT && ACT.rest; if (!r) return 0; return r.pausedLeft != null ? r.pausedLeft : Math.max(0, (r.endsAt - Date.now()) / 1000); }
+function sessTone() { return ACT.kind === 'recovery' ? 'recover' : toneOf(ACT.focus); }
+function running() { return !!(ACT && ACT.items && ACTIVE); }
+function saveAct() { writeActive(ACT); }
+function earlierIndex(slot) { var i; for (i = 0; i < ACT.items.length; i++) if (ACT.items[i].slot === slot && ACT.items[i].earlier) return i; return -1; }
+function mainOf(d, slot) { var m = null; d.items.forEach(function (x) { if (x.slot === slot && !x.earlier) m = x; }); return m; }
+function earlierOf(d, slot) { var e = null; d.items.forEach(function (x) { if (!e && x.slot === slot && x.earlier) e = x; }); return e; }
+/* a new draft from the engine's session (startSession, or activeSession after a reload of an older draft) */
+function newDraft(s, startedAt) {
+  return { v: 2, workoutId: s.workoutId, title: s.title, day: s.day || coachToday(), kind: s.kind, focus: s.focus, about: s.aboutMinutes || s.minutes || 30,
+    startedAt: startedAt || Date.now(), pausedTotalMs: 0, pausedAt: null, open: true, xi: 0, rest: null, restOn: prefGet('rest', true), sound: prefGet('sound', false), dist: 0, pendingAlways: [],
+    items: (s.items || []).map(function (it) { return freshEx(it, it.slot); }), planMoves: planMovesOf(s) };
 }
-/* ---------- plain screens for the full plan, progress and the summary until part 2 builds them ---------- */
-function vWeek() {
-  return '<div class="scr cover"><div class="scroll">' + subHdr('Your week') +
-    '<div class="planlist">' + DAYS.map(function (x) { return '<button class="prow" style="width:100%;text-align:left" data-tone="' + (x.done ? 'done' : x.tone) + '" data-a="day" data-v="' + x.i + '">' + gem(x.done ? 'done' : x.tone, x.done ? 'check' : x.g, x.i === 0 ? 'lit' : '') + '<div><span class="dw">' + dayName(x.key, x.i) + ' · ' + fmtS(x.key) + '</span><h3>' + esc(x.title) + '</h3><p>' + esc(x.summary) + '</p></div></button>'; }).join('') + '</div>' +
-    '<p class="note mx" style="margin-top:12px;text-align:center">' + esc((WK.thisWeek && WK.thisWeek.text) || '') + '. Your week always starts from today.</p></div></div>';
+/* the plan's own move per slot as the workout started, so a swap back to it reads "Back to {move}." (owner ruling of 2026-11-22) */
+function planMovesOf(s) { var m = {}; (s.items || []).forEach(function (it) { m[String(it.slot)] = it.exerciseId; }); return m; }
+/* the rest timer and its sound are the person's own settings, kept between workouts (6.7) */
+var PREF = { rest: 'balance_coach_rest_timer', sound: 'balance_coach_rest_sound' };
+function prefGet(k, d) { try { var v = localStorage.getItem(PREF[k]); return v === null ? d : v === '1'; } catch (e) { return d; } }
+function prefSet(k, on) { if (MEM) return; try { localStorage.setItem(PREF[k], on ? '1' : '0'); } catch (e) {} }
+
+/* ---------- words (the iPhone app's CoachWorkoutText) ---------- */
+function valText(x, w, r) { var l = lt(x); return l === 'weightReps' ? w + ' lb x ' + r : l === 'reps' ? plural(r, 'rep') : l === 'seconds' ? r + ' sec' : r + ' min'; }
+function chipText(x, w, r) { var l = lt(x); return l === 'weightReps' ? w + ' × ' + r : l === 'reps' ? String(r) : l === 'seconds' ? r + 's' : r + ' min'; }
+function logged(x) {
+  var g = x.logs, l = lt(x); if (!g.length) return '';
+  if (isMinItem(x)) return g[0].r + ' min';
+  if (l === 'reps') return g.map(function (s) { return s.r; }).join(', ') + ' reps';
+  if (l === 'seconds') return g.map(function (s) { return s.r; }).join(', ') + ' seconds';
+  if (g.every(function (s) { return s.w === g[0].w; })) return g[0].w + ' lb x ' + g.map(function (s) { return s.r; }).join(', ');
+  return g.map(function (s) { return s.w + ' x ' + s.r; }).join(', ') + ' lb';
 }
-function vProgress() {
-  var P = PROG && PROG.ok ? PROG : { recent: [], pounds: {} }, pd = P.pounds || {};
-  var rows = (P.recent || []).map(function (r) { var tone = r.kind === 'free' ? 'brand' : r.kind === 'recovery' ? 'recover' : toneOf(r.focus);
-    return '<div class="prow" data-tone="' + tone + '">' + gem(tone, r.kind === 'free' ? freeIcon(r.title) : GLYPH[tone], '') + '<div><span class="dw">' + fmtS(r.day) + '</span><h3>' + esc(dispTitle(r.title)) + '</h3><p>' + esc(dispSummary(r.summary)) + '</p></div></div>'; }).join('');
-  return '<div class="scr cover"><div class="scroll">' + subHdr('Your progress') +
-    '<div class="card mx" style="margin-top:12px;padding:14px 16px"><h3>' + plural(P.workoutsCompleted || 0, 'workout') + ' so far</h3><p class="note" style="margin-top:4px">' + nf(pd.lifetime || 0) + ' lb all time · ' + nf(pd.thisWeek || 0) + ' lb this week · ' + nf(pd.last30Days || 0) + ' lb in the last 30 days</p></div>' +
-    '<div class="secrow"><span class="label">Recent workouts</span></div><div class="planlist">' + (rows || '<p class="note mx">Your first workout sets down the first plate.</p>') + '</div></div></div>';
+function didText(x) { if (!x.logs.length) return x.skipped ? 'Skipped today' : 'Not logged today'; return 'Today ' + logged(x); }
+function lastOf(x, short) {
+  var l = x.item.last; if (!l) return '';
+  if (isMinItem(x)) { var m = l.minutes != null ? l.minutes : (l.sets && l.sets[0] && l.sets[0].minutes); return m != null ? m + ' min' : ''; }
+  var s = l.sets || []; if (!s.length) return '';
+  if (lt(x) === 'reps') return s.map(function (y) { return y.reps; }).join(', ');
+  if (lt(x) === 'seconds') return s.map(function (y) { return y.seconds; }).join(', ') + ' sec';
+  var w = s[0].weight, reps = s.map(function (y) { return y.reps; }).join(', ');
+  if (s.every(function (y) { return y.weight === w; })) return short ? w + ' × ' + reps : w + ' lb x ' + reps;
+  return s.map(function (y) { return y.weight + '×' + y.reps; }).join(', ');
 }
-function vSummary() {
-  var d = DAYS[0];
-  return '<div class="scr cover"><div class="scroll">' + subHdr('Summary') + '<div class="dayhead mx" style="margin-top:12px">' + gem('done', 'check', 'lg lit') + '<div><h3>' + esc(d.title) + '</h3><p>' + esc(d.summary) + '</p></div></div>' +
-    '<p class="note mx" style="margin-top:12px">+' + doneEarned(d.key) + ' min of scroll time earned</p></div></div>';
+function lastLine(x) {
+  var it = x.item, line = lt(x) === 'weightReps' && it.repsLow && it.repsHigh ? 'Aim for ' + it.repsLow + ' to ' + it.repsHigh + ' reps · ' : '', last = lastOf(x, false);
+  if (last) return line + 'Last time ' + last;
+  if (fromNums(it)) return line + 'First time';
+  if (it.hint) return line + it.hint;
+  return line + (it.calibrating ? 'First time - start light' : 'First time');
+}
+function mergedTail(x) { var last = lastOf(x, true); return last ? ' · last ' + last : ' · ' + (x.item.calibrating ? 'first time - start light' : 'first time'); }
+function logDetail(x, w, r) { return isMinItem(x) ? x.item.name : valText(x, w, r) + (x.item.perHand ? ' each hand' : ''); }
+function signedTag(row) { var d = row && row.direction; return d === 'up' ? '+' + row.tag : d === 'down' ? '-' + row.tag : d === 'same' ? 'Same' : ''; }
+function tagCls(row) { return row && row.direction === 'up' ? 'up' : row && row.direction === 'down' ? 'down' : 'same'; }
+
+/* ---------- what the coach is sent (6.10): one item per slot, earlier sets with the move they were logged on (B3) ---------- */
+function engineSets(x) {
+  var l = lt(x);
+  return x.logs.map(function (s) { return l === 'weightReps' ? { weight: s.w, reps: s.r } : l === 'reps' ? { reps: s.r } : l === 'seconds' ? { seconds: s.r } : { minutes: s.r }; });
+}
+function recoverySplit(total, targets) {
+  var left = Math.max(0, total);
+  return targets.map(function (t, i) { var share = i === targets.length - 1 ? left : Math.min(left, Math.max(0, t)); left -= share; return share; });
+}
+function finishItems(d, minutes) {
+  if (d.kind === 'cardio') {
+    var c = d.items[0]; if (!c) return [];
+    var o = { slot: c.slot, exerciseId: c.item.exerciseId, minutes: minutes };
+    if (d.dist > 0) o.distanceHundredths = d.dist * 10;
+    return [o];
+  }
+  if (d.kind === 'recovery') {
+    var sh = recoverySplit(minutes, d.items.map(function (x) { return tval(x.item); }));
+    return d.items.map(function (x, i) { return sh[i] > 0 ? { slot: x.slot, exerciseId: x.item.exerciseId, minutes: sh[i] } : { slot: x.slot, exerciseId: x.item.exerciseId, skipped: true }; });
+  }
+  var slots = [];
+  d.items.forEach(function (x) { if (slots.indexOf(x.slot) < 0) slots.push(x.slot); });
+  return slots.map(function (slot) {
+    var m = mainOf(d, slot), e = earlierOf(d, slot); if (!m) return null;
+    var o = { slot: slot, exerciseId: m.item.exerciseId };
+    if (!m.logs.length) o.skipped = true; else if (isMinItem(m)) o.minutes = m.logs[0].r; else o.sets = engineSets(m);
+    if (m.logs.length && m.feel) o.feel = m.feel;
+    if (e && e.logs.length) o.earlierSets = { exerciseId: e.item.exerciseId, sets: engineSets(e).slice(0, 10) };
+    return o;
+  }).filter(Boolean);
+}
+/* "about {N} min left" (5.18): the workout's about-minutes times the share of work still to do */
+function setWork(x) { return lt(x) === 'seconds' ? tval(x.item) * (x.item.perSide ? 2 : 1) + 15 : (x.item.perSide ? 70 : 40); }
+function exSeconds(x) { if (isMinItem(x)) return 60 * tval(x.item); var s = tsets(x.item), rs = Math.max(0, x.item.restSeconds || 0); return s * setWork(x) + Math.max(0, s - 1) * rs; }
+function minutesLeft() {
+  var main = ACT.items.filter(function (x) { return !x.earlier; }), whole = 300, any = ACT.items.some(function (x) { return x.logs.length > 0; }), left = any ? 0 : 300;
+  main.forEach(function (x, j) { whole += (j > 0 ? 60 : 0) + exSeconds(x); });
+  main.forEach(function (x, j) {
+    if (isDone(x)) return;
+    var sl = Math.max(0, x.n - x.logs.length), st = x.logs.length > 0, rs = Math.max(0, x.item.restSeconds || 0);
+    if (isMinItem(x)) { left += (st || j === 0 ? 0 : 60) + (sl > 0 ? 60 * tval(x.item) : 0); return; }
+    var w = setWork(x);
+    left += st ? sl * (w + rs) : (j > 0 ? 60 : 0) + sl * w + Math.max(0, sl - 1) * rs;
+  });
+  return Math.max(1, Math.round((ACT.about || 45) * left / Math.max(1, whole)));
+}
+function setsLine() { var d = setsDone(); return allDone() ? 'All ' + plural(d, 'set') + ' done' : d + ' of ' + setsTotal() + ' sets done · about ' + minutesLeft() + ' min left'; }
+/* Swap is offered for a lifted move with alternatives that is not the kept first part of a swapped slot; once the new move has
+   sets, its slot cannot change again (the engine keeps one earlier part per slot, B3) */
+function canSwap(i) {
+  var x = ACT.items[i]; if (!x || ACT.kind !== 'training' || x.earlier || isMinItem(x)) return false;
+  if (!swapChoices(x).length && !(x.item.alternatives || []).length) return false;
+  return !(earlierIndex(x.slot) >= 0 && x.logs.length > 0);
+}
+/* the moves the Swap list offers: the engine's alternatives, never a move already in today's workout (one move is never logged twice).
+   The move done first in this slot stays on the list while the new one has no sets: picking it folds its sets back in. */
+function swapChoices(x) {
+  var used = {};
+  ACT.items.forEach(function (y) { if (y === x) return; if (y.slot === x.slot && y.earlier && !x.logs.length) return; used[y.item.exerciseId] = 1; });
+  return (x.item.alternatives || []).filter(function (a) { return !used[a.exerciseId] && a.exerciseId !== x.item.exerciseId; }).slice(0, 6);
 }
 
+/* the Next time line (5.18): the engine's own answer for what is logged so far, from a completeSession on a copy that is thrown away */
+var PV = { key: '', rows: null };
+function previewRow(x) {
+  if (!x.logs.length) return null;
+  var items = finishItems(ACT, Math.max(1, ACT.about || 1)), key = JSON.stringify(items) + '|' + coachToday() + '|' + REV;
+  if (PV.key !== key) {
+    var r = exec('completeSession', { today: coachToday(), workoutId: ACT.workoutId, durationMinutes: Math.max(1, ACT.about || 1), items: items });
+    PV = { key: key, rows: r.result && r.result.ok && r.result.summary ? r.result.summary.next || [] : [] };
+  }
+  return PV.rows.filter(function (row) { return row.slot === x.slot; })[0] || null;
+}
+/* the steppers' ranges (the engine's weightStep, minWeight and maxWeight; values by 1, seconds by 5) */
+function wStep(it) { return Math.max(1, it.weightStep || 5); }
+function wMin(it) { return Math.max(0, it.minWeight || 0); }
+function wMax(it) { return Math.max(wMin(it), Math.min(995, it.maxWeight || 995)); }
+function vStep(x) { return lt(x) === 'seconds' ? 5 : 1; }
+function vRange(x) { return lt(x) === 'seconds' ? [5, 600] : isMinItem(x) ? [1, 180] : [1, 99]; }
+
+/* ---------- the workout screen (5.18) and the cardio and recovery screen (5.19) ---------- */
+function ringHTML(left, total, label, big, attr) {
+  var c = 2 * Math.PI * 54, f = total ? clamp(left / total, 0, 1) : 0, sw = big ? 6 : 8;
+  return '<div class="ringbox' + (big ? ' big' : '') + '"' + (attr === 'rest' ? ' role="timer" aria-label="Rest"' : attr === 'cardio' ? ' role="timer" aria-label="Time moved"' : '') + '><svg viewBox="0 0 124 124" aria-hidden="true"><circle class="trk" cx="62" cy="62" r="54" fill="none" stroke-width="' + sw + '"/>' +
+    '<circle class="arc" data-arc="' + attr + '" cx="62" cy="62" r="54" fill="none" stroke-width="' + sw + '" stroke-linecap="round" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + (c * (1 - f)).toFixed(1) + '"/></svg>' +
+    '<div class="mid"><b ' + (attr === 'rest' ? 'data-rest' : 'data-clk') + '>' + clock(attr === 'rest' ? Math.ceil(left) : left) + '</b><span>' + label + '</span></div></div>';
+}
+function stepRow(f, label, val, unit, hint, md, less, more) {
+  return '<div class="steprow' + (md ? ' md' : '') + '"><button class="stepbtn' + (md ? ' md' : '') + '" data-a="step" data-v="' + f + ':-1" aria-label="' + less + '">' + ic('minus') + '</button>' +
+    '<div class="stepval" aria-live="polite"><span class="lb">' + label + '</span><span class="v">' + val + (unit ? '<small>' + unit + '</small>' : '') + '</span>' + (hint ? '<span class="hint">' + hint + '</span>' : '') + '</div>' +
+    '<button class="stepbtn' + (md ? ' md' : '') + '" data-a="step" data-v="' + f + ':1" aria-label="' + more + '">' + ic('plus') + '</button></div>';
+}
+function steppers(x, w, r, md) {
+  var it = x.item, l = lt(x), h = '';
+  if (l === 'weightReps') h += stepRow('w', 'Weight', w, 'lb', it.perHand ? 'each hand' : '', md, 'Less weight', 'More weight');
+  if (l === 'weightReps' || l === 'reps') h += stepRow('r', 'Reps', r, '', it.perSide ? 'each side' : md && COMPACT && l === 'weightReps' && !ACT.rest && it.repsLow && it.repsHigh ? 'aim for ' + it.repsLow + ' to ' + it.repsHigh : '', md, 'Fewer reps', 'More reps');
+  else if (l === 'seconds') h += stepRow('r', 'Seconds', r, 'sec', it.perSide ? 'each side' : '', md, 'Fewer seconds', 'More seconds');
+  else h += stepRow('r', 'Minutes', r, 'min', '', md, 'Fewer minutes', 'More minutes');
+  return h;
+}
+/* the line under the steppers (Swift WorkoutCue) */
+function cueLine(x) {
+  var it = x.item, e = UI.wedit, t = it.target || {}, l = lt(x);
+  if (e) return '<p class="cue edit">' + ic('edit', 'i16') + 'Changing set ' + (e.j + 1) + ' · goal was ' + valText(x, t.weight || 0, tval(it)) + '</p>';
+  var dw = l === 'weightReps' ? x.cw - (t.weight || 0) : 0, dv = x.cr - tval(it), u = l === 'seconds' ? 'sec' : isMinItem(x) ? 'min' : Math.abs(dv) === 1 ? 'rep' : 'reps';
+  if (!x.logs.length && !dw && !dv) {
+    if (fromNums(it)) return '<p class="cue">' + ic('info', 'i16') + 'Started from your numbers</p>';
+    if (it.calibrating && l === 'weightReps') return '<p class="cue">' + ic('info', 'i16') + 'First time: start light. If a set feels easy, add weight on the next set.</p>';
+    if (!it.last && (l === 'reps' || l === 'seconds')) return '<p class="cue">' + ic('info', 'i16') + 'First time: do what you can and log it.</p>';
+    var notes = it.notes || [], cb = ctext('comebackNote', ''), tw = ctext('skippedTwiceNote', '');
+    if (cb && notes.indexOf(cb) >= 0) return '<p class="cue">' + ic('info', 'i16') + esc(cb) + '</p>';
+    if (tw && notes.indexOf(tw) >= 0 && (it.alternatives || []).length && canSwap(ACT.xi)) return '<button class="cue swapcue" data-a="sheet" data-v="swap">' + ic('swap', 'i16') + esc(tw) + '</button>';
+  }
+  if (!dw && !dv) return '<p class="cue ok">' + ic('check', 'i16') + 'On target</p>';
+  if (dw > 0) return '<p class="cue ok">' + ic('up', 'i16') + dw + ' lb over the goal - log what you lift</p>';
+  if (dw < 0) return '<p class="cue">' + (-dw) + ' lb under the goal - that\'s fine, log what you did</p>';
+  if (dv > 0) return '<p class="cue ok">' + ic('up', 'i16') + dv + ' ' + u + ' over target - nice</p>';
+  return '<p class="cue">' + (-dv) + ' ' + u + ' under target - that\'s fine, log what you did</p>';
+}
+var FEELS = [['easy', 'Easy'], ['justRight', 'Just right'], ['hard', 'Hard']];
+function feelHTML(x) {
+  return '<div class="feel"><p>How did that feel? <span>Optional</span></p><div class="opts" role="group" aria-label="How did ' + esc(x.item.name) + ' feel">' +
+    FEELS.map(function (f) { return '<button class="' + (x.feel === f[0] ? 'on' : '') + '" data-a="feel" data-v="' + f[0] + '" aria-pressed="' + (x.feel === f[0]) + '">' + f[1] + '</button>'; }).join('') + '</div></div>';
+}
+function changeTag(row) { var t = signedTag(row); return t ? '<span class="tag ' + tagCls(row) + '">' + esc(t) + '</span>' : ''; }
+function nextTimeHTML(x) {
+  var row = previewRow(x); if (!row) return '';
+  return '<p class="nexttime">Next time: <b>' + esc(row.text || '') + '</b>' + (row.change !== 'skipped' ? changeTag(row) : '') + '</p>';
+}
+function sessTop(withClock) {
+  var p = !!ACT.pausedAt;
+  return '<div class="stop">' + iconBtn('minimize', '', 'chevD', 'Minimize. Your workout keeps running') +
+    '<div class="mid"><span class="dn" tabindex="-1" data-focus><i' + (p ? ' class="paused"' : '') + '></i>' + esc(dispTitle(ACT.title)) + (p ? ' · paused' : '') + '</span>' +
+    (withClock ? '<span class="clock" data-clk role="timer" aria-label="Workout time">' + clock(sessEl() / 1000) + '</span>' : '') + '</div>' +
+    (p ? iconBtn('pause', '', 'play', 'Paused. Open resume options') : iconBtn('pause', '', 'pause', 'Pause workout')) + '</div>';
+}
+function sofarChip() { return '<div class="sofar"><span class="chip">' + ic('bolt', 'i12') + '<span data-sofar>' + soFar(sessEl()) + '</span></span></div>'; }
+function logBtnHTML() {
+  var x = ACT.items[ACT.xi], st = btnState(), g = Date.now() < (UI.guardUntil || 0) ? ' guard' : '', nx = nextOpen(ACT.xi), e = UI.wedit;
+  function b(cls, icon, t, sub, label) { return '<button class="logbtn' + cls + '" data-a="main" aria-label="' + esc(label || t + '. ' + sub) + '"><span class="ck">' + ic(icon) + '</span><span class="lt">' + esc(t) + '<small>' + esc(sub) + '</small></span></button>'; }
+  if (st === 'edit') return b('', 'check', 'Save set ' + (e.j + 1), valText(x, e.w, e.r));
+  if (st === 'rest') return b(' quiet' + g, 'skip', 'Skip rest', ACT.rest.ex && nx >= 0 ? 'Next: ' + ACT.items[nx].item.name : 'Set ' + (x.logs.length + 1) + ' is next');
+  if (st === 'log') return b(g, 'check', isMinItem(x) ? 'Log ' + x.cr + ' min' : 'Log set ' + (x.logs.length + 1), logDetail(x, x.cw, x.cr));
+  if (st === 'next' && nx >= 0) return b(' quiet' + g, 'arrow', 'Next exercise', ACT.items[nx].item.name + ' · ' + tShort(ACT.items[nx].item));
+  return b(' finish' + g, 'check', 'Finish workout', 'See your summary', 'Finish workout. See your summary');
+}
+function vSession() {
+  if (!running() || !ACT.items.length) return '';
+  if (ACT.kind !== 'training') return vCardio();
+  if (ACT.xi >= ACT.items.length) ACT.xi = 0;
+  var x = ACT.items[ACT.xi], it = x.item, st = btnState(), e = UI.wedit, h, j, chips = '', card;
+  h = '<div class="sess" data-tone="' + sessTone() + '">' + sessTop(true) + sofarChip() +
+    '<div class="segs" aria-hidden="true">' + ACT.items.map(function (y, i) { return '<i class="' + (i === ACT.xi ? 'cur' : y.skipped && !y.logs.length ? 'skip' : isDone(y) ? 'done' : '') + '"></i>'; }).join('') + '</div>' +
+    '<p class="setsline">' + setsLine() + '</p><div class="sbody">';
+  var more = '<button class="pill round" data-a="sheet" data-v="menu" aria-label="More options for ' + esc(it.name) + '">' + ic('more') + '</button>';
+  var gl = 'Goal <b>' + esc(tShort(it).replace(' · ', ' at ')) + '</b>' + esc(mergedTail(x));
+  h += '<div class="exh"><span class="label">Exercise ' + (ACT.xi + 1) + ' of ' + ACT.items.length + '</span><div class="hrow"><h2>' + esc(it.name) + '</h2>' + more + '</div>' +
+    '<p class="goal">Goal <b>' + esc(it.text || tShort(it)) + '</b></p><p class="last">' + esc(lastLine(x)) + '</p><p class="gl">' + gl + '</p></div>';
+  h += '<div class="pills">' + (canSwap(ACT.xi) ? '<button class="pill" data-a="sheet" data-v="swap">' + ic('swap') + 'Swap</button>' : '') + '<button class="pill" data-a="sheet" data-v="xlist">' + ic('list') + 'All exercises</button><span style="flex:1"></span>' + more + '</div>';
+  for (j = 0; j < x.n; j++) {
+    if (j < x.logs.length) chips += '<button class="setc done' + (e && e.j === j ? ' edit' : '') + '" data-a="chip" data-v="' + j + '" aria-label="Set ' + (j + 1) + ', logged ' + esc(valText(x, x.logs[j].w, x.logs[j].r)) + '. Tap to change."><small>' + ic('check', 'i12') + 'Set ' + (j + 1) + '</small><b>' + esc(chipText(x, x.logs[j].w, x.logs[j].r)) + '</b></button>';
+    else if (j === x.logs.length && !x.skipped) chips += e ? '<button class="setc now" data-a="chip" data-v="' + j + '" aria-label="Back to set ' + (j + 1) + '"><small>Set ' + (j + 1) + '</small><b>' + esc(chipText(x, x.cw, x.cr)) + '</b></button>' : '<div class="setc now" aria-current="step"><small>Set ' + (j + 1) + '</small><b>' + esc(chipText(x, x.cw, x.cr)) + '</b></div>';
+    else chips += '<div class="setc"><small>Set ' + (j + 1) + '</small><b>' + (x.skipped ? 'skipped' : '·') + '</b></div>';
+  }
+  if (x.n < 5 && !isMinItem(x) && !x.skipped) chips += '<button class="setc add" data-a="addset" aria-label="Add a set">' + ic('plus', 'i18') + '</button>';
+  h += '<div class="sets">' + chips + '</div>';
+  if (st === 'edit') card = '<div class="logcard lc-log">' + steppers(x, e.w, e.r, COMPACT) + cueLine(x) + '</div>';
+  else if (st === 'log') card = '<div class="logcard lc-log">' + steppers(x, x.cw, x.cr, COMPACT) + cueLine(x) + '</div>';
+  else {
+    var r = ACT.rest, band = r ? '<div class="restband"><button class="adj" data-a="rest-adj" data-v="-15" aria-label="15 seconds less rest">-15s</button>' + ringHTML(restLeft(), r.total, 'Rest', false, 'rest') + '<button class="adj" data-a="rest-adj" data-v="15" aria-label="15 seconds more rest">+15s</button></div>' : '';
+    if (r && !r.ex) card = '<div class="logcard">' + band + '<p class="nextlbl">Next: set ' + (x.logs.length + 1) + '</p>' + steppers(x, x.cw, x.cr, true) + '</div>';
+    else {
+      var sk = x.skipped && !x.logs.length;
+      var head = sk ? '<div class="donehead skipped"><span class="orb">' + ic('skip') + '</span><h3>Skipped</h3><p>Same target next time. Nothing is lost.</p><button class="btn btn-ghost" data-a="unskip">' + ic('undo') + 'Undo skip</button></div>'
+        : '<div class="donehead' + (r ? ' slim' : '') + '"><span class="orb">' + ic('check') + '</span><h3>' + esc(it.name) + ' done</h3><p>' + esc(didText(x).replace(/^Today /, '')) + '</p></div>';
+      card = '<div class="logcard fit">' + band + (r ? '' : head) + (sk ? '' : nextTimeHTML(x) + feelHTML(x)) + '</div>';
+    }
+  }
+  return h + card + '</div><div class="sfoot">' + logBtnHTML() + '</div></div>';
+}
+function cardioLine() {
+  if (ACT.kind === 'recovery') return ACT.items.map(function (x) { return x.item.name + ' ' + tval(x.item) + ' min'; }).join(', then ') + '. Keep it easy - this day helps you recover.';
+  var it = ACT.items[0].item, ch = it.change, prev = ch && ch.direction === 'up' && ch.previous && ch.previous.minutes;
+  return 'Goal ' + tval(it) + ' min' + (prev ? ', up from ' + prev + ' min' : '') + '. Go at a pace where you can still talk.';
+}
+function vCardio() {
+  var goal = 0, rec = ACT.kind === 'recovery', dist = ACT.dist || 0;
+  ACT.items.forEach(function (x) { goal += tval(x.item); });
+  return '<div class="sess" data-tone="' + sessTone() + '">' + sessTop(false) + '<div class="cardio-mid">' +
+    ringHTML(sessEl() / 1000, goal * 60, 'of ' + goal + ' min', true, 'cardio') + sofarChip() +
+    '<h2>' + esc(rec ? 'Active recovery' : ACT.items[0].item.name) + '</h2><p>' + esc(cardioLine()) + '</p>' +
+    (rec ? '' : '<div style="width:100%;max-width:300px"><span class="label" style="display:block;margin-bottom:8px">Distance · optional</span><div class="ministep"><button data-a="dist" data-v="-1" aria-label="Less distance">' + ic('minus', 'i20') + '</button>' +
+    '<div class="mv" aria-live="polite">' + (dist ? (dist / 10).toFixed(1) : 'Not set') + '<small>' + (dist ? 'miles' : 'tap + to add') + '</small></div><button data-a="dist" data-v="1" aria-label="More distance">' + ic('plus', 'i20') + '</button></div></div>') + '</div>' +
+    '<div class="sfoot"><button class="logbtn" data-a="main"><span class="ck">' + ic('check') + '</span><span class="lt">' + (rec ? 'Finish recovery' : 'Finish cardio') + '<small>Logged by time</small></span></button></div></div>';
+}
+
+/* ---------- the workout's sheets: Swap (5.20), the exercise menu (5.21), All exercises (5.22), Paused, Finish now and Discard (5.23) ---------- */
+var EQUIP_WORD = { barbell: 'Barbell', dumbbell: 'Dumbbells', machine: 'Machine', cardioMachine: 'Machine', cable: 'Cable', bodyweight: 'Bodyweight' };
+function swapLine(id) { var m = exInfo(id); return (m.muscleLabel ? m.muscleLabel + ' · ' : '') + (EQUIP_WORD[m.equipment] || 'No equipment'); }
+function isBodyweight(id) { var q = exInfo(id).equipment; return q === 'bodyweight' || q === 'none' || !q; }
+function foldBackNote(x) {
+  if (x.logs.length) return '';
+  var e = earlierIndex(x.slot) >= 0 ? ACT.items[earlierIndex(x.slot)] : null; if (!e || !e.logs.length) return '';
+  return ' Picking ' + e.item.name + ' again brings back ' + (e.logs.length === 1 ? 'the set' : 'the ' + e.logs.length + ' sets') + ' you logged.';
+}
+function shSwap() {
+  var x = ACT.items[ACT.xi], alts = swapChoices(x), sc = UI.sheet.scope || 'today';
+  var b = '<p class="lead">Instead of <b style="color:var(--text)">' + esc(x.item.name) + '</b>. These work the same muscles with what you have.</p>';
+  b += '<div class="seg" role="radiogroup" aria-label="How long to swap for" style="margin-top:14px">' + [['today', 'Just today'], ['always', 'Every time']].map(function (o) {
+    return '<button role="radio" aria-checked="' + (sc === o[0]) + '" class="' + (sc === o[0] ? 'on' : '') + '" data-a="swap-scope" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>';
+  b += alts.length ? '<div class="stack">' + alts.map(function (a) {
+    return '<button class="opt" data-a="do-swap" data-v="' + esc(a.exerciseId) + '"><span class="sym">' + ic(isBodyweight(a.exerciseId) ? 'figure' : 'lift') + '</span><span><h3>' + esc(a.name) + '</h3><p>' + esc(swapLine(a.exerciseId)) + '</p></span>' + ic('chevR', 'i16 go') + '</button>'; }).join('') + '</div>'
+    : '<div class="callout calm" style="margin-top:14px">' + ic('info', 'i18') + '<span>No other move fits this spot with your equipment.</span></div>';
+  return shell('Swap exercise', b + '<p class="note" style="margin-top:12px;text-align:center">' + (x.logs.length ? 'The sets you already logged stay. ' : '') + 'Your coach gives the new move its own starting target.' + esc(foldBackNote(x)) + '</p>', { tone: sessTone() });
+}
+function shMenu() {
+  var x = ACT.items[ACT.xi], b = '<div class="menu">';
+  function row(a, icon, title, sub, val) { return '<button data-a="' + a + '"' + (val ? ' role="switch" aria-checked="' + (val === 'On') + '"' : '') + '><span class="symtile plain">' + ic(icon, 'i20') + '</span><span><h3>' + title + '</h3>' + (sub ? '<p>' + sub + '</p>' : '') + '</span><span class="val">' + (val || '') + '</span></button>'; }
+  if (COMPACT) { if (canSwap(ACT.xi)) b += row('menu-swap', 'swap', 'Swap exercise', 'A different move for the same muscles.'); b += row('menu-list', 'list', 'All exercises', setsDone() + ' of ' + setsTotal() + ' sets done. Jump to any of them.'); }
+  if (x.skipped) b += row('unskip', 'undo', 'Undo skip', 'Bring this exercise back.');
+  else if (!isDone(x)) b += row('skip', 'skip', 'Skip this exercise', 'Same target next time. Nothing is lost.');
+  if (x.n < 5 && !x.skipped && !isMinItem(x)) b += row('addset', 'plus', 'Add a set', plural(x.n, 'set') + ' now');
+  if (x.n > Math.max(1, x.logs.length) && !x.skipped) b += row('remset', 'minus', 'Remove a set', plural(x.n, 'set') + ' now');
+  b += row('opt-rest', 'timer', 'Rest timer', ACT.restOn ? 'Counts down after each set. You can always skip it.' : 'No countdown between sets.', ACT.restOn ? 'On' : 'Off');
+  b += row('opt-sound', 'sound', 'Sound when rest ends', 'Your phone always buzzes. Sound is extra.', ACT.sound ? 'On' : 'Off');
+  return shell(esc(x.item.name), b + '</div>', { tone: sessTone() });
+}
+function listLine(x) {
+  if (x.skipped && !x.logs.length) return 'Skipped today';
+  if (!x.logs.length) return 'Goal ' + (x.item.text || tShort(x.item));
+  if (isDone(x)) return didText(x);
+  return didText(x) + ' · set ' + (x.logs.length + 1) + ' of ' + x.n + ' is next';
+}
+function shXList() {
+  var rows = ACT.items.map(function (x, i) {
+    var done = isDone(x), cur = i === ACT.xi, sk = x.skipped && !x.logs.length, line = listLine(x);
+    return '<button class="lrow' + (done && !x.skipped ? ' done' : cur ? ' cur' : '') + '" data-a="goto" data-v="' + i + '"' + (cur ? ' aria-current="step"' : '') + ' aria-label="Exercise ' + (i + 1) + ', ' + esc(x.item.name) + '. ' + esc(line) + (cur ? '. Current' : '') + '"><span class="n">' + (x.skipped ? ic('skip', 'i12') : done ? ic('check', 'i12') : (i + 1)) + '</span>' +
+      '<span><h3>' + esc(x.item.name) + '</h3><p>' + esc(line) + '</p></span>' + ic('chevR', 'i16 go') + '</button>';
+  }).join('');
+  return shell('All exercises', '<p class="lead">' + setsDone() + ' of ' + setsTotal() + ' sets done. Tap an exercise to jump to it.</p><div class="card" style="padding:4px 14px;margin-top:12px">' + rows + '</div>', { tone: sessTone() });
+}
+function shPause() {
+  var c = UI.sheet.c, left = setsLeftCount(), keep = '<button class="btn btn-secondary" data-a="keep-going">Keep going</button>';
+  if (c === 'finish') return shell('Finish now?', '<p class="lead">' + (left === 1 ? '1 set not logged. That is fine. It just will not count toward next time.' : left + ' sets not logged. That is fine. They just will not count toward next time.') + '</p><div class="stack"><button class="btn btn-cta" data-a="finish-now">Finish and save</button>' + keep + '</div>');
+  if (c === 'discard') return shell('Discard this workout?', '<p class="lead">Nothing will be saved and no time is earned.</p><div class="stack"><button class="btn btn-danger" data-a="discard">' + ic('trash') + 'Discard workout</button>' + keep + '</div>');
+  return shell('Paused · <span data-pclk>' + clock(sessEl() / 1000) + '</span>', '<p class="lead">The timer is stopped. Paused time doesn\'t earn scroll time.</p>' + (ACT.kind === 'training' ? '<p class="note" style="margin-top:6px">' + setsDone() + ' of ' + setsTotal() + ' sets done.</p>' : '') +
+    '<div class="stack"><button class="btn btn-cta" data-a="keep-going">' + ic('play') + 'Resume</button><button class="btn btn-secondary" data-a="finish-ask">Finish and save</button><button class="btn btn-danger" data-a="discard-ask">Discard this workout</button></div>', { tone: sessTone() });
+}
+
+/* ---------- workout logic (6.1 to 6.10) ---------- */
+function buzz(p) { try { var ua = navigator.userActivation; if (navigator.vibrate && (!ua || ua.hasBeenActive)) navigator.vibrate(p); } catch (e) {} }
+var ACTX = null;
+function beep() {
+  try { var C = window.AudioContext || window.webkitAudioContext; if (!C) return; ACTX = ACTX || new C(); var o = ACTX.createOscillator(), g = ACTX.createGain(); o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(ACTX.destination); o.start(); o.stop(ACTX.currentTime + 0.2); } catch (e) {}
+}
+/* spoken lines (10.3): one polite live region outside the screens that re-draw */
+function say(msg) {
+  var lv = document.getElementById('cx-live');
+  if (!lv) { lv = document.createElement('div'); lv.id = 'cx-live'; lv.setAttribute('role', 'status'); lv.setAttribute('aria-live', 'polite'); lv.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap'; document.body.appendChild(lv); }
+  lv.textContent = ''; setTimeout(function () { lv.textContent = msg; }, 60);
+}
+function cur() { return ACT.items[ACT.xi]; }
+function setGuard(ms) { UI.guardUntil = Date.now() + ms; setTimeout(function () { var b = $('#cx-cover .logbtn'); if (b && Date.now() >= (UI.guardUntil || 0)) b.classList.remove('guard'); }, ms + 40); }
+function sessRender() { saveAct(); render(); }
+function logSet() {
+  var x = cur(); if (!x || isDone(x)) return;
+  x.logs.push({ w: lt(x) === 'weightReps' ? x.cw : 0, r: x.cr });
+  x.cr = tval(x.item);
+  setGuard(600); buzz(12);
+  var t = Math.max(0, x.item.restSeconds || 0);
+  if (ACT.restOn && t > 0 && !allDone()) ACT.rest = { endsAt: Date.now() + t * 1000, total: t, ex: isDone(x), pausedLeft: null };
+  sessRender();
+}
+/* how a rest ends: 'tap' (Skip rest), 'auto' (it ran out with the screen open) or 'quiet' (it ran out while away) */
+function endRest(how) {
+  var r = ACT && ACT.rest; if (!r) return;
+  ACT.rest = null;
+  if (r.ex && isDone(cur())) { var n = nextOpen(ACT.xi); if (n >= 0) ACT.xi = n; }
+  if (how === 'tap') setGuard(500);
+  sessRender();
+  if (how === 'auto') {
+    var x = cur(); buzz([70, 50, 70]); if (ACT.sound) beep();
+    if (x) {
+      say('Rest over. Set ' + (x.logs.length + 1) + ' of ' + x.item.name + '.');
+      try { if (document.hidden && window.Notification && Notification.permission === 'granted') new Notification('Rest is over', { body: x.item.name + ': set ' + (x.logs.length + 1) + ' is next.' }); } catch (e) {}
+    }
+  }
+}
+function mainTap() {
+  if (!running() || Date.now() < (UI.guardUntil || 0)) return;
+  if (ACT.kind !== 'training') { finishWorkout(); return; }
+  var x = cur(), st = btnState(), e = UI.wedit, n;
+  if (st === 'edit') {
+    if (x.logs[e.j]) { x.logs[e.j] = { w: lt(x) === 'weightReps' ? e.w : 0, r: e.r }; if (e.j === x.logs.length - 1 && lt(x) === 'weightReps') x.cw = e.w; }
+    UI.wedit = null; setGuard(500); sessRender();
+  } else if (st === 'rest') endRest('tap');
+  else if (st === 'log') logSet();
+  else if (st === 'next') { n = nextOpen(ACT.xi); if (n >= 0) ACT.xi = n; UI.wedit = null; setGuard(400); sessRender(); }
+  else finishWorkout();
+}
+function stepVal(v) {
+  var x = cur(); if (!x) return;
+  var f = v.split(':')[0], d = +v.split(':')[1], e = UI.wedit, it = x.item, rg = vRange(x);
+  if (f === 'w') { var w = clamp((e ? e.w : x.cw) + d * wStep(it), wMin(it), wMax(it)); if (e) e.w = w; else x.cw = w; }
+  else { var r = clamp((e ? e.r : x.cr) + d * vStep(x), rg[0], rg[1]); if (e) e.r = r; else x.cr = r; }
+  buzz(4); sessRender();
+}
+function tapChip(j) {
+  var x = cur(), e = UI.wedit;
+  if ((e && e.j === j) || (e && j >= x.logs.length)) UI.wedit = null;
+  else if (j < x.logs.length) UI.wedit = { j: j, w: x.logs[j].w || x.cw, r: x.logs[j].r };
+  else return;
+  ACT.rest = null; sessRender();
+}
+function addSet() { var x = cur(); if (!x || x.n >= 5 || isMinItem(x) || x.skipped) return; x.n++; if (ACT.rest && ACT.rest.ex) ACT.rest.ex = false; UI.sheet = null; sessRender(); }
+function remSet() {
+  var x = cur(); if (!x || x.n <= Math.max(1, x.logs.length)) return;
+  x.n--; if (allDone()) ACT.rest = null; else if (ACT.rest && isDone(x)) ACT.rest.ex = true;
+  UI.sheet = null; sessRender();
+}
+function skipEx() {
+  var x = cur(); if (!x || x.skipped || x.logs.length >= x.n) return;
+  x.skipped = true; ACT.rest = null; UI.wedit = null; UI.sheet = null; sessRender();
+  toast('Skipped ' + x.item.name + '. Same target next time.', function () { if (ACT && ACT.items.indexOf(x) >= 0 && x.skipped) { x.skipped = false; sessRender(); } });
+}
+function unskip() { var x = cur(); if (!x || !x.skipped) return; x.skipped = false; UI.sheet = null; sessRender(); }
+function setFeel(v) { var x = cur(); if (!x) return; x.feel = x.feel === v ? null : v; sessRender(); }
+function adjRest(s) {
+  var r = ACT.rest; if (!r) return;
+  if (r.pausedLeft != null) r.pausedLeft += s; else r.endsAt += s * 1000;
+  r.total = Math.max(r.total, Math.ceil(restLeft()) + Math.max(0, s));
+  if (restLeft() <= 0) { endRest('tap'); return; }
+  sessRender();
+}
+function gotoEx(i) { if (!ACT.items[i]) return; ACT.xi = i; ACT.rest = null; UI.wedit = null; UI.sheet = null; UI.sheetOpener = null; sessRender(); refocus(null, '#cx-cover .logbtn'); }
+function stepDist(d) { var t = ACT.dist || 0; ACT.dist = t === 0 ? (d > 0 ? 10 : 0) : clamp(t + d, 0, 999); sessRender(); }
+function pauseWorkout() {
+  if (!running()) return;
+  if (!ACT.pausedAt) { ACT.pausedAt = Date.now(); if (ACT.rest && ACT.rest.pausedLeft == null) ACT.rest.pausedLeft = Math.max(0, (ACT.rest.endsAt - Date.now()) / 1000); saveAct(); }
+  openSheet('pause');
+}
+function resumeWorkout() {
+  if (!ACT || !ACT.pausedAt) return;
+  ACT.pausedTotalMs = (ACT.pausedTotalMs || 0) + (Date.now() - ACT.pausedAt); ACT.pausedAt = null;
+  if (ACT.rest && ACT.rest.pausedLeft != null) { ACT.rest.endsAt = Date.now() + ACT.rest.pausedLeft * 1000; ACT.rest.pausedLeft = null; }
+  saveAct();
+}
+/* the engine's item for the current slot again, keeping what was logged (Swift refreshCurrentFromSession) */
+function refreshFromSession() {
+  var x = cur(), a = q('activeSession', today()), s = a.ok && a.active ? a.session : null; if (!x || x.earlier || !s) return;
+  var it = (s.items || []).filter(function (y) { return y.slot === x.slot; })[0]; if (!it) return;
+  if (it.exerciseId === x.item.exerciseId) x.item = it; else if (!x.logs.length) ACT.items[ACT.xi] = freshEx(it, x.slot);
+  saveAct();
+}
+/* Swap (6.6, B3): before a set the new move takes the slot; after sets, those stay with the first move (sent as earlierSets) and the
+   new move gets the engine's full target; picking the first move again before the new one has a set folds its sets back in */
+function doSwap(id) {
+  var x = cur(); if (!x || x.earlier) return;
+  var always = UI.sheet && UI.sheet.scope === 'always', idx = ACT.xi;
+  var r = cxRun('swapExercise', { today: coachToday(), workoutId: ACT.workoutId, slot: x.slot, exerciseId: id, scope: 'today' });
+  var it = r.ok && r.session ? (r.session.items || []).filter(function (y) { return y.slot === x.slot; })[0] : null;
+  if (!it) { refreshFromSession(); render(); return; }
+  ACT.rest = null; UI.wedit = null; PV.key = '';
+  var ei = earlierIndex(x.slot);
+  if (!x.logs.length && ei >= 0 && ACT.items[ei].item.exerciseId === id) {
+    var back = ACT.items[ei]; back.item = it; back.earlier = false; back.n = Math.min(5, Math.max(back.logs.length, back.pb || tsets(it), 1)); back.pb = null;
+    ACT.items.splice(idx, 1); ACT.xi = ei < idx ? ei : ei - 1; ACT.items[ACT.xi] = back;
+  } else if (!x.logs.length) ACT.items[idx] = freshEx(it, x.slot);
+  else { x.pb = x.n; x.n = x.logs.length; x.earlier = true; ACT.items.splice(idx + 1, 0, freshEx(it, x.slot)); ACT.xi = idx + 1; }
+  ACT.pendingAlways = (ACT.pendingAlways || []).filter(function (p) { return p.slot !== x.slot; });
+  if (always) ACT.pendingAlways.push({ slot: x.slot, exerciseId: id });
+  UI.sheet = null; UI.sheetOpener = null; sessRender(); refocus(null, '#cx-cover .logbtn');
+  toast(ACT.planMoves && ACT.planMoves[String(x.slot)] === id ? 'Back to ' + it.name + '.' : 'Swapped to ' + it.name + ' ' + (always ? 'from now on.' : 'for today.'));
+}
+
+/* ---------- finish (6.10, 8.2) and discard ---------- */
+var SUM = null, SKEY = 'balance_coach_summary';
+function readSum() { if (MEM) return null; try { var t = localStorage.getItem(SKEY); var o = t ? JSON.parse(t) : null; return o && typeof o === 'object' ? o : null; } catch (e) { return null; } }
+function writeSum(o) { if (MEM) return; try { if (o) localStorage.setItem(SKEY, JSON.stringify(o)); else localStorage.removeItem(SKEY); } catch (e) {} }
+function movedToday() { var n = 0; demoEntries().forEach(function (e) { n += +e.mins || 0; }); return Math.round(n); }
+function goalMin() { var s = demo(); return Math.max(1, (s && +s.workoutGoalMin) || 30); }
+function recCards(list) {
+  var order = [], names = {}, lines = {};
+  (list || []).forEach(function (r) {
+    var id = r.exerciseId, t = String(r.text || ''), k = t.lastIndexOf(': '); if (!id || k < 0) return;
+    var name = r.name || '', est = r.type === 'estimatedMax', lead = t.slice(0, k);
+    if (!(id in names)) { order.push(id); names[id] = name; }
+    if (est) lead = 'New best max (about the most you could lift once)';
+    else if (name) lead = lead.replace(' for ' + name, '').replace(' ' + name, '');
+    (lines[id] = lines[id] || []).push({ lead: lead, value: t.slice(k + 2), est: est });
+  });
+  return order.map(function (id) { return { name: names[id], lines: lines[id] }; });
+}
+function sumPlates(P, fallback) {
+  var plates = platesFrom(((P && P.recent) || []).filter(function (r) { return r.kind !== 'free'; }).slice(0, 5).reverse());
+  if (!plates.length && fallback) plates = [fallback];
+  return { plates: plates, earlier: Math.max(0, ((P && P.workoutsCompleted) || plates.length) - plates.length) };
+}
+function earlierRow(slot, name, did, next, stays) { return { slot: slot, name: name, tag: stays ? 'Same' : '', cls: 'same', did: did, next: stays ? next : '', why: stays ? 'Same target next time.' : '' }; }
+function buildSummary(res, d, credit) {
+  var sm = res.summary || {}, rec = res.record || {}, next = sm.next || [], items = rec.items || [], rows = [];
+  next.forEach(function (row) {
+    var slot = row.slot, main = mainOf(d, slot), e = earlierOf(d, slot), skipped = row.change === 'skipped', onPurpose = !!(main && main.skipped), did;
+    if (e && e.logs.length) rows.push(earlierRow(slot, e.item.name, didText(e), e.item.text || '', !(d.pendingAlways || []).some(function (p) { return p.slot === slot; })));
+    if (main && main.logs.length) did = didText(main);
+    else if (d.kind !== 'training') { var mi = (items.filter(function (y) { return y.slot === slot; })[0] || {}).minutes || 0; did = mi > 0 ? 'Today ' + mi + ' min' : 'Not logged today'; }
+    else did = onPurpose ? 'Skipped today' : 'Not reached - you finished early';
+    rows.push({ slot: slot, name: row.name || (main && main.item.name) || '', tag: skipped ? (onPurpose ? 'Skipped' : 'Not done') : signedTag(row), cls: skipped ? 'same' : tagCls(row), did: did, next: row.text || '', why: skipped ? 'Same target next time.' : row.reason || '' });
+  });
+  var goal = 0; d.items.forEach(function (x) { if (isMinItem(x)) goal += tval(x.item); });
+  var pl = sumPlates(PROG, { tone: sessToneOf(d), min: credit.minutes, kind: d.kind });
+  if (pl.plates.length) pl.plates[pl.plates.length - 1].fresh = true;
+  return { recordId: rec.id || '', day: rec.day || d.day, title: dispTitle(d.title), focus: d.focus, kind: d.kind, credit: credit, pounds: sm.pounds || 0,
+    setsDone: d.items.reduce(function (a, x) { return a + x.logs.length; }, 0), setsTotal: d.items.reduce(function (a, x) { return a + (x.skipped ? x.logs.length : Math.max(x.n, x.logs.length)); }, 0),
+    goalMinutes: goal, dist: d.kind === 'cardio' ? d.dist || 0 : 0, rows: rows, records: recCards(sm.records), nothingChanges: d.kind === 'recovery' && next.every(function (r) { return r.change === 'fixed'; }),
+    plates: pl.plates, earlier: pl.earlier };
+}
+function sessToneOf(d) { return d.kind === 'recovery' ? 'recover' : toneOf(d.focus); }
+/* "See summary" with no kept summary: rebuilt from the engine's record (no change sizes, so only Same and Skipped are tagged) */
+function summaryFromRecord(id) {
+  var f = q('record', { id: id }), rec = f.ok && f.record; if (!rec) return null;
+  var items = rec.items || [], ex = [], earlier = {}, sets = 0, total = 0, goal = 0;
+  function did(it, logs) { var l = it.logType; if (!logs.length) return it.skipped ? 'Skipped today' : 'Not logged today'; return 'Today ' + logged({ item: it, logs: logs }); }
+  function logsOf(it) { return it.logType === 'cardio' ? ((it.minutes || 0) > 0 ? [{ w: 0, r: it.minutes }] : []) : (it.sets || []).map(function (s) { return { w: s.weight || 0, r: s.reps != null ? s.reps : s.seconds || 0 }; }); }
+  items.forEach(function (it) {
+    var lg = logsOf(it); ex.push({ it: it, logs: lg });
+    if (it.earlier) { var el = logsOf(it.earlier); if (el.length) { earlier[it.slot] = { name: it.earlier.name, did: did(it.earlier, el) }; sets += el.length; total += el.length; } }
+    if (it.logType === 'cardio') goal += (it.target && it.target.minutes) || 0;
+    else { sets += lg.length; total += Math.max((it.target && it.target.sets) || 0, lg.length); }
+  });
+  var rows = [];
+  (rec.next || []).forEach(function (row) {
+    var e = ex.filter(function (y) { return y.it.slot === row.slot; })[0], skipped = row.change === 'skipped';
+    if (earlier[row.slot]) rows.push(earlierRow(row.slot, earlier[row.slot].name, earlier[row.slot].did, '', true));
+    var dd = e && e.logs.length ? did(e.it, e.logs) : e && e.it.logType === 'cardio' ? 'Not logged today' : 'Skipped today';
+    rows.push({ slot: row.slot, name: (e && e.it.name) || '', tag: skipped ? 'Skipped' : row.change === 'same' ? 'Same' : '', cls: 'same', did: dd, next: row.text || '', why: skipped ? 'Same target next time.' : row.reason || '' });
+  });
+  var m = rec.durationMinutes || 0, pl = sumPlates(PROG, null);
+  return { recordId: rec.id, day: rec.day, title: dispTitle(rec.title || 'Workout'), focus: rec.focus, kind: rec.kind || 'training',
+    credit: { minutes: m, earned: Math.round(m * rate()), shield: '', shields: shields(), movedToday: movedToday(), goal: goalMin() },
+    pounds: rec.pounds || 0, setsDone: sets, setsTotal: total, goalMinutes: goal, dist: Math.floor((rec.distanceHundredths || 0) / 10), rows: rows, records: recCards(rec.records),
+    nothingChanges: rec.kind === 'recovery' && (rec.next || []).every(function (r) { return r.change === 'fixed'; }), plates: pl.plates, earlier: pl.earlier };
+}
+function summaryNow() {
+  var d = DAYS[0], rid = d && d.raw && d.raw.recordId;
+  if (SUM && ((rid && SUM.recordId === rid) || (!rid && SUM.day === coachToday()))) return SUM;
+  if (!rid || !(d && d.done)) return null;
+  SUM = summaryFromRecord(rid);
+  return SUM;
+}
+function finishWorkout(seeded) {
+  if (!running()) return false;
+  var d = ACT, min = Math.round(sessEl() / 60000);
+  UI.sheet = null; UI.wedit = null;
+  if (min < 1) { cxRun('cancelSession', today()); ACT = null; writeActive(null); refresh(); if (!seeded) { closeCover(); toast('Too short to count - nothing logged.'); } return false; }
+  var items = finishItems(d, min), sh0 = shields();
+  var r = cxRun('completeSession', { today: coachToday(), workoutId: d.workoutId, durationMinutes: Math.min(600, min), items: items });
+  /* earning comes from time moved, so it is credited once whether or not the engine took the log */
+  var c = null; try { c = typeof creditWorkout === 'function' ? creditWorkout(dispTitle(d.title), min, { silent: true, quiet: !!seeded, kind: 'coach' }) : null; } catch (e) { c = null; }
+  var credit = { minutes: min, earned: c ? c.earned : Math.round(min * rate()), shield: c && c.shieldBanked ? 'banked' : min >= 30 && sh0 >= 2 ? 'full' : '', shields: shields(), movedToday: movedToday(), goal: goalMin() };
+  if (r.ok) {
+    (d.pendingAlways || []).forEach(function (p) { cxRun('swapExercise', { today: coachToday(), workoutId: d.workoutId, slot: p.slot, exerciseId: p.exerciseId, scope: 'always' }); });
+    ACT = null; writeActive(null); refresh();
+    SUM = buildSummary(r, d, credit); writeSum(SUM);
+    UI.cover = 'summary';
+    if (!seeded) { render(true); buzz([20, 40, 20]); say('Workout done. ' + credit.earned + ' minutes of scroll time earned.'); }
+    return true;
+  }
+  cxRun('cancelSession', today());
+  var s2 = cxRun('logFreeWorkout', { today: coachToday(), label: dispTitle(d.title), durationMinutes: Math.min(600, min) });
+  ACT = null; writeActive(null); refresh();
+  if (!seeded) { closeCover(); toast(s2.ok ? 'Saved as a timed workout. Your plan did not change.' : 'Your plan did not change.'); }
+  return false;
+}
+function discardWorkout() {
+  cxRun('cancelSession', today()); ACT = null; writeActive(null); UI.sheet = null; UI.wedit = null; refresh(); closeCover();
+  toast('Workout discarded. Nothing was saved.');
+}
+/* a reload, another tab or an older draft: the draft follows the engine's running session (rule: no draft, no session) */
+function ensureDraft() {
+  if (!ACTIVE) return;
+  if (!ACT || ACT.v !== 2 || !Array.isArray(ACT.items) || ACT.workoutId !== ACTIVE.workoutId) { ACT = newDraft(ACTIVE, (ACT && ACT.startedAt) || Date.now()); saveAct(); }
+}
+
+/* ---------- the summary (5.24) ---------- */
+function vSummary() {
+  var m = summaryNow(); if (!m) return '';
+  var cr = m.credit, met = cr.movedToday >= cr.goal, tiles = [], h, next = '', stat;
+  tiles.push('<div class="tile"><b>' + cr.minutes + '<small>min</small></b><span>Time</span></div>');
+  if (m.kind === 'training') {
+    tiles.push('<div class="tile"><b>' + nf(m.pounds) + '<small>lb</small></b><span>Lifted</span></div>');
+    tiles.push('<div class="tile"><b>' + m.setsDone + '<small>of ' + m.setsTotal + '</small></b><span>Sets</span></div>');
+  } else {
+    tiles.push('<div class="tile"><b>' + m.goalMinutes + '<small>min</small></b><span>Goal</span></div>');
+    if (m.dist) tiles.push('<div class="tile"><b>' + (m.dist / 10).toFixed(1) + '<small>mi</small></b><span>Distance</span></div>');
+  }
+  var art = COMPACT ? { w: 230, h: 96, rx: 54, u: 0.62, base: m.earlier > 0 } : { w: 300, h: 138, rx: 74, u: 0.85, base: m.earlier > 0 };
+  h = '<div class="scr cover" data-tone="done"><div class="scroll">' +
+    '<div class="hdr sub" style="padding-left:20px"><h1 tabindex="-1" data-focus>Workout done</h1>' + sampleTag() + '<span class="grow"></span>' + iconBtn('sum-done', '', 'x', 'Close summary') + '</div>' +
+    '<div class="sumhero"><div class="art">' + stackSVG(m.plates, art) + '</div>' +
+    '<b class="big">+' + cr.earned + ' min</b><span class="cap">of scroll time earned</span><span class="sub">' + esc(m.title) + ' · ' + fmtD(m.day) + '</span></div>' +
+    '<div class="tiles3"' + (tiles.length === 2 ? ' style="grid-template-columns:1fr 1fr"' : '') + '>' + tiles.join('') + '</div>';
+  stat = '<div class="statline' + (met ? ' mint' : '') + '">' + ic(met ? 'check' : 'walk', 'i20') + '<span>' + (met ? 'Moved <b>' + cr.movedToday + ' min</b> today · ' + cr.goal + '-min goal met' : 'Moved <b>' + cr.movedToday + ' of ' + cr.goal + ' min</b> today') + '</span></div>';
+  if (cr.shield === 'banked') stat += '<div class="statline">' + ic('shield', 'i20') + '<span><b>Streak Shield banked</b> · ' + cr.shields + ' of 2 Shields' + (cr.shields >= 2 ? ' · full' : '') + '</span></div>';
+  if (cr.shield === 'full') stat += '<div class="statline">' + ic('shield', 'i20') + '<span><b>Shields full</b> · 2 of 2. You already hold the most, so none was added.</span></div>';
+  stat += '<p class="note mx" style="margin-top:10px;text-align:center">Scroll time comes from minutes moved. Reps and pounds never change what you earn.</p>';
+  if (m.nothingChanges) stat += '<p class="note mx" style="margin-top:6px;text-align:center;color:var(--text-2)">Nice work - same plan next time.</p>';
+  else if (m.rows.length) {
+    next = '<div class="secrow"><span class="label">Next time</span><span class="aside">From what you logged</span></div><div class="card mx" style="padding:4px 16px">' + m.rows.map(function (r) {
+      return '<div class="nrow"><div class="top"><h3>' + esc(r.name) + '</h3>' + (r.tag ? '<span class="tag ' + r.cls + '">' + esc(r.tag) + '</span>' : '') + '</div>' +
+        '<p class="did">' + esc(r.did) + '</p>' + (r.next ? '<p class="to"><span>Next: </span>' + esc(r.next) + '</p>' : '') + (r.why ? '<p class="why">' + esc(r.why) + '</p>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  if (COMPACT) { h += next; next = ''; }
+  h += stat;
+  if (m.records.length) {
+    h += '<div class="secrow"><span class="label">New records</span><span class="aside">All time</span></div>';
+    m.records.forEach(function (r) {
+      h += '<div class="rec"><span class="orb">' + ic('trophy', 'i20') + '</span><div><h3>' + esc(r.name) + '</h3><p>' + r.lines.map(function (l) { return esc(l.lead) + ': <b>' + esc(l.value) + '</b>' + (l.est ? '<span class="est">Estimated</span>' : ''); }).join('<br>') + '</p></div></div>';
+    });
+  }
+  h += next;
+  return h + '</div><div class="foot"><div class="two"><button class="btn btn-secondary" data-a="sum-progress">' + ic('chart') + 'See progress</button><button class="btn btn-end" data-a="sum-done">Done</button></div></div></div>';
+}
+
+/* ---------- Your week (5.12) ---------- */
+function vWeek() {
+  var tw = WK.thisWeek || { done: 0, target: 0, text: '' }, i, dots = '';
+  for (i = 0; i < (tw.target || 0); i++) dots += '<i' + (i < (tw.done || 0) ? ' class="on"' : '') + '>' + ic('check', 'i14') + '</i>';
+  var stops = DAYS.map(function (d, n) { return TONE[d.done ? 'done' : d.tone][0] + ' ' + Math.round(n / Math.max(1, DAYS.length - 1) * 100) + '%'; }).join(', ');
+  return '<div class="scr cover"><div class="scroll">' + subHdr('Your week') +
+    '<div class="card wkcard"><div><h3>' + esc(tw.text) + '</h3><p>Missed days wait for you.</p></div><div class="dots" role="img" aria-label="' + esc(tw.text) + '">' + dots + '</div></div>' +
+    '<div class="tl"><span class="rail" style="top:35px;bottom:35px;background:linear-gradient(180deg,' + stops + ')"></span>' +
+    DAYS.map(function (d) {
+      return '<button class="trow' + (d.i === 0 ? ' now' : '') + '" data-tone="' + (d.done ? 'done' : d.tone) + '" data-a="day" data-v="' + d.i + '"><span class="node">' + ic(d.done ? 'check' : d.g) + '</span>' +
+        '<span style="min-width:0"><span class="dw">' + (d.i < 2 ? dayName(d.key, d.i) + ' · ' : '') + fmtD(d.key) + '</span><h3>' + esc(d.title) + '</h3><p>' + esc(d.summary) + '</p></span>' + ic('chevR', 'i16 go') + '</button>';
+    }).join('') + '</div>' +
+    '<p class="note mx" style="margin-top:14px">Week ' + (WK.weeksOnPlan || 1) + ' on your plan. Your week always starts from today. If you miss a workout it moves to your next training day.</p>' +
+    '<div class="mx" style="margin-top:14px;padding-bottom:8px"><button class="btn btn-secondary" data-a="open-edit">' + ic('edit') + 'Edit my plan</button></div></div></div>';
+}
+
+/* ---------- Your progress (5.13, 5.14) ---------- */
+var BAR_ORDER = ['push', 'pull', 'legs', 'upper', 'full', 'core', 'cardio', 'recover'];
+var TONE_NAME = { push: 'Push', pull: 'Pull', legs: 'Legs', upper: 'Upper', full: 'Full body', core: 'Core', cardio: 'Cardio', recover: 'Recover', rest: 'Rest' };
+function shortK(n) { return n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
+function shortBig(n) { return n >= 1000000 ? (Math.round(n / 10000) / 100) + 'M' : nf(n); }
+function pv() { return UI.pv || (UI.pv = {}); }
+function byTone(w, field) { var o = {}; Object.keys(w.byFocus || {}).forEach(function (k) { var t = toneOf(k), v = (w.byFocus[k] || {})[field] || 0; if (v) o[t] = (o[t] || 0) + v; }); return o; }
+function weekChart(P, byPounds) {
+  var weeks = P.weeklyPounds || [], max = 1, used = {}, cols = '', axis = '', list = '', fld = byPounds ? 'pounds' : 'workouts';
+  weeks.forEach(function (w) { max = Math.max(max, w[fld] || 0); });
+  weeks.forEach(function (w, n) {
+    var src = byTone(w, fld), tot = w[fld] || 0, now = n === weeks.length - 1, segs = '';
+    BAR_ORDER.slice().reverse().forEach(function (t) { if (src[t]) { used[t] = 1; segs += '<i data-tone="' + t + '" style="height:' + Math.max(3, Math.round(src[t] / max * 118)) + 'px"></i>'; } });
+    cols += '<div class="col' + (now ? ' cur' : '') + (tot ? '' : ' flat') + '"><span class="v">' + (tot ? (byPounds ? shortK(tot) : tot) : '') + '</span>' + (segs || '<i></i>') + '</div>';
+    var dd = dateOf(w.weekStart);
+    axis += '<span' + (now ? ' class="cur"' : '') + '>' + (dd.getMonth() + 1) + '/' + dd.getDate() + '</span>';
+    list = '<div><span>Week of ' + fmtS(w.weekStart) + (now ? ' (this week)' : '') + '</span><b>' + (byPounds ? nf(tot) + ' lb' : plural(tot, 'workout')) + '</b></div>' + list;
+  });
+  var legend = BAR_ORDER.filter(function (t) { return used[t]; }).map(function (t) { return '<span data-tone="' + t + '"><i></i>' + TONE_NAME[t] + '</span>'; }).join('');
+  return '<div class="card chart" role="img" aria-label="' + (byPounds ? 'Pounds lifted' : 'Workouts finished') + ' in each of the last 8 weeks. Use Show as a list for the numbers.">' +
+    (pv().wlist ? '<div class="tlist" style="margin-top:-8px">' + list + '</div>' : '<div class="bars">' + cols + '</div><div class="axis">' + axis + '</div>') +
+    '<div class="legend">' + legend + '</div>' +
+    (byPounds ? '<p class="note" style="text-align:center;margin-top:8px">Bars are colored by the kind of day. Core, cardio and recovery days add no pounds.</p>' : '<p class="note" style="text-align:center;margin-top:8px">Bodyweight reps add no pounds, so this chart counts your workouts instead.</p>') +
+    '<div class="btnrow"><button class="btn btn-ghost quiet" data-a="toggle" data-v="wlist">' + ic(pv().wlist ? 'chart' : 'list') + (pv().wlist ? 'Show as a chart' : 'Show as a list') + '</button></div></div>';
+}
+/* the lift chips: weightReps lifts with 2 or more sessions, in the color of the newest workout that holds the lift */
+var LIFT_TONE = {};
+function liftTone(id) {
+  if (LIFT_TONE[id]) return LIFT_TONE[id];
+  var lp = q('liftProgress', { today: coachToday(), exerciseId: id }), pts = (lp.ok && lp.points) || [], last = pts[pts.length - 1], tone = 'brand';
+  if (last && last.recordId) { var r = q('record', { id: last.recordId }); if (r.ok && r.record) tone = r.record.kind === 'recovery' ? 'recover' : toneOf(r.record.focus); }
+  if (tone === 'rest') tone = 'brand';
+  return (LIFT_TONE[id] = tone);
+}
+function lineChart(id, name, tone) {
+  var lp = q('liftProgress', { today: coachToday(), exerciseId: id }), pts = (lp.ok && lp.points) || [];
+  if (pts.length < 2) return '';
+  var c = TONE[tone] || TONE.brand, Wd = 322, H = 176, L0 = 34, R0 = 44, T0 = 14, B0 = 26, lo = Infinity, hi = -Infinity;
+  pts.forEach(function (p) { lo = Math.min(lo, p.heaviest); hi = Math.max(hi, p.estimatedMax || p.heaviest); });
+  lo = Math.max(0, Math.floor((lo - 8) / 10) * 10); hi = Math.ceil((hi + 6) / 10) * 10; if (hi <= lo) hi = lo + 10;
+  function X(i) { return L0 + (Wd - L0 - R0) * (pts.length === 1 ? 0.5 : i / (pts.length - 1)); }
+  function Y(v) { return T0 + (H - T0 - B0) * (1 - (v - lo) / (hi - lo)); }
+  var g = '', k, v, runs = [], run = [];
+  for (k = 0; k <= 3; k++) { v = lo + (hi - lo) * k / 3; g += '<line x1="' + L0 + '" x2="' + (Wd - R0) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '" stroke="rgba(255,255,255,.07)"/><text x="' + (L0 - 7) + '" y="' + (Y(v) + 3.5).toFixed(1) + '" text-anchor="end" font-size="11" font-weight="600" fill="rgba(240,244,255,.55)">' + Math.round(v) + '</text>'; }
+  /* the estimated max line breaks where a point has none (no work set of 12 reps or fewer) */
+  pts.forEach(function (p, i) { if (p.estimatedMax) run.push(X(i).toFixed(1) + ',' + Y(p.estimatedMax).toFixed(1)); else { if (run.length) runs.push(run); run = []; } });
+  if (run.length) runs.push(run);
+  var pw = pts.map(function (p, i) { return X(i).toFixed(1) + ',' + Y(p.heaviest).toFixed(1); }).join(' '), last = pts[pts.length - 1], n = pts.length - 1;
+  var svg = '<svg viewBox="0 0 ' + Wd + ' ' + H + '" width="100%" aria-hidden="true" style="display:block;overflow:visible">' + g +
+    runs.map(function (r) { return '<polyline points="' + r.join(' ') + '" fill="none" stroke="rgba(240,244,255,.62)" stroke-width="1.8" stroke-dasharray="4 5" stroke-linecap="round"/>'; }).join('') +
+    '<polyline points="' + pw + '" fill="none" stroke="' + c[0] + '" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 6px ' + c[0] + ')"/>' +
+    pts.map(function (p, i) { return '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.heaviest).toFixed(1) + '" r="' + (i === n ? 5 : 3.2) + '" fill="' + (i === n ? c[1] : '#0B0F1A') + '" stroke="' + c[0] + '" stroke-width="2"/>'; }).join('') +
+    '<text x="' + (X(n) + 9).toFixed(1) + '" y="' + (Y(last.heaviest) + 4).toFixed(1) + '" font-size="12" font-weight="800" fill="' + c[1] + '">' + last.heaviest + ' lb</text>' +
+    (last.estimatedMax ? '<text x="' + (X(n) + 9).toFixed(1) + '" y="' + (Y(last.estimatedMax) + 4).toFixed(1) + '" font-size="12" font-weight="700" fill="rgba(240,244,255,.8)">' + last.estimatedMax + ' lb</text>' : '') +
+    '<text x="' + L0 + '" y="' + (H - 6) + '" font-size="11" font-weight="600" fill="rgba(240,244,255,.55)">' + fmtS(pts[0].day) + '</text>' +
+    '<text x="' + (Wd - R0) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" font-weight="600" fill="rgba(240,244,255,.55)">' + fmtS(last.day) + '</text></svg>';
+  var list = pts.slice().reverse().map(function (p) { return '<div><span>' + fmtS(p.day) + '</span><b>' + p.heaviest + ' lb' + (p.estimatedMax ? ' · estimated max ' + p.estimatedMax + ' lb' : '') + '</b></div>'; }).join('');
+  return '<div class="card chart" data-tone="' + tone + '" role="img" aria-label="' + esc(name) + ': heaviest set and estimated max over time. Use Show as a list for the numbers.">' +
+    (pv().llist ? '<div class="tlist" style="margin-top:-8px">' + list + '</div>' : svg) +
+    '<div class="legend"><span data-tone="' + tone + '"><i></i>Heaviest set</span><span><i class="dash"></i>Estimated max</span></div>' +
+    '<p class="note" style="text-align:center;margin-top:8px">Estimated max: about the most you could lift once, worked out from your sets. Not a test.</p>' +
+    '<div class="btnrow"><button class="btn btn-ghost quiet" data-a="toggle" data-v="llist">' + ic(pv().llist ? 'chart' : 'list') + (pv().llist ? 'Show as a chart' : 'Show as a list') + '</button></div></div>';
+}
+function recordCards(P) {
+  var list = (P.liftRecords || []).filter(function (r) { return r.heaviest || r.mostReps || r.longestHold; }), out = '', explained = false;
+  function split(t) { t = String(t || ''); var k = t.indexOf(': '); return k < 0 ? ['', t] : [t.slice(0, k), t.slice(k + 2)]; }
+  list.slice(0, pv().allrec ? 99 : 4).forEach(function (r) {
+    var lines = [], s;
+    if (r.heaviest) { s = split(r.heaviest.text); lines.push(esc(s[0]) + ': <b>' + esc(s[1]) + '</b>'); }
+    if (r.bestEstimatedMax) { lines.push((explained ? 'Best max: ' : 'Best max (about the most you could lift once): ') + '<b>' + r.bestEstimatedMax.value + ' lb</b><span class="est">Estimated</span>'); explained = true; }
+    if (r.mostReps) { s = split(r.mostReps.text); lines.push(esc(s[0]) + ': <b>' + esc(s[1]) + '</b>'); }
+    if (r.longestHold) { s = split(r.longestHold.text); lines.push(esc(s[0]) + ': <b>' + esc(s[1]) + '</b>'); }
+    out += '<div class="rec"><span class="orb">' + ic('trophy', 'i20') + '</span><div><h3>' + esc(r.name) + '</h3><p>' + lines.join('<br>') + '</p></div></div>';
+  });
+  if (list.length > 4) out += '<div class="btnrow"><button class="btn btn-ghost quiet" data-a="toggle" data-v="allrec">' + (pv().allrec ? 'Show fewer' : 'Show all ' + list.length + ' lifts') + '</button></div>';
+  return { n: list.length, html: out };
+}
+function recTone(r) { return r.kind === 'free' ? 'brand' : r.kind === 'recovery' ? 'recover' : toneOf(r.focus); }
+function emptyCard(icon, title, text) { return '<div class="card empty mx">' + ic(icon, 'i28') + '<h3>' + title + '</h3><p>' + text + '</p></div>'; }
+function vProgress() {
+  var P = PROG && PROG.ok ? PROG : { hasData: false, pounds: {}, weeklyPounds: [], liftRecords: [], recent: [] }, pd = P.pounds || {}, h;
+  function tiles() {
+    return '<div class="secrow"><span class="label">Pounds lifted</span></div><div class="tiles3 pl" style="margin-top:0">' +
+      [['All time', pd.lifetime || 0, 'wide'], ['This week', pd.thisWeek || 0], ['Last 30 days', pd.last30Days || 0]].map(function (t) { return '<div class="tile' + (t[2] ? ' wide' : '') + '"><b>' + shortBig(t[1]) + '<small>lb</small></b><span>' + t[0] + '</span></div>'; }).join('') + '</div>' +
+      '<p class="note mx" style="margin-top:10px">Weight × reps of every set. Bodyweight reps add no pounds.</p>';
+  }
+  if (!P.hasData) {
+    return '<div class="scr cover"><div class="scroll">' + subHdr('Your progress') +
+      '<div class="card stackhero"><div class="art">' + stackSVG([], { w: 300, h: 150, rx: 86, ghost: true }) + '</div><b class="big plain">0</b><span class="unit">workouts finished</span>' +
+      '<span class="cap">Your first workout sets down the first plate.</span>' +
+      '<button class="btn btn-cta" style="margin-top:16px" data-a="back">' + ic('play') + 'Go to today\'s workout</button></div>' + tiles() +
+      '<div class="secrow"><span class="label">Each week</span><span class="aside">Last 8 weeks</span></div><div class="card chart"><div class="bars" style="height:64px">' + (P.weeklyPounds || []).map(function () { return '<div class="col flat"><i></i></div>'; }).join('') + '</div>' +
+      '<div class="axis">' + (P.weeklyPounds || []).map(function (w) { var dd = dateOf(w.weekStart); return '<span>' + (dd.getMonth() + 1) + '/' + dd.getDate() + '</span>'; }).join('') + '</div>' +
+      '<p class="note" style="text-align:center;margin-top:10px">No weeks yet. Your first finished workout starts this chart.</p></div>' +
+      '<div class="secrow"><span class="label">Your lifts</span></div>' + emptyCard('chart', 'No lines yet', 'Each main lift gets its own line once you have logged it twice.') +
+      '<div class="secrow"><span class="label">Records</span></div>' + emptyCard('trophy', 'No records yet', 'Records start the second time you do a lift. A first time is never a record.') +
+      '<div class="secrow"><span class="label">Recent workouts</span></div>' + emptyCard('list', 'Nothing here yet', 'Every workout you finish is listed here.') + '</div></div>';
+  }
+  var recent = P.recent || [], plates = platesFrom(recent.filter(function (r) { return r.kind !== 'free'; }).slice(0, 10).reverse()), done = P.workoutsCompleted || 0, older = Math.max(0, done - plates.length), used = {}, legend = '';
+  plates.forEach(function (p) { used[p.tone] = 1; });
+  BAR_ORDER.forEach(function (t) { if (used[t]) legend += '<span data-tone="' + t + '"><i></i>' + TONE_NAME[t] + '</span>'; });
+  var tw = P.thisWeek && P.thisWeek.text ? P.thisWeek.text + ' · week ' + (P.weeksOnPlan || 1) + ' on your plan<br>' : '';
+  h = '<div class="scr cover"><div class="scroll">' + subHdr('Your progress') +
+    '<div class="card stackhero"><div class="art">' + stackSVG(plates, { w: 300, h: 186, rx: 90, base: older > 0, baseLabel: older > 0 ? older + ' earlier' : '' }) + '</div>' +
+    '<b class="big">' + done + '</b><span class="unit">' + (done === 1 ? 'workout finished' : 'workouts finished') + ' · all time</span>' +
+    '<span class="cap">' + esc(tw).replace('&lt;br&gt;', '<br>') + 'One plate for every workout, in the color of that day.</span><div class="legend">' + legend + '</div></div>' + tiles();
+  var byPounds = (pd.lifetime || 0) > 0;
+  h += '<div class="secrow"><span class="label">' + (byPounds ? 'Pounds each week' : 'Workouts each week') + '</span><span class="aside">Last 8 weeks</span></div>' + weekChart(P, byPounds);
+  var lifts = (P.liftRecords || []).filter(function (r) { return r.logType === 'weightReps' && r.sessions >= 2; });
+  h += '<div class="secrow"><span class="label">Your lifts</span><span class="aside">Since you started</span></div>';
+  if (lifts.length) {
+    var sel = lifts.filter(function (r) { return r.exerciseId === pv().lift; })[0] || lifts[0]; pv().lift = sel.exerciseId;
+    h += '<div class="liftchips">' + lifts.map(function (r) { var on = r.exerciseId === sel.exerciseId; return '<button data-tone="' + liftTone(r.exerciseId) + '" class="' + (on ? 'on' : '') + '" data-a="lift" data-v="' + esc(r.exerciseId) + '" aria-pressed="' + on + '">' + esc(r.name) + '</button>'; }).join('') + '</div><div style="height:10px"></div>' + lineChart(sel.exerciseId, sel.name, liftTone(sel.exerciseId));
+  } else h += emptyCard('chart', 'No lines yet', 'Each main lift gets its own line once you have logged it twice.');
+  var rc = recordCards(P);
+  h += '<div class="secrow"><span class="label">Your records</span><span class="aside">All time</span></div>' + (rc.n ? rc.html : emptyCard('trophy', 'No records yet', 'Records start the second time you do a lift. A first time is never a record.'));
+  var rows = recent.slice(0, pv().allrecent ? 10 : 5).map(function (r) {
+    var t = recTone(r);
+    return '<button class="rrow" data-a="recent" data-v="' + esc(r.id) + '">' + gem(t, r.kind === 'free' ? freeIcon(r.title) : GLYPH[t], 'sm') + '<span><h3>' + esc(dispTitle(r.title)) + '</h3><p>' + fmtD(r.day) + ' · ' + esc(dispSummary(r.summary)) + '</p></span>' + ic('chevR', 'i16 go') + '</button>';
+  }).join('');
+  h += '<div class="secrow"><span class="label">Recent workouts</span><span class="aside">Last ' + Math.min(10, recent.length) + '</span></div>' + (rows ? '<div class="card mx" style="padding:4px 14px 4px 12px">' + rows + '</div>' : emptyCard('list', 'Nothing here yet', 'Every workout you finish is listed here.')) +
+    (recent.length > 5 ? '<div class="btnrow"><button class="btn btn-ghost quiet" data-a="toggle" data-v="allrecent">' + (pv().allrecent ? 'Show fewer' : 'Show all ' + recent.length) + '</button></div>' : '') +
+    (P.freeWorkouts ? '<p class="note mx" style="margin-top:10px">Plus ' + plural(P.freeWorkouts, 'workout') + ' you timed without the coach.</p>' : '');
+  return h + '<div style="height:12px"></div></div></div>';
+}
+/* ---------- Recent workout (5.15) ---------- */
+function shRecent(id) {
+  var f = q('record', { id: id }), r = f.ok && f.record; if (!r) return '';
+  var t = recTone(r), items = r.items || [], exn = items.filter(function (x) { return !x.skipped || x.earlier; }).length, desc = r.kind === 'free' ? '' : ((catalog().tables || {}).descriptions || {})[r.focus] || '';
+  var tiles = '<div class="tile"><b>' + (r.durationMinutes || 0) + '<small>min</small></b><span>Time</span></div>';
+  if (r.kind === 'training') tiles += '<div class="tile"><b>' + nf(r.pounds || 0) + '<small>lb</small></b><span>Lifted</span></div>';
+  tiles += '<div class="tile"><b>' + exn + '</b><span>' + (exn === 1 ? 'Exercise' : 'Exercises') + '</span></div>';
+  var nrec = (r.records || []).length;
+  return shell(fmtD(r.day), '<div class="dayhead">' + gem(t, r.kind === 'free' ? freeIcon(r.title) : GLYPH[t], 'lg lit') + '<div><h3>' + esc(dispTitle(r.title)) + '</h3>' + (desc ? '<p>' + esc(desc) + '</p>' : '') + '</div></div>' +
+    '<div class="tiles3" style="margin:14px 0 0' + (r.kind === 'training' ? '' : ';grid-template-columns:1fr 1fr') + '">' + tiles + '</div>' +
+    (nrec ? '<div class="statline" style="margin:10px 0 0">' + ic('trophy', 'i20 gold') + '<span><b>' + plural(nrec, 'new record') + '</b> that day</span></div>' : '') +
+    '<div class="statline" style="margin:10px 0 0">' + ic('bolt', 'i20') + '<span><b>+' + Math.round((r.durationMinutes || 0) * rate()) + ' min</b> of scroll time earned</span></div>', { tone: t, sample: SAMPLE });
+}
+/* test addresses only (?coach=, ?coachSeed=): the in-memory coach state as the engine's own save text, so a check can ask the same
+   engine for the numbers on screen. It reads nothing from storage and returns null on a real (stored) plan. */
+function coachTestText() { if (!MEM || !READY) return null; try { var r = E.run('save', ST, {}); return r.result && r.result.ok ? r.result.text : null; } catch (e) { return null; } }
+window.coachTestText = coachTestText;
 /* ---------- drawing ---------- */
 var BEHIND = ['.tab-contents', '.tab-bar', '.app-topbar', '#cx-mini', '#cx-pin'];
 function setInert(list, on) { list.forEach(function (s) { var el = $(s); if (!el) return; if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert'); }); }
@@ -650,10 +1402,10 @@ function coverHTML() {
     case 'setup': return UI.setup ? vSetup() : '';
     case 'edit': return UI.edit ? vEdit() : '';
     case 'free': return freeRun() ? vFree() : '';
-    case 'session': return ACTIVE ? vSession() : '';
+    case 'session': ensureDraft(); return running() ? vSession() : '';
     case 'week': return hasPlan() ? vWeek() : '';
     case 'progress': return hasPlan() ? vProgress() : '';
-    case 'summary': return hasPlan() && DAYS[0] && DAYS[0].done ? vSummary() : '';
+    case 'summary': return hasPlan() ? vSummary() : '';
   }
   return '';
 }
@@ -664,6 +1416,9 @@ function sheetHTML() {
   switch (sh.n) {
     case 'earned': return shEarned(); case 'time': return shTime(); case 'change': return shChange();
     case 'list': return shDay(0); case 'day': return shDay(sh.i); case 'numbers': return shNumbers();
+    case 'recent': return sh.id ? shRecent(sh.id) : '';
+    case 'swap': return running() ? shSwap() : ''; case 'menu': return running() ? shMenu() : '';
+    case 'xlist': return running() ? shXList() : ''; case 'pause': return running() ? shPause() : '';
   }
   return '';
 }
@@ -683,18 +1438,24 @@ function render(nav) {
   var ckey = UI.cover ? UI.cover + ':' + (UI.setup ? UI.setup.step : '') : '';
   if (cv) {
     var osc = cv.querySelector('.scroll'), cst = osc && ckey === coverKeyOpen ? osc.scrollTop : 0;
-    cv.innerHTML = chtml; cv.classList.toggle('on', !!UI.cover);
+    var keep = ckey && ckey === coverKeyOpen && cv.contains(document.activeElement) ? selOf(document.activeElement) : '';
+    cv.innerHTML = chtml; cv.classList.toggle('on', !!UI.cover); cv.classList.toggle('compact', COMPACT);
     if (UI.cover) { cv.setAttribute('role', 'dialog'); cv.setAttribute('aria-modal', 'true'); cv.setAttribute('aria-label', coverLabel()); } else { cv.removeAttribute('role'); cv.removeAttribute('aria-modal'); cv.removeAttribute('aria-label'); }
     var nsc = cv.querySelector('.scroll'); if (nsc) nsc.scrollTop = cst;
     if (ckey && ckey !== coverKeyOpen) { if (cv.firstElementChild && nav !== false && !reduced()) cv.firstElementChild.classList.add('enter'); focusIn(cv); }
+    else if (keep) refocus(keep, '#cx-cover .logbtn');
   }
   coverKeyOpen = ckey;
   document.body.classList.toggle('cx-cover-open', !!UI.cover);
-  /* the resume bar: a running timer is one tap away on every tab */
-  var mini = $('#cx-mini'), f = freeRun(), showMini = !!f && UI.cover !== 'free';
+  /* the resume bar: a running workout or timer is one tap away on every tab (COACH_SPEC 7) */
+  var mini = $('#cx-mini'), f = freeRun(), runS = running() && UI.cover !== 'session', showMini = runS || (!!f && UI.cover !== 'free');
   if (mini) {
     mini.classList.toggle('on', showMini);
-    if (showMini) {
+    if (runS) {
+      var mt = sessTone(), mtr = ACT.kind === 'training';
+      mini.setAttribute('aria-label', 'Back to ' + dispTitle(ACT.title).toLowerCase()); mini.setAttribute('data-tone', mt);
+      mini.innerHTML = gem(mt, GLYPH[mt], 'sm') + '<span class="tx"><b>' + esc(dispTitle(ACT.title)) + ' · <i data-clk>' + clock(sessEl() / 1000) + '</i></b><span>' + (mtr ? setsDone() + ' of ' + setsTotal() + ' sets' : 'Logged by time') + (ACT.pausedAt ? ' · paused' : '') + '</span></span><span class="mopen">' + ic('up', 'i18') + '</span>';
+    } else if (showMini) {
       mini.setAttribute('aria-label', 'Back to your timer'); mini.setAttribute('data-tone', 'brand');
       mini.innerHTML = gem('brand', freeIcon(f.name), 'sm') + '<span class="tx"><b>' + esc(f.name) + ' · <i data-clk>' + clock(freeElapsed() / 1000) + '</i></b><span>Timed workout' + (f.pausedAt ? ' · paused' : '') + '</span></span><span class="mopen">' + ic('up', 'i18') + '</span>';
     } else mini.innerHTML = '';
@@ -706,10 +1467,11 @@ function render(nav) {
   /* the sheet */
   var box = $('#cx-sheets'), osb = box && box.querySelector('.sb'), sst = osb ? osb.scrollTop : 0, shtml = sheetHTML();
   if (!shtml) UI.sheet = null;
-  var key = UI.sheet ? UI.sheet.n + ':' + (UI.sheet.i != null ? UI.sheet.i : '') : '';
+  var key = UI.sheet ? UI.sheet.n + ':' + (UI.sheet.i != null ? UI.sheet.i : '') + ':' + (UI.sheet.c || '') + ':' + (UI.sheet.id || '') : '';
   if (box) {
+    var skeep = key && key === sheetKeyOpen && box.contains(document.activeElement) ? selOf(document.activeElement) : '';
     box.innerHTML = shtml; box.classList.toggle('on', !!key);
-    if (key && key === sheetKeyOpen) { Array.prototype.forEach.call(box.children, function (n) { n.classList.add('still'); }); var nsb = box.querySelector('.sb'); if (nsb) nsb.scrollTop = sst; }
+    if (key && key === sheetKeyOpen) { Array.prototype.forEach.call(box.children, function (n) { n.classList.add('still'); }); var nsb = box.querySelector('.sb'); if (nsb) nsb.scrollTop = sst; if (skeep) refocus(skeep, '#cx-sheets .sheet'); }
     else if (key) { var she = box.querySelector('.sheet'); if (she) { try { she.focus({ preventScroll: true }); } catch (e) {} } }
   }
   sheetKeyOpen = key;
@@ -719,7 +1481,7 @@ function render(nav) {
   wake(!!UI.cover && (UI.cover === 'free' || UI.cover === 'session'));
   tickStart();
 }
-function coverLabel() { return { setup: 'Build my plan', edit: 'Edit my plan', free: 'Timed workout', session: 'Workout', week: 'Your week', progress: 'Your progress', summary: 'Summary' }[UI.cover] || 'Coach'; }
+function coverLabel() { return { setup: 'Build my plan', edit: 'Edit my plan', free: 'Timed workout', session: ACT ? dispTitle(ACT.title) : 'Workout', week: 'Your week', progress: 'Your progress', summary: 'Workout done' }[UI.cover] || 'Coach'; }
 function reduced() { try { return typeof prefersReducedMotion === 'function' ? prefersReducedMotion() : false; } catch (e) { return false; } }
 function focusIn(root) {
   var t = root.querySelector('[data-focus]') || root.querySelector('button:not([disabled])');
@@ -730,21 +1492,33 @@ function focusables(root) {
     return !el.disabled && el.tabIndex >= 0 && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
   });
 }
-/* the free timer clock: real timestamps from app.js, painted 4 times a second */
+/* the clocks: real timestamps (the free timer's from app.js, the workout's from its draft), painted 4 times a second;
+   the rest ring and the cardio ring follow the same tick, and a rest that runs out ends here */
 var TICK = null, lastLA = 0;
 function tickStart() {
-  var need = !!freeRun();
+  var need = !!freeRun() || running();
   if (need && !TICK) TICK = setInterval(paint, 250);
   if (!need && TICK) { clearInterval(TICK); TICK = null; }
 }
 function paint() {
-  var f = freeRun(); if (!f) { tickStart(); return; }
-  var el = freeElapsed(), t = clock(el / 1000), n = document.querySelectorAll('.cx [data-clk]'), i;
+  var f = freeRun(), run = running(); if (!f && !run) { tickStart(); return; }
+  if (run && ACT.rest && ACT.rest.pausedLeft == null && !ACT.pausedAt && ACT.rest.endsAt <= Date.now()) { endRest(Date.now() - ACT.rest.endsAt < 2000 ? 'auto' : 'quiet'); return; }
+  var el = run ? sessEl() : freeElapsed(), t = clock(el / 1000), n = document.querySelectorAll('.cx [data-clk]'), i;
   for (i = 0; i < n.length; i++) if (n[i].textContent !== t) n[i].textContent = t;
   t = soFar(el); n = document.querySelectorAll('.cx [data-sofar]');
   for (i = 0; i < n.length; i++) if (n[i].textContent !== t) n[i].textContent = t;
+  if (run) paintRings(el);
   var now = Date.now();
   if (now - lastLA >= 1000) { lastLA = now; try { if (typeof updateLiveActivityCard === 'function') updateLiveActivityCard(); } catch (e) {} }
+}
+function paintRings(el) {
+  var c = 2 * Math.PI * 54, a = $('#cx-cover [data-arc="rest"]'), b, r = ACT.rest, left, tot;
+  if (a && r) {
+    left = restLeft(); a.setAttribute('stroke-dashoffset', (c * (1 - (r.total ? clamp(left / r.total, 0, 1) : 0))).toFixed(1));
+    b = $('#cx-cover [data-rest]'); if (b && b.textContent !== clock(Math.ceil(left))) b.textContent = clock(Math.ceil(left));
+  }
+  a = $('#cx-cover [data-arc="cardio"]');
+  if (a) { tot = 0; ACT.items.forEach(function (x) { tot += tval(x.item); }); a.setAttribute('stroke-dashoffset', (c * (1 - clamp(el / 1000 / Math.max(1, tot * 60), 0, 1))).toFixed(1)); }
 }
 /* keep the screen awake while a workout cover is open; any failure is silent */
 function wake(on) {
@@ -774,9 +1548,26 @@ function toast(msg, undo) {
 
 /* ---------- every tap ---------- */
 function draft() { return UI.cover === 'setup' && UI.setup ? UI.setup.d : UI.edit ? UI.edit.d : null; }
-function opener() { var a = document.activeElement; return a && a !== document.body ? a : null; }
+/* the control that opened a sheet or cover, as a selector: every draw replaces the buttons, so the element itself would be gone */
+var ROOTS = ['#cx-sheets', '#cx-cover', '#cx-mini', '#cx-pin', '#coach-home', '#tab-coach'];
+function selOf(el) {
+  if (!el || el === document.body || !el.closest) return '';
+  if (el.id) return '#' + el.id;
+  var b = el.closest('[data-a]'), root = ROOTS.filter(function (r) { return el.closest(r); })[0];
+  if (!b || !root) return '';
+  var v = b.getAttribute('data-v');
+  return root + ' [data-a="' + b.getAttribute('data-a') + '"]' + (v != null ? '[data-v="' + v.replace(/"/g, '\\"') + '"]' : '');
+}
+function findSel(sel) {
+  if (!sel) return null;
+  var list = []; try { list = document.querySelectorAll(sel); } catch (e) { return null; }
+  for (var i = 0; i < list.length; i++) if (list[i].getClientRects().length && !list[i].closest('[inert]')) return list[i];
+  return null;
+}
+function opener() { return selOf(document.activeElement); }
 function refocus(el, fallback) {
-  var t = el && el.isConnected && el.getClientRects().length ? el : (fallback ? $(fallback) : null);
+  var t = typeof el === 'string' ? findSel(el) : el && el.isConnected && el.getClientRects().length ? el : null;
+  if (!t && fallback) t = findSel(fallback);
   if (t) { try { t.focus({ preventScroll: true }); } catch (e) {} }
 }
 function openSheet(n, extra) {
@@ -786,6 +1577,8 @@ function openSheet(n, extra) {
 }
 function closeSheet() {
   if (!UI.sheet) return;
+  /* the Paused sheet and its Finish now? and Discard? steps: any way out (Keep going, X, Escape, the scrim) resumes (6.9) */
+  if (UI.sheet.n === 'pause') resumeWorkout();
   var back = UI.sheetOpener; UI.sheet = null; UI.sheetOpener = null; render(); refocus(back, UI.cover ? '#cx-cover button' : '#coach-home button');
 }
 function openCover(c) {
@@ -794,7 +1587,7 @@ function openCover(c) {
 }
 function closeCover(target) {
   var back = UI.coverOpener; UI.cover = null; UI.coverOpener = null; render(true);
-  refocus(target ? $(target) : back, '#coach-home button');
+  refocus(target || back, '#coach-home button');
 }
 function busyFree() { if (freeRun()) { UI.sheet = null; render(); toast('End your timed workout first.'); return true; } return false; }
 function busySession() { if (ACTIVE) { UI.sheet = null; render(); toast('Finish your workout first.'); return true; } return false; }
@@ -809,11 +1602,8 @@ function startPlanned() {
   var d = DAYS[0]; if (!d || !d.wid || !ACTS.canStart) { UI.sheet = null; refresh(); render(); return; }
   var r = cxRun('startSession', { today: coachToday(), workoutId: d.wid });
   if (!r.ok) { UI.sheet = null; refresh(); render(); toastErr(r); return; }
-  ACT = { workoutId: d.wid, title: d.title, startedAt: Date.now() }; writeActive(ACT);
+  ACT = newDraft(r.session, Date.now()); UI.wedit = null; UI.guardUntil = 0; PV.key = ''; saveAct();
   refresh(); openCover('session');
-}
-function cancelPlanned() {
-  cxRun('cancelSession', today()); ACT = null; writeActive(null); refresh(); closeCover();
 }
 function coachStartFree(name, goal) {
   name = String(name || 'Workout');
@@ -847,7 +1637,13 @@ function endFree() {
 /* a mutating op whose failure the person never needs to see (the earned time is already credited) */
 function exec0(op, input) { try { cxRun(op, input); } catch (e) {} }
 function act(a, v, el) {
-  var d = draft(), f, x;
+  var d = draft(), f, x, hadSheet = !!UI.sheet, back = UI.sheetOpener;
+  actOn(a, v, el, d);
+  /* a sheet closed by a choice inside it hands focus back to the control that opened it */
+  if (hadSheet && !UI.sheet && (!document.activeElement || document.activeElement === document.body)) { UI.sheetOpener = null; refocus(back, UI.cover ? '#cx-cover .logbtn' : '#coach-home button'); }
+}
+function actOn(a, v, el, d) {
+  var f, x;
   switch (a) {
     case 'close': closeSheet(); break;
     case 'sheet': if (v === 'numbers' && !UI.edit) break; openSheet(v); break;
@@ -855,10 +1651,40 @@ function act(a, v, el) {
     case 'nav': openCover(v); break;
     case 'back': if (UI.cover === 'edit') UI.edit = null; closeCover(); break;
     case 'start': startPlanned(); break;
-    case 'resume': if (ACTIVE) openCover('session'); break;
+    case 'resume': if (ACTIVE) { ensureDraft(); ACT.open = true; saveAct(); openCover('session'); } break;
     case 'resume-free': if (freeRun()) { var fr = freeRun(); fr.open = true; freeSave(); openCover('free'); } break;
     case 'open-summary': openCover('summary'); break;
-    case 'sess-close': cancelPlanned(); break;
+    /* the workout (5.18 to 5.23, 6) */
+    case 'main': mainTap(); break;
+    case 'step': if (running()) stepVal(v); break;
+    case 'chip': if (running()) tapChip(+v); break;
+    case 'addset': if (running()) addSet(); break;
+    case 'remset': if (running()) remSet(); break;
+    case 'skip': if (running()) skipEx(); break;
+    case 'unskip': if (running()) unskip(); break;
+    case 'feel': if (running()) setFeel(v); break;
+    case 'rest-adj': if (running()) adjRest(+v); break;
+    case 'goto': if (running()) gotoEx(+v); break;
+    case 'dist': if (running()) stepDist(+v); break;
+    case 'minimize': if (ACT) { ACT.open = false; saveAct(); } UI.wedit = null; closeCover('#cx-mini'); break;
+    case 'pause': pauseWorkout(); break;
+    case 'keep-going': closeSheet(); break;
+    case 'finish-ask': if (running() && ACT.kind === 'training' && !allDone()) { UI.sheet.c = 'finish'; render(); } else finishWorkout(); break;
+    case 'finish-now': finishWorkout(); break;
+    case 'discard-ask': if (UI.sheet) { UI.sheet.c = 'discard'; render(); } break;
+    case 'discard': discardWorkout(); break;
+    case 'opt-rest': if (running()) { ACT.restOn = !ACT.restOn; prefSet('rest', ACT.restOn); if (!ACT.restOn) ACT.rest = null; sessRender(); } break;
+    case 'opt-sound': if (running()) { ACT.sound = !ACT.sound; prefSet('sound', ACT.sound); sessRender(); } break;
+    case 'menu-swap': if (UI.sheet) { UI.sheet = { n: 'swap' }; render(); } break;
+    case 'menu-list': if (UI.sheet) { UI.sheet = { n: 'xlist' }; render(); } break;
+    case 'swap-scope': if (UI.sheet) { UI.sheet.scope = v; render(); } break;
+    case 'do-swap': if (running()) doSwap(v); break;
+    /* the summary, Your week and Your progress */
+    case 'sum-done': UI.sheet = null; closeCover('#coach-home .hero .btn'); break;
+    case 'sum-progress': UI.sheet = null; UI.cover = 'progress'; render(true); break;
+    case 'toggle': pv()[v] = !pv()[v]; render(); break;
+    case 'lift': pv().lift = v; render(); break;
+    case 'recent': if (!UI.sheet) UI.sheetOpener = opener(); UI.sheet = { n: 'recent', id: v }; render(); break;
     case 'undo-choice':
       if (UI.swapBase) { x = UI.swapBase; f = cxRun('swapWorkout', { today: coachToday(), workoutId: x }); if (f.ok) UI.swapBase = null; after(f, 'Back to your plan for today.'); }
       else after(cxRun('clearTodayChoice', today()), 'Back to your plan for today.');
@@ -894,7 +1720,7 @@ function act(a, v, el) {
       break;
     case 'setup-done': UI.setup = null; closeCover(); refocus(null, '#coach-home .hero .btn-cta'); if (COMPACT) refocus(null, '#cx-pin .btn'); break;
     case 'open-edit':
-      if (ACTIVE || freeRun()) { UI.sheet = null; render(); toast('Finish your workout first.'); break; }
+      if (ACTIVE) { UI.sheet = null; render(); toast('Finish your workout first.'); break; }
       x = fromProfile(WK.profile); UI.edit = { d: x, o: copy(x) }; openCover('edit'); break;
     case 'edit-save':
       f = cxRun('editProfile', { today: coachToday(), profile: toProfile(UI.edit.d) });
@@ -924,9 +1750,25 @@ function act(a, v, el) {
 document.addEventListener('click', function (e) {
   var el = e.target.closest ? e.target.closest('.cx [data-a], #cx-mini') : null;
   if (!el || el.disabled) return;
-  if (el.id === 'cx-mini') { act('resume-free', ''); return; }
-  act(el.getAttribute('data-a'), el.getAttribute('data-v') || '', el);
+  if (el.id === 'cx-mini') { act(running() ? 'resume' : 'resume-free', ''); return; }
+  var a = el.getAttribute('data-a');
+  if ((a === 'step' || a === 'dist') && HOLD.fired) { HOLD.fired = false; return; }
+  act(a, el.getAttribute('data-v') || '', el);
 });
+/* holding a stepper repeats after 400 ms, 8 steps a second (6.2) */
+var HOLD = { t: null, iv: null, fired: false };
+function holdStop() { clearTimeout(HOLD.t); clearInterval(HOLD.iv); HOLD.t = HOLD.iv = null; }
+document.addEventListener('pointerdown', function (e) {
+  var el = e.target.closest ? e.target.closest('#cx-cover [data-a="step"], #cx-cover [data-a="dist"]') : null;
+  holdStop(); HOLD.fired = false; if (!el || e.button > 0) return;
+  var a = el.getAttribute('data-a'), v = el.getAttribute('data-v') || '';
+  HOLD.t = setTimeout(function () {
+    HOLD.fired = true; act(a, v);
+    HOLD.iv = setInterval(function () { if (!running() || UI.cover !== 'session' || UI.sheet) { holdStop(); return; } act(a, v); }, 125);
+  }, 400);
+});
+['pointerup', 'pointercancel'].forEach(function (t) { document.addEventListener(t, function () { var was = !!HOLD.t; holdStop(); if (was) setTimeout(function () { HOLD.fired = false; }, 0); }); });
+window.addEventListener('blur', holdStop);
 document.addEventListener('input', function (e) {
   if (e.target.id !== 'cx-bw') return;
   var d = draft(); if (!d) return;
@@ -952,7 +1794,8 @@ document.addEventListener('keydown', function (e) {
 /* Escape on a cover does what the cover's own leave button does, and only where that loses nothing
    (COACH_SPEC 2.1 and 2.2: covers close only by their buttons, which keeps setup answers, plan edits and a running workout safe).
    Your week, Your progress and the summary go back; the free timer minimizes and keeps running; Edit my plan goes back only with
-   no edits; setup closes only on question 1 with nothing answered yet. The workout (its Close cancels it) and the ready screen stay. */
+   no edits; setup closes only on question 1 with nothing answered yet. The workout and the ready screen stay: Escape never
+   discards a set or ends a workout (on the Paused sheet it resumes, like Keep going). */
 function coverEscape() {
   switch (UI.cover) {
     case 'week': case 'progress': case 'summary': return function () { act('back', ''); };
@@ -1017,8 +1860,34 @@ function sampleCredit() {
   try { creditWorkout(dispTitle(r.title), r.durationMinutes || 0, { silent: true, quiet: true, kind: 'coach' }); } catch (e) {}
 }
 /* a test address opens a state on top of a seed (rule 11). Everything stays in memory (MEM): no coach key and no demo save is written. */
+/* a running workout on a seed: the engine's startSession, then a draft with its clock set back el seconds */
+function seedStart(el) {
+  refresh();
+  var d = DAYS[0]; if (!d || !d.wid || d.done) return false;
+  var r = cxRun('startSession', { today: coachToday(), workoutId: d.wid }); if (!r.ok) return false;
+  ACT = newDraft(r.session, Date.now() - (el || 0) * 1000); ACT.restOn = true; ACT.sound = false;
+  refresh(); UI.cover = 'session';
+  return true;
+}
+function seedSession(sd, logs, o) {
+  o = o || {};
+  ST = seedPlan(sd, o.kind || 'training', o.pref || 56, o.goal); SAMPLE = true;
+  if (!seedStart(o.el)) return false;
+  logs.forEach(function (k, i) { var x = ACT.items[i], j; if (!x) return; for (j = 0; j < k && j < x.n; j++) x.logs.push({ w: lt(x) === 'weightReps' ? x.cw : 0, r: x.cr }); });
+  ACT.xi = o.xi || 0;
+  return true;
+}
+function seedRest(left, ex) { var t = Math.max(left, (ACT.items[ACT.xi].item.restSeconds) || left); ACT.rest = { endsAt: Date.now() + left * 1000, total: t, ex: ex, pausedLeft: null }; }
+/* the summary sample: the prototype's logs on the lifted moves, finished early at 46 minutes, through the real completeSession and creditWorkout */
+function seedSummary(sd) {
+  if (!seedSession(sd, [], { el: 2772 })) return;
+  var logs = [[135, [8, 8, 8]], [85, [9, 9, 9]], [35, [11, 11, 10]], [45, [10, 10, 10]], [10, [12, 12, 12]]];
+  ACT.items.forEach(function (x, i) { var l = logs[i]; if (l && lt(x) === 'weightReps') x.logs = l[1].map(function (r) { return { w: l[0], r: r }; }); });
+  finishWorkout(true);
+}
 function route(name, seed) {
   MEM = true; SAMPLE = false; UI.sheet = null; UI.cover = null; UI.setup = null; UI.edit = null;
+  ACT = null; SUM = null; UI.wedit = null; UI.guardUntil = 0; UI.pv = {}; LIFT_TONE = {}; PV.key = ''; LOAD_ERR = ''; REV++;
   var stay = false, sd = seed || 'lived-in';
   switch (name) {
     case 'first-visit': ST = freshState(); break;
@@ -1040,12 +1909,27 @@ function route(name, seed) {
       var s = demo(); if (s) s.activeWorkout = { name: 'Walk', startedAt: Date.now() - 372000, pausedTotalMs: 0, pausedAt: null, kind: 'free', goal: 0, open: true };
       UI.cover = 'free'; break;
     case 'today': ST = seedPlan(sd, 'training', 56); SAMPLE = true; break;
+    /* the workout, at the prototype's moments: [n] = sets logged per exercise, at the target, el = seconds on the clock */
+    case 'session': seedSession(sd, [1], { el: 262 }); break;
+    case 'session-rest': if (seedSession(sd, [1], { el: 185 })) seedRest(92, false); break;
+    case 'session-paused': if (seedSession(sd, [3, 3, 2], { xi: 2, el: 1112 })) { ACT.pausedAt = Date.now(); UI.sheet = { n: 'pause' }; } break;
+    case 'session-feel': seedSession(sd, [3], { el: 560 }); break;
+    case 'session-rest-ex': if (seedSession(sd, [3], { el: 560 })) seedRest(74, true); break;
+    case 'session-cardio': seedSession(sd, [], { el: 850, kind: 'cardio', pref: 58, goal: 'stayFit' }); break;
+    case 'session-min': if (seedSession(sd, [3, 3, 2], { xi: 2, el: 1112 })) { ACT.open = false; UI.cover = null; } break;
+    case 'swap': if (seedSession(sd, [1], { el: 262 })) UI.sheet = { n: 'swap', scope: 'today' }; break;
+    case 'summary': seedSummary(sd); break;
+    case 'first-workout': ST = seedFresh(NUMS_PROFILE); seedStart(0); break;
+    case 'week': ST = seedPlan(sd, 'training', 56); SAMPLE = true; UI.cover = 'week'; break;
+    case 'progress': ST = seedPlan(sd); SAMPLE = true; UI.cover = 'progress'; break;
+    case 'progress-empty': ST = seedFresh(SAMPLE_PROFILE); UI.cover = 'progress'; break;
     default: ST = seedPlan(sd); SAMPLE = true; /* a seed on its own: browse it from Coach home */
   }
   refresh();
   if (stay === 'edit') { var x = fromProfile(WK.profile); UI.edit = { d: x, o: copy(x) }; UI.cover = 'edit'; }
 }
-var COACH_STATES = ['first-visit', 'setup', 'setup-days', 'setup-numbers', 'setup-ready', 'first-week', 'today', 'rest-day', 'cardio-day', 'recovery-day', 'done-today', 'edit-plan', 'earned', 'change-today', 'time', 'free'];
+var COACH_STATES = ['first-visit', 'setup', 'setup-days', 'setup-numbers', 'setup-ready', 'first-week', 'today', 'rest-day', 'cardio-day', 'recovery-day', 'done-today', 'edit-plan', 'earned', 'change-today', 'time', 'free',
+  'session', 'session-rest', 'session-paused', 'session-feel', 'session-rest-ex', 'session-cardio', 'session-min', 'swap', 'summary', 'first-workout', 'week', 'progress', 'progress-empty'];
 function stateParam() { var v = param('coach'); return v && COACH_STATES.indexOf(v) >= 0 ? v : ''; }
 /* true while a test address is open: app.js saveState asks this and writes nothing (rule 11, the helpers only read the address) */
 function coachHoldsSaves() { return MEM || !!(stateParam() || seedParam()); }
@@ -1060,10 +1944,11 @@ function init() {
   if (name || sd) route(name, sd);
   refresh();
   if (!MEM) {
-    ACT = readActive();
+    /* a reload or a closed browser comes back to the same exercise, chips, rest and clock (COACH_SPEC 7); no draft means no session */
+    ACT = readActive(); SUM = readSum();
     if (ACT && !ACTIVE) { ACT = null; writeActive(null); }
     if (!ACT && ACTIVE) { cxRun('cancelSession', today()); refresh(); }
-    if (ACT && ACTIVE) UI.cover = 'session';
+    if (ACT && ACTIVE) { ensureDraft(); if (ACT.open !== false) UI.cover = 'session'; }
     var f = freeRun(); if (f && f.open && !UI.cover) UI.cover = 'free';
   }
 }
@@ -1072,7 +1957,7 @@ function coachRestore() {
   if (!routed) {
     routed = true;
     var tab = param('tab');
-    if ((tab === 'coach' || tab === 'earn' || stateParam() || seedParam()) && typeof switchTab === 'function') { switchTab('coach'); return; }
+    if ((tab === 'coach' || tab === 'earn' || stateParam() || seedParam() || (!tab && !MEM && ACT && ACTIVE)) && typeof switchTab === 'function') { switchTab('coach'); return; }
   }
   render(true);
 }
@@ -1081,7 +1966,7 @@ function coachRefresh() { if (!READY) return; refresh(); render(); }
 function coachSignOutCleanup() {
   if (!READY) return;
   if (ACTIVE) cxRun('cancelSession', today());
-  ACT = null; writeActive(null);
+  ACT = null; writeActive(null); SUM = null; writeSum(null); UI.wedit = null;
   UI.sheet = null; UI.cover = null; UI.setup = null; UI.edit = null; UI.swapBase = null;
   if (TICK) { clearInterval(TICK); TICK = null; }
   wake(false); refresh(); render();
