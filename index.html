@@ -7,8 +7,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Balance - Move to Scroll</title>
-  <link rel="stylesheet" href="style.css?v=19" />
-  <link rel="stylesheet" href="coach.css?v=19" />
+  <link rel="stylesheet" href="style.css?v=20" />
+  <link rel="stylesheet" href="coach.css?v=20" />
 
   <!-- SVG Favicon -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%236366F1' stroke-width='3' stroke-dasharray='66 8' stroke-linecap='round' transform='rotate(-90 16 16)'/%3E%3C/svg%3E" />
@@ -63,6 +63,24 @@
     <symbol id="i-door" viewBox="0 0 24 24"><path d="M13 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h7M17 8l4 4-4 4M21 12H10"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6 7l1 13.5h10L18 7M10 11v6M14 11v6"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4.5V10h-5.5"/></symbol>
+  </svg>
+  <!-- Single shared gradient (item 2d) - JS updates only the two stop-color
+       values on every repaint, which IS animatable (unlike swapping between
+       separate gradient elements), so a real band change cross-fades instead
+       of snapping. The Lock Screen ring references this id; hero-grad-mint is
+       the workout success ring's. WHERO - they moved here from the old Today
+       ring, in a zero-size svg that takes no room and is never read out. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="ring-depletion-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop id="ring-depletion-stop-1" class="depletion-stop" offset="0%" stop-color="#34D399"/>
+        <stop id="ring-depletion-stop-2" class="depletion-stop" offset="100%" stop-color="#2DD4BF"/>
+      </linearGradient>
+      <linearGradient id="hero-grad-mint" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#34D399"/>
+        <stop offset="100%" stop-color="#2DD4BF"/>
+      </linearGradient>
+    </defs>
   </svg>
   <!-- iPhone Frame Wrapper (desktop only) -->
   <div id="phone-frame">
@@ -401,40 +419,16 @@
             </div>
             <p class="streak-rule-caption">A day counts when you stay within your allowance.</p>
 
-            <!-- Hero Ring -->
-            <div class="hero-ring-wrap">
-              <svg id="hero-ring-svg" viewBox="0 0 240 240" width="220" height="220">
-                <defs>
-                  <!-- Single shared gradient (item 2d) - JS updates only the two
-                       stop-color values on every repaint, which IS animatable
-                       (unlike swapping between separate gradient elements), so a
-                       real band change cross-fades instead of snapping. Every
-                       ring that shows remaining time (hero, earn mini, lock
-                       screen) references this same id. -->
-                  <linearGradient id="ring-depletion-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop id="ring-depletion-stop-1" class="depletion-stop" offset="0%" stop-color="#34D399"/>
-                    <stop id="ring-depletion-stop-2" class="depletion-stop" offset="100%" stop-color="#2DD4BF"/>
-                  </linearGradient>
-                  <linearGradient id="hero-grad-mint" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#34D399"/>
-                    <stop offset="100%" stop-color="#2DD4BF"/>
-                  </linearGradient>
-                </defs>
-                <circle class="ring-track" cx="120" cy="120" r="100" stroke-width="14"/>
-                <circle id="hero-ring-arc" class="ring-arc hero-arc" cx="120" cy="120" r="100"
-                  stroke="url(#ring-depletion-gradient)"
-                  stroke-width="14"
-                  stroke-dasharray="628"
-                  stroke-dashoffset="0"
-                  transform="rotate(-90 120 120)"/>
-              </svg>
-              <div class="ring-center">
-                <div class="ring-countdown" id="ring-countdown">31 min</div>
-                <div class="ring-label-sm" id="ring-label-sm">left today</div>
-              </div>
+            <!-- WHERO - the Today hero is the balance scale (balance-hero.js).
+                 app.js mounts it once, with the real numbers, the first time
+                 Today is on screen; the module gives the canvas its role, its
+                 tabindex and its spoken label, so none is added here. The
+                 still canvas shows the last frame while the live one is
+                 paused (another tab, a sheet or a popup on top). -->
+            <div class="hero-scale" id="hero-scale-wrap">
+              <canvas class="hero-scale-canvas" id="hero-scale"></canvas>
+              <canvas class="hero-scale-still" id="hero-scale-still" aria-hidden="true" hidden></canvas>
             </div>
-
-            <p class="ring-caption">45 min allowance + <span id="earned-display">12</span> min earned · resets at midnight</p>
 
             <!-- W5 (XP-24) - shield status pill, right under the hero as in the
                  DESIGN_DIRECTION Today recipe. Demo wording only: the web demo
@@ -445,6 +439,7 @@
 
             <!-- W5 (XP-24) - streak dots: shape plus color, one accessible element -->
             <div class="streak-dots" id="streak-dots" role="img" aria-label="This week"></div>
+            <p class="ring-caption">45 min allowance + <span id="earned-display">12</span> min earned · resets at midnight</p>
             <!-- W5 (XP-22) - the Lock Screen widget is a roadmap item, labeled as such -->
             <a class="widget-link" id="widget-link-today">
               <span class="widget-link-main"><svg class="icon icon-16" aria-hidden="true"><use href="#i-lock"/></svg>See Lock Screen widget</span>
@@ -1017,8 +1012,9 @@
   <!-- Confetti canvas -->
   <canvas id="confetti-canvas"></canvas>
 
-  <script src="app.js?v=19"></script>
-  <script src="coach-engine.js?v=19"></script>
-  <script src="coach.js?v=19"></script>
+  <script src="balance-hero.js?v=20"></script>
+  <script src="app.js?v=20"></script>
+  <script src="coach-engine.js?v=20"></script>
+  <script src="coach.js?v=20"></script>
 </body>
 </html>
