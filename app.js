@@ -120,6 +120,7 @@ const WORKOUT_GOAL_STEP = 5;
 const WORKOUT_GOAL_DEFAULT = 30;
 
 function clampWorkoutGoal(value) {
+  if (value == null || value === '') return WORKOUT_GOAL_DEFAULT;
   const n = Number(value);
   if (!Number.isFinite(n)) return WORKOUT_GOAL_DEFAULT;
   const stepped = Math.round(n / WORKOUT_GOAL_STEP) * WORKOUT_GOAL_STEP;
@@ -158,11 +159,10 @@ let widgetInterval = null;
 let laElapsedInterval = null;
 
 // ===== RING DEPLETION COLOR (item 2d) =====
-// One shared gradient (defined once in the hero ring's <defs>, referenced by
-// all three rings that show remaining time) whose two stop-color values get
-// updated here on every repaint. Funneled through this single function so
-// the hero ring, earn mini ring, and lock-screen ring can never disagree on
-// which band they're in.
+// One shared gradient (defined once in a zero-size <svg> at the top of the
+// page, referenced by the Lock Screen ring that shows remaining time) whose
+// two stop-color values get updated here on every repaint. Funneled through
+// this single function so the ring's band always follows the same rule.
 function applyRingDepletionColor(pct) {
   const stop1 = document.getElementById('ring-depletion-stop-1');
   const stop2 = document.getElementById('ring-depletion-stop-2');
@@ -179,28 +179,19 @@ function applyRingDepletionColor(pct) {
   stop2.setAttribute('stop-color', c2);
 }
 
-// ===== RING DISPLAY =====
-// No more real-time countdown interval - the ring simply repaints from
-// current state whenever something changes it or the app regains focus.
+// ===== TODAY HERO AND LOCK SCREEN RING =====
+// No more real-time countdown interval - the Today hero and the Lock Screen
+// ring simply repaint from current state whenever something changes them or
+// the app regains focus.
 function updateRingDisplay() {
   const remaining = state.remainingSeconds;
   const total = state.totalSeconds;
   const pct = total > 0 ? remaining / total : 0;
 
-  // WF-19 - whole minutes, rounded UP, the same way the Lock Screen widget
-  // rounds: "0 min left" must never show while apps are still unlocked.
-  const mins = Math.ceil(remaining / 60);
-  setTextContent('ring-countdown', `${mins} min`);
-  setTextContent('ring-label-sm', 'left today');
-  fitRingCountdown();
-
-  // Hero arc
-  const arc = document.getElementById('hero-ring-arc');
-  if (arc) {
-    const circumference = 628; // 2*pi*100
-    const offset = circumference - (pct * circumference);
-    arc.setAttribute('stroke-dashoffset', offset.toFixed(2));
-  }
+  // WHERO - the Today hero is the balance scale; its big number is minutes
+  // left rounded UP (WF-19), the same way the Lock Screen widget rounds:
+  // "0 min left" must never show while apps are still unlocked.
+  updateHeroScale();
 
   applyRingDepletionColor(pct);
 
@@ -208,43 +199,138 @@ function updateRingDisplay() {
   updateLockScreenWidgets();
 }
 
-// W6 repair (WV-04) - the hero number never runs over the ring. The CSS size
-// (52px, 44px on a short phone) is the most it can be; when the number's box
-// would cross the inner edge of the ring's stroke (a three-digit value such as
-// "120 min", or "47 min" in the 176px ring), it steps down 1px at a time until
-// it sits inside, never below 24px. Like a minimum scale factor on iPhone.
-// Runs whenever the number changes and when the window is resized, since the
-// short-phone ring is a different size.
-const RING_INNER_RATIO = 93 / 240; // inner edge of the 14-wide stroke at r=100, viewBox 240
-function fitRingCountdown() {
-  const el = document.getElementById('ring-countdown');
-  const svg = document.getElementById('hero-ring-svg');
-  if (!el || !svg) return;
-  el.style.fontSize = '';
-  const ring = svg.getBoundingClientRect();
-  if (!ring.width) return;
-  const inner = ring.width * RING_INNER_RATIO;
-  const cy = ring.top + ring.height / 2;
-  const fits = () => {
-    const b = el.getBoundingClientRect();
-    const fs = parseFloat(getComputedStyle(el).fontSize) || 0;
-    const halfInk = fs * 0.36; // cap height is about 0.71 em, centered in the line
-    const dy = Math.abs(b.top + b.height / 2 - cy) + halfInk;
-    const dx = b.width / 2;
-    return dx * dx + dy * dy <= inner * inner;
+// ===== TODAY HERO (WHERO) =====
+// The balance scale (balance-hero.js 1.2.1, HERO_SPEC "For hosts"). One
+// mapping turns the app's own numbers into the hero's inputs, so the hero
+// never disagrees with the tiles, the caption or the Lock Screen widget:
+//   tracking  - at least one app is picked (isTrackingApps)
+//   screenMin - the last 5-min Screen Time checkpoint, the "Used today" number
+//   moveMin   - the real minutes of today's logged workouts, summed
+//   rate      - the earn rate; goalMin - the daily movement goal
+//   earnedMin - state.earnedMinutes as credited, so a day on which the rate
+//               changed still shows what was earned; made whole with
+//               Math.round and never below 0
+//   leftMin   - minutes left, rounded UP like the Lock Screen widget (WF-19)
+//   allowance - the day's total less earned time (the base plus any minutes
+//               a partner approved), never below 0
+// It mounts once, the first time Today is on screen, with these numbers
+// (never empty and pushed later), and stays transparent until its first
+// frame is drawn. After that a change goes through setState only when an
+// input really changed: a patch during the opening pour, even an unchanged
+// one, would end its quiet start and make a balanced day celebrate.
+const HERO_SCALE_KEYS = ['tracking', 'screenMin', 'moveMin', 'rate', 'goalMin', 'earnedMin', 'leftMin', 'allowance'];
+const HERO_SCALE_POPUPS = ['confirm-popup', 'sso-mock-popup', 'screen-time-popup', 'health-popup'];
+let heroScale = null;          // the one instance, for the life of the page
+let heroScaleInputs = null;    // the inputs it was last given
+let heroScaleLive = false;     // its canvas is in the layout (frame loop allowed)
+let heroScaleMountQueued = false;
+
+function heroScaleNumbers() {
+  const moved = (state.worktimeLoggedToday || []).reduce((sum, w) => sum + (Number(w && w.mins) || 0), 0);
+  return {
+    tracking: isTrackingApps(),
+    screenMin: getCheckpointMinutesToday(),
+    moveMin: Math.max(0, Math.round(moved)),
+    rate: state.earnRateMultiplier,
+    goalMin: state.workoutGoalMin,
+    earnedMin: Math.max(0, Math.round(Number(state.earnedMinutes) || 0)),
+    leftMin: Math.ceil(state.remainingSeconds / 60),
+    allowance: Math.max(0, dayTotalMinutes() - state.earnedMinutes),
   };
-  let size = parseFloat(getComputedStyle(el).fontSize) || 0;
-  while (size > 24 && !fits()) {
-    size -= 1;
-    el.style.fontSize = `${size}px`;
+}
+
+// Today is the screen in front, with no sheet, popup or Coach cover on top.
+function heroScaleOnScreen() {
+  const shell = document.getElementById('app-shell');
+  const pane = document.getElementById('tab-today');
+  if (!shell || !shell.classList.contains('active') || !pane || !pane.classList.contains('active')) return false;
+  if (document.querySelector('.bottom-sheet.open')) return false;
+  // Full-screen overlays (Lock Screen preview, share card, intercept) lay
+  // over the shell without hiding it.
+  if (document.querySelector('.overlay-screen.active')) return false;
+  const body = document.body.classList;
+  if (body.contains('cx-cover-open') || body.contains('cx-sheet-open')) return false;
+  return !HERO_SCALE_POPUPS.some(id => {
+    const el = document.getElementById(id);
+    return !!(el && el.style.display && el.style.display !== 'none');
+  });
+}
+
+function updateHeroScale() {
+  if (!window.BalanceHero || !document.getElementById('hero-scale')) return;
+  if (!heroScale) {
+    // The mount waits for the end of the current task, so a repaint that
+    // is still settling the day's numbers (paintAppShell) lands first.
+    if (!heroScaleMountQueued && heroScaleOnScreen()) {
+      heroScaleMountQueued = true;
+      queueMicrotask(mountHeroScale);
+    }
+    return;
   }
+  const next = heroScaleNumbers();
+  if (heroScaleInputs && HERO_SCALE_KEYS.every(k => next[k] === heroScaleInputs[k])) return;
+  heroScaleInputs = next;
+  heroScale.setState(next);
+}
+
+function mountHeroScale() {
+  heroScaleMountQueued = false;
+  const canvas = document.getElementById('hero-scale');
+  if (heroScale || !canvas || !heroScaleOnScreen()) return;
+  const wrap = document.getElementById('hero-scale-wrap');
+  heroScaleInputs = heroScaleNumbers();
+  heroScaleLive = true;
+  heroScale = BalanceHero.mount(canvas, Object.assign({}, heroScaleInputs, {
+    onReady: () => { if (wrap) wrap.classList.add('is-ready'); },
+  }));
+}
+
+// The hero stops its own frame loop when the page is hidden or its canvas is
+// off screen. Tabs, screens and sheets here only fade (opacity and
+// visibility), so the canvas would still count as on screen under them.
+// While Today is covered or another tab shows, the frame on screen is copied
+// to the still canvas and the live one leaves the layout, which stops its
+// loop; it comes back when Today does, and a change made meanwhile animates
+// then. Never destroyed: Today stays for the life of the page.
+function syncHeroScale() {
+  const canvas = document.getElementById('hero-scale');
+  const still = document.getElementById('hero-scale-still');
+  if (!canvas || !still) return;
+  const live = heroScaleOnScreen();
+  if (!heroScale) { if (live) updateHeroScale(); return; }
+  if (live === heroScaleLive) return;
+  heroScaleLive = live;
+  if (live) {
+    canvas.style.display = '';
+    still.hidden = true;
+    return;
+  }
+  if (canvas.width && canvas.height) {
+    still.width = canvas.width;
+    still.height = canvas.height;
+    still.getContext('2d').drawImage(canvas, 0, 0);
+  }
+  still.hidden = false;
+  canvas.style.display = 'none';
+}
+
+function watchHeroScale() {
+  if (typeof MutationObserver !== 'function') return;
+  const mo = new MutationObserver(syncHeroScale);
+  const classTargets = [document.body, document.getElementById('tab-today')]
+    .concat(Array.from(document.querySelectorAll('.screen, .bottom-sheet')));
+  classTargets.forEach(el => { if (el) mo.observe(el, { attributes: true, attributeFilter: ['class'] }); });
+  HERO_SCALE_POPUPS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) mo.observe(el, { attributes: true, attributeFilter: ['style'] });
+  });
 }
 
 // ===== LOCK SCREEN WIDGETS =====
 function updateLockScreenWidgets() {
   const mins = Math.ceil(state.remainingSeconds / 60);
-  // item 2d - use the exact same pct as the hero ring (raw seconds, not
-  // ceil'd minutes) so the two rings can never disagree on their color band.
+  // item 2d - use the exact same pct as updateRingDisplay (raw seconds, not
+  // ceil'd minutes) so the ring and its gradient never disagree on the band.
   const pct = state.totalSeconds > 0 ? state.remainingSeconds / state.totalSeconds : 0;
 
   // Label
@@ -409,7 +495,31 @@ function syncToastPlacement(force) {
   const container = document.getElementById('toast-container');
   if (!force && container && container.childElementCount > 0) return;
   const sheetOpen = !!document.querySelector('.bottom-sheet.open');
-  document.body.classList.toggle('toast-top', sheetOpen || TOAST_TOP_SCREENS.includes(currentScreen));
+  document.body.classList.toggle('toast-top', sheetOpen || TOAST_TOP_SCREENS.includes(currentScreen) || earnMoreUnderToasts());
+}
+
+// WHERO - the hero made Today taller, so "+ Earn more" can be scrolled to
+// where a bottom toast lands. While the button is there, toasts drop from
+// the top instead, and toasts already showing move up if the button scrolls
+// under them. The bottom toast column ends 22px above the tab bar (80px
+// from the bottom, the bar is 58px), or 82px while the Coach resume bar
+// shows (coach.css lifts it to 140px); each toast and its gap take about 56px.
+function earnMoreUnderToasts() {
+  if (currentScreen !== 'app-shell' || state.currentTab !== 'today') return false;
+  const btn = document.getElementById('earn-more-btn');
+  const bar = document.querySelector('#app-shell .tab-bar');
+  const container = document.getElementById('toast-container');
+  if (!btn || !bar || !container) return false;
+  const b = btn.getBoundingClientRect();
+  if (!b.height) return false;
+  const zoneBottom = bar.getBoundingClientRect().top - (document.body.classList.contains('cx-has-mini') ? 82 : 22);
+  const zoneTop = zoneBottom - 56 * (container.childElementCount + 1);
+  return b.bottom > zoneTop && b.top < zoneBottom;
+}
+function liftToastsOffEarnMore() {
+  const container = document.getElementById('toast-container');
+  if (!container || !container.childElementCount || document.body.classList.contains('toast-top')) return;
+  if (earnMoreUnderToasts()) document.body.classList.add('toast-top');
 }
 
 // W6 (WV-19) - one check for every motion effect JS drives itself (confetti,
@@ -628,6 +738,7 @@ function renderWorkoutGoal() {
   const earned = Math.round(goal * state.earnRateMultiplier);
   setTextContent('goal-earn-line', `${goal} min of movement earns ${earned} min of scroll time`);
   setTextContent('goal-set-val', `${goal} min`);
+  updateHeroScale(); // WHERO - the goal mark, and the earn line after a rate change
 }
 
 // One write path for the goal, from the setup step and from Settings.
@@ -796,7 +907,7 @@ function flushPendingToasts() {
 }
 
 // ===== NUMBERS ENGINE (A8) =====
-// Single source of truth: minutes used today derives from the ring's own numbers.
+// Single source of truth: minutes used today derives from the day's own numbers (total and remaining seconds).
 function getUsedMinutesToday() {
   return Math.max(0, Math.round((state.totalSeconds - state.remainingSeconds) / 60));
 }
@@ -1160,7 +1271,7 @@ function buildHourChart() {
 }
 
 // Baseline card: the user's own guess (rounded to 5 min by the same helper
-// the shock stat uses) against what the demo ring has counted so far today.
+// the shock stat uses) against what the demo has counted so far today.
 // No invented "actual" figure anywhere in this card.
 function renderBaselineCard() {
   const rows = document.getElementById('baseline-rows');
@@ -1186,7 +1297,7 @@ function renderBaselineCard() {
 // ===== WEEKLY CHART =====
 // The 6 historical days stay hardcoded for the demo; today's bar is always
 // the real, live "used minutes" / earned minutes so it can never disagree
-// with the ring (A8).
+// with the Today hero (A8).
 const WEEK_SOCIAL_HISTORICAL = [42, 38, 45, 29, 45, 22, 31];
 const WEEK_EARNED_HISTORICAL = [8, 12, 0, 15, 5, 20, 12];
 const WEEK_TODAY_IDX = 6;
@@ -1225,14 +1336,17 @@ function buildWeekChart() {
   const dayResults = streakDayResults();
   // WFIX repair - the drawn sample bar never contradicts that day result: a
   // kept day ('under') is drawn at or under the goal line and the day that
-  // went over is drawn above it, keeping the sample's day-to-day shape. 'none'
-  // days and today keep their own heights.
+  // went over is drawn above it, keeping the sample's day-to-day shape. Today
+  // keeps its own height. WHERO item 8e - a 'none' day (no data) keeps its
+  // sample height unless that would rise above the goal line (low
+  // allowances); then it is drawn under the line the same way a kept day is.
   const sampleMax = Math.max(...WEEK_SOCIAL_HISTORICAL);
   for (let i = 0; i < social.length; i++) {
     if (i === todayIdx) continue;
     const shape = social[i] / sampleMax;
     if (dayResults[i] === 'under' && social[i] > allowance) social[i] = Math.round(allowance * (0.6 + 0.3 * shape));
     else if (dayResults[i] === 'over' && social[i] <= allowance) social[i] = Math.round(allowance * (1.15 + 0.2 * shape));
+    else if (dayResults[i] === 'none' && social[i] > allowance) social[i] = Math.round(allowance * (0.6 + 0.3 * shape));
   }
   // fix 7 - headroom is derived from the DATA, not from whichever value
   // (data or allowance) currently happens to be the max. The old formula
@@ -1241,7 +1355,9 @@ function buildWeekChart() {
   // 1/1.15 (86.9565%) no matter how high the allowance went - it only
   // ever moved when the DATA stayed the dominant term. Fixed additive
   // headroom based on the data means the line actually moves both ways.
-  const dataMax = Math.max(...social);
+  // WHERO item 8e - the earlier days' sample earned bars count as data too,
+  // so lowering the no-data bars never pushes an earned bar past the top.
+  const dataMax = Math.max(...social, ...earned.slice(0, todayIdx));
   const headroom = Math.max(dataMax, 1) * 0.15;
   const scaleMax = Math.max(dataMax, allowance) + headroom;
   const goalPct = Math.min(100, (allowance / scaleMax) * 100);
@@ -1324,6 +1440,7 @@ function renderEarnedList() {
 
 // Cheap, event-driven refresh of everything derived from "used minutes today" (A8).
 function refreshTodayNumbers() {
+  updateHeroScale(); // WHERO - the hero reads the same numbers (an app picked or dropped, minutes earned)
   renderAppTiles();
   buildWeekChart();
   renderStatusLayer(); // W5 - the stat strip and baseline card derive from the same numbers
@@ -1496,7 +1613,7 @@ function hideBreathingPause() {
 
 // ===== APP SESSION (item 2c) =====
 // Tapping "Open X" starts a simulated doom-scroll session: a plausible
-// randomized length (8-15 min, tuned so a full ~45-57 min ring runs out in
+// randomized length (8-15 min, tuned so a full ~45-57 min allowance runs out in
 // roughly 3-5 taps - see final report), a short honest "leaving Balance"
 // transition, then an automatic return that deducts only what was actually
 // available (remaining can never go negative).
@@ -1633,6 +1750,7 @@ function creditWorkout(workoutName, duration, opts = {}) {
   const entry = { label: workoutName, mins: duration, earned: earnedMins };
   if (opts.kind) { entry.kind = opts.kind; entry.at = Date.now(); }
   state.worktimeLoggedToday.push(entry);
+  updateHeroScale(); // WHERO - the movement minutes changed after addEarnedMinutes repainted
 
   if (!quiet && !silent) showToast(`Logged! +${earnedMins} min earned 🎉`);
 
@@ -1733,7 +1851,7 @@ function setTextContent(id, text) {
 
 // ===== DISPLAY HELPERS (A5, A9, A13, B2) =====
 
-// A5 - ring caption honors the expires-at-midnight toggle.
+// A5 - the allowance caption under the Today hero honors the expires-at-midnight toggle.
 function updateRingCaption() {
   const caption = document.querySelector('.ring-caption');
   if (!caption) return;
@@ -1778,6 +1896,7 @@ function updateGreeting() {
 
 // A13 - "Day 1" reads better than "1 days".
 function formatStreakText(n) {
+  if (!(n > 0)) return 'No streak'; // WHERO item 8h - words at 0, never "0 days" (fits the 375 greeting row)
   return n === 1 ? 'Day 1' : `${n} days`;
 }
 
@@ -2040,6 +2159,8 @@ const FOCUS_TRAP_SHEETS = ['apps-sheet', 'settings-sheet', 'legal-sheet', 'other
 function topOpenDialog() {
   const confirmPopup = document.getElementById('confirm-popup');
   if (confirmPopup && confirmPopup.style.display === 'flex') return confirmPopup;
+  const stPopup = document.getElementById('screen-time-popup'); // WHERO item 8g
+  if (stPopup && stPopup.style.display === 'flex') return stPopup;
   for (const id of FOCUS_TRAP_SHEETS) {
     const el = document.getElementById(id);
     if (el && el.classList.contains('open')) return el;
@@ -2103,7 +2224,7 @@ function updateSettingsAccountSection() {
 }
 
 // A1 - Daily-allowance stepper: writes state, recomputes total, clamps
-// remaining, and keeps every display of it (ring, caption, intercept) in sync.
+// remaining, and keeps every display of it (Today hero, caption, intercept) in sync.
 function applyAllowanceChange(newAllowance) {
   const usedSeconds = state.totalSeconds - state.remainingSeconds;
   state.dailyAllowanceMinutes = newAllowance;
@@ -2308,7 +2429,7 @@ function loadState() {
   // Number(...) and fall back to a sane default on any non-finite result
   // (NaN/Infinity), so a garbled localStorage value (e.g. earnedMinutes
   // stored as the string "not-a-number") can't leak into captions/labels
-  // anywhere it's displayed, not just the ring (which already clamped).
+  // anywhere it's displayed, not just the Today hero (which clamps its own).
   const numericDefaults = {
     earnedMinutes: 0,
     unlockMinutesToday: 0,
@@ -2712,6 +2833,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // WONB - like the iPhone app, the Screen Time prompt comes right after the
   // apps are picked. Answered once: coming back here later goes straight on.
   let stDenyCount = 0;
+  let stOpener = null; // WHERO item 8g - focus goes back here when the prompt closes
 
   document.getElementById('ob-a-next').addEventListener('click', () => {
     if (state.selectedApps.length === 0) return;
@@ -2725,6 +2847,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (stLink) stLink.style.display = 'none';
     const stPopup = document.getElementById('screen-time-popup');
     if (stPopup) stPopup.style.display = 'flex';
+    // WHERO item 8g - focus moves into the prompt (Tab and Shift+Tab then stay
+    // inside it, see topOpenDialog) and returns to this button when it closes.
+    stOpener = document.getElementById('ob-a-next');
+    const stFirst = document.getElementById('st-deny-btn');
+    if (stFirst) stFirst.focus({ preventScroll: true });
   });
 
   // Step B: slider
@@ -2764,7 +2891,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // on to the hours guess; the reveal after it is built only from that guess.
   function closeScreenTimePopup() {
     const stPopup = document.getElementById('screen-time-popup');
+    const wasOpen = !!(stPopup && stPopup.style.display === 'flex');
     if (stPopup) stPopup.style.display = 'none';
+    const opener = stOpener;
+    stOpener = null;
+    if (wasOpen && opener && opener.isConnected) opener.focus({ preventScroll: true });
   }
 
   function advancePastScreenTime() {
@@ -3042,10 +3173,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── COACH TAB ── (coach.js wires its own taps)
 
-  // W6 repair - the hero number is re-fitted on resize (the ring is 176px on a short phone).
-  window.addEventListener('resize', () => {
-    fitRingCountdown();
-  });
+  // WHERO - the Today hero pauses on other tabs and under covers, and a toast
+  // on screen moves to the top when "+ Earn more" scrolls under it.
+  watchHeroScale();
+  const todayScrollEl = document.querySelector('#tab-today .tab-scroll');
+  if (todayScrollEl) todayScrollEl.addEventListener('scroll', liftToastsOffEarnMore, { passive: true });
 
   // item 3c - "Other" workout-type library sheet.
   document.getElementById('other-overlay').addEventListener('click', closeOtherLibrary);
@@ -3218,7 +3350,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // item 2b/2c - since nothing decays on a real-time interval anymore, repaint
-// the ring (and resolve any pending app-session whose time has genuinely
+// the Today hero (and resolve any pending app-session whose time has genuinely
 // elapsed) whenever the page regains focus, e.g. a real background/
 // foreground cycle on a phone.
 document.addEventListener('visibilitychange', () => {
@@ -3276,6 +3408,7 @@ function startInterceptExercise(mins, exercise, baseMins) {
     // sweep (fix 13) - intercept exercises count toward Earned Today, same
     // as Quick-log workouts, so they can't disagree.
     state.worktimeLoggedToday.push({ label, mins: baseMins, earned: mins });
+    updateHeroScale(); // WHERO - the movement minutes changed after addEarnedMinutes repainted
     renderEarnedList();
 
     saveState();
@@ -3423,7 +3556,10 @@ function wrapCenteredText(ctx, text, x, y, maxWidth, lineHeight) {
 
 function renderShareCanvas() {
   const { streak, arcPct } = getShareStats();
-  const W = 600, H = 750;
+  // WHERO item 8i - with no streak line (streak 0) the image is 180px shorter,
+  // the way the on-screen card closes up: the ring and the headline keep their
+  // places and the footer comes up, so no empty band is left above it.
+  const W = 600, H = streak > 0 ? 750 : 570;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
@@ -3437,12 +3573,8 @@ function renderShareCanvas() {
   roundRectPath(ctx, 0, 0, W, H, 40);
   ctx.fill();
 
-  // WFIX repair - with no streak line (streak 0) the ring and the headline
-  // move down together, so the image has no empty band above the footer.
-  const dy = streak > 0 ? 0 : 90;
-
   // Ring arc (approximates .share-ring)
-  const cx = W / 2, cy = 190 + dy, r = 90;
+  const cx = W / 2, cy = 190, r = 90;
   ctx.lineWidth = 16;
   ctx.strokeStyle = 'rgba(255,255,255,0.12)';
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
@@ -3462,7 +3594,7 @@ function renderShareCanvas() {
   // Headline - the same text as the on-screen card, built by shareHeadlineText()
   ctx.fillStyle = '#fff';
   ctx.font = '700 30px -apple-system, BlinkMacSystemFont, sans-serif';
-  wrapCenteredText(ctx, shareHeadlineText(), cx, 360 + dy, 480, 40);
+  wrapCenteredText(ctx, shareHeadlineText(), cx, 360, 480, 40);
 
   // Streak (no emoji glyphs on the exported image; the SAMPLE / roadmap
   // caption lives outside the card and is never drawn here)
@@ -3473,7 +3605,7 @@ function renderShareCanvas() {
   // Footer
   ctx.font = '400 16px -apple-system, BlinkMacSystemFont, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillText('balance · move to scroll', cx, 700);
+  ctx.fillText('balance · move to scroll', cx, H - 50);
 
   return canvas;
 }

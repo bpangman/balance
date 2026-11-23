@@ -162,7 +162,7 @@ input {
 /* W4 - ambient glow (WV-01, NS-06): three soft color pools painted behind every
    screen so the canvas reads lit from behind, never flat. z-index -1 inside the
    screen's own stacking context keeps it under the content and above --bg. The
-   pools stay indigo / violet / teal so the ring's depletion colors (mint, amber,
+   pools stay indigo / violet / teal so the rings' depletion colors (mint, amber,
    coral) keep their meaning. Not on .share-card, which has its own gradient. */
 .screen::before,
 #app-shell::before {
@@ -1071,41 +1071,62 @@ input {
   border-radius: 999px;
 }
 
-/* Hero ring */
-.hero-ring-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* WHERO - Today hero: the balance scale (balance-hero.js 1.2.1, HERO_SPEC
+   "For hosts" and section 15). The canvas keeps the module's 390:432 box and
+   spans the full screen width: the wrapper bleeds the tab's 20px side
+   padding, so the soft glow fades out at the screen edge instead of stopping
+   at a box edge 20px in (the reference artboard is full width too). The
+   module sizes its own backing store; nothing here sets a canvas size in
+   pixels. The hero stays transparent until its first frame is drawn (app.js
+   adds .is-ready on onReady), never display:none, or that frame would wait.
+   touch-action pan-y lets a vertical swipe on the hero scroll Today. */
+.hero-scale {
   position: relative;
-  margin: 8px 0 12px;
+  margin: 0 -20px;
+  min-width: 320px;
+  aspect-ratio: 390 / 432;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
-.hero-arc {
-  transition: stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1);
+.hero-scale.is-ready { opacity: 1; }
+
+.hero-scale-canvas,
+.hero-scale-still {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.ring-center {
+.hero-scale-canvas { cursor: pointer; }
+
+/* The still copy sits in the same box and never takes a tap. */
+.hero-scale-still {
   position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  inset: 0;
+  pointer-events: none;
 }
 
-.ring-countdown {
-  font-size: 52px;
-  font-weight: 800;
-  letter-spacing: -2px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+.hero-scale-still[hidden] { display: none; }
+
+/* The standard focus ring (2px teal, rounded), drawn just inside the canvas
+   edge as in the hero's own demo: the canvas is as wide as the scrolling tab,
+   which would clip a ring drawn outside it. */
+.hero-scale-canvas:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: -6px;
+  border-radius: 24px;
 }
 
-.ring-label-sm {
-  font-size: 12px;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-}
+/* "+ Earn more" sits below the hero, so it is reached by scrolling. Scrolled
+   into view (by focus or scrollIntoView) it stops 16px above the tab bar, or
+   above the Coach resume bar while that shows (56px, 10px over the bar). */
+#tab-today .tab-scroll { scroll-padding-bottom: calc(58px + max(var(--safe-bottom), 0px) + 16px); }
+body.cx-has-mini #tab-today .tab-scroll { scroll-padding-bottom: calc(58px + max(var(--safe-bottom), 0px) + 82px); }
 
 /* item 2d - the shared depletion gradient's stops cross-fade between bands
    instead of snapping; swapping between separate <linearGradient> elements
@@ -2244,9 +2265,10 @@ a { color: inherit; text-decoration: none; }
 /* ===== SIGN-IN STEP (item 5, WONB) =====
    The first screen after the splash. The old Welcome screen's brand moment
    (ring glyph with a soft glow, gradient headline, one promise line) sits on
-   top of the sign-in buttons. Its auto top margin pairs with the terms
-   line's auto margin, so the brand and the buttons sit as one centered group
-   between the progress bar and the terms line on every phone height. The
+   top of the sign-in buttons. WHERO item 8c - three auto margins (above the
+   brand, above the buttons, above the terms line) share the free height
+   evenly, so a tall phone shows brand, buttons and terms with even gaps
+   instead of one small centered group between two empty bands. The
    gradient headline is this screen's one gradient object (the sign-in
    buttons are black and white). */
 .signin-header { margin-bottom: 0; }
@@ -2296,7 +2318,7 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: auto;
 }
 .sso-btn {
   display: flex;
@@ -2359,6 +2381,20 @@ a { color: inherit; text-decoration: none; }
   padding: 13px 2px;
   margin: -13px -2px;
   min-height: auto;
+  position: relative;
+}
+/* WHERO item 8f - the focus ring follows the link text with the standard 2px
+   offset, not the 44px hit box (a ring 50px tall that crossed the lines
+   above and below). The sentence itself does not move. */
+.account-legal-link:focus-visible { outline: none; }
+.account-legal-link:focus-visible::after {
+  content: "";
+  position: absolute;
+  inset: 13px 2px;
+  border-radius: 3px;
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+  pointer-events: none;
 }
 
 /* Sign-in mock sheet spinner (item 5) */
@@ -2471,7 +2507,7 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 4px;
+  padding-top: 14px; /* WHERO item 8b - circles 36px in (20 + 14 + 2), the same as the bottom and the plan card */
 }
 .goal-step-btn {
   width: 56px;
@@ -2935,7 +2971,7 @@ a { color: inherit; text-decoration: none; }
 /* ===== W5 - status layer, shared total, roadmap captions ===== */
 
 /* Shield status pill (DESIGN 3 chip, status variant). Demo wording only.
-   Sits under the hero ring and its caption, above the streak dots. */
+   Sits right under the Today hero, above the streak dots. */
 .status-pill-row {
   display: flex;
   justify-content: center;
@@ -3325,64 +3361,35 @@ a { color: inherit; text-decoration: none; }
 #confirm-popup button:focus-visible { outline-offset: -4px; }
 
 /* ===== W6 (WV-04) - iPhone SE fit, 375 x 667 =====
-   On a short phone the Today hero and the rows under it are tightened so the
-   "+ Earn more" button sits fully above the tab bar (bottom at or above
-   y609). Nothing moves in the markup; only sizes and gaps shrink here. Two
-   lines that repeat elsewhere are dropped on this height only: the Lock
-   Screen widget link (also in Settings, "See Lock Screen widget") and the
-   caption under the app marks (the total tile below them already says the
-   number is one combined total). The used-total glyph is dropped too, the
-   number and its label stay. Scoped to the phone layout (max-width 500px),
-   so a short desktop window keeps the full-size framed phone.
+   On a short phone the header and the gaps on Today are tightened. Nothing
+   moves in the markup; only sizes and gaps shrink here. Scoped to the phone
+   layout (max-width 500px), so a short desktop window keeps the full-size
+   framed phone.
    The header floor drops to 20px because these phones (iPhone SE, 8) have a
    20pt status bar and no notch; the header is one element shared by every
    tab, so all three tabs get the same room.
-   Repair round 1: the fit holds in the common states, not only the seed.
-   With 4 to 6 picked apps every mark and "Add apps" stay on ONE row (the
-   row used to wrap to a second row and push the button under the tab bar);
-   with 5 or 6 apps the names under the marks are hidden from view on this
-   height only, since they would be cut to two or three letters, and each
-   tile still carries its name for VoiceOver. A partner unlock or "carries
-   over" makes the caption two lines; the gaps below are tight enough that
-   the button still clears the tab bar.
-   A later cluster replaces this hero and redoes this fit. */
+   WHERO - the balance-scale hero replaced the ring and fills the width, so
+   the whole hero sits above the tab bar and "+ Earn more" is reached by
+   scrolling (scrolled into view it stops above the tab bar). With no
+   button to squeeze above the tab bar any more, the four things this block
+   used to hide show again: the Lock Screen widget link, the caption under
+   the app marks, the used-total glyph and the names under 5 or 6 marks.
+   The marks wrap four to a row as on every other size, so the names keep
+   their full width instead of being cut to two or three letters. */
 @media (max-height: 700px) and (max-width: 500px) {
   .app-topbar { padding-top: max(var(--safe-top), 20px); padding-bottom: 4px; }
   #tab-today .tab-scroll { padding-top: 2px; }
   .greeting-row { margin-bottom: 12px; }
   .streak-rule-caption { margin: -8px 0 0; }
-  #hero-ring-svg { width: 176px; height: 176px; }
-  .ring-countdown { font-size: 44px; }
-  .hero-ring-wrap { margin: 0 0 2px; }
   .ring-caption { margin-bottom: 0; font-size: 12px; line-height: 1.15; }
   .status-pill-row { margin-top: 4px; }
   .streak-dots { margin: 6px 0 2px; }
-  #widget-link-today { display: none; }
   #tab-today .section-title { margin-bottom: 6px; }
   .app-tiles-row { gap: 6px; margin-bottom: 8px; padding-bottom: 0; }
-  .app-marks-row {
-    gap: 8px;
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
-  }
-  .app-marks-row:has(> :nth-child(6)) { gap: 6px; }
+  .app-marks-row { gap: 8px; }
   .app-marks-row .app-used-tile, .add-apps-tile { padding: 5px; gap: 4px; }
-  .app-marks-row:has(> :nth-child(5)) .app-used-tile,
-  .app-marks-row:has(> :nth-child(5)) .add-apps-tile { padding: 5px 2px; }
-  .app-marks-row:has(> :nth-child(6)) .app-used-name {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
   .app-used-icon, .add-apps-icon { width: 32px; height: 32px; border-radius: 10px; }
   .used-total-tile { padding: 7px 12px; gap: 10px; }
-  .used-total-glyph { display: none; }
-  .tiles-shared-caption { display: none; }
   #earn-more-btn { padding: 15px; }
 
   /* WFIX item 6a - paywall: "Restore purchases" sits fully on screen without
